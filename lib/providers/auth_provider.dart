@@ -22,13 +22,13 @@ class AuthProvider with ChangeNotifier {
   }
 
   // Login
-  Future<bool> login(String email, String password) async {
+  Future<bool> login(String userId, String password) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      final response = await _apiService.login(email, password);
+      final response = await _apiService.login(userId, password);
       
       if (response.statusCode == 200) {
         final data = response.data;

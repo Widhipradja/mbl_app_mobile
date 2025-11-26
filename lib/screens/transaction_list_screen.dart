@@ -151,7 +151,7 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
                                 }
                               },
                             );
-                          }).toList(),
+                          }),
                           const SizedBox(height: 8),
                         ],
                       );
