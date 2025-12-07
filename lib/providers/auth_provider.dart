@@ -13,7 +13,9 @@ class AuthProvider with ChangeNotifier {
   String? get error => _error;
   bool get isAuthenticated => _user != null;
 
-  final ApiService _apiService = ApiService();
+  final ApiService _apiService;
+
+  AuthProvider({ApiService? apiService}) : _apiService = apiService ?? ApiService();
 
   // Initialize user from storage
   Future<void> init() async {
