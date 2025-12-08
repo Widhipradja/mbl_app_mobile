@@ -67,13 +67,6 @@ class TransactionCard extends StatelessWidget {
                 'PIC: ${transaction.pic}',
                 style: TextStyle(fontSize: 12, color: Colors.grey[600]),
               ),
-            if (transaction.description != null)
-              Text(
-                transaction.description!,
-                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
           ],
         ),
         trailing: Column(

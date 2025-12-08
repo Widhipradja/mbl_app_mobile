@@ -5,18 +5,46 @@ import 'config/routes.dart';
 import 'providers/auth_provider.dart';
 import 'providers/transaction_provider.dart';
 import 'services/storage_service.dart';
+import 'services/api_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Initialize services
   await StorageService.init();
-  
+
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  @override
+  void initState() {
+    super.initState();
+    // Listen for token expiration
+    ApiService.tokenExpiredNotifier.addListener(_handleTokenExpiration);
+  }
+
+  @override
+  void dispose() {
+    ApiService.tokenExpiredNotifier.removeListener(_handleTokenExpiration);
+    super.dispose();
+  }
+
+  void _handleTokenExpiration() {
+    if (ApiService.tokenExpiredNotifier.value) {
+      // Reset the notifier
+      ApiService.tokenExpiredNotifier.value = false;
+      // Navigate to login
+      AppRouter.router.go('/login');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

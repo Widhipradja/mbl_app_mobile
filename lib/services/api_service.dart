@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'storage_service.dart';
 import '../utils/constants.dart';
 import '../utils/jwt_decoder.dart';
+import 'package:flutter/material.dart';
 
 class ApiService {
   // static const String baseUrl = 'https://8ff4edc65c2d.ngrok-free.app/mblapi';
@@ -11,6 +12,7 @@ class ApiService {
   // For local testing: 'http://localhost:3000/api' (iOS simulator)
 
   late Dio _dio;
+  static final ValueNotifier<bool> tokenExpiredNotifier = ValueNotifier(false);
 
   ApiService() {
     _dio = Dio(
@@ -37,6 +39,7 @@ class ApiService {
             if (JwtDecoder.isExpired(token)) {
               print('🔴 Token expired, clearing storage');
               StorageService.clearAll();
+              tokenExpiredNotifier.value = true;
               return handler.reject(
                 DioException(
                   requestOptions: options,
@@ -61,6 +64,7 @@ class ApiService {
           if (error.response?.statusCode == 401) {
             // Token expired, logout user
             StorageService.clearAll();
+            tokenExpiredNotifier.value = true;
           }
           return handler.next(error);
         },
