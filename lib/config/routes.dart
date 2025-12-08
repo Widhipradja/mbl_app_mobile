@@ -5,6 +5,7 @@ import '../screens/home_screen.dart';
 import '../screens/add_transaction_screen.dart';
 import '../screens/transaction_list_screen.dart';
 import '../services/storage_service.dart';
+import '../utils/jwt_decoder.dart';
 
 class AppRouter {
   static final GoRouter router = GoRouter(
@@ -15,15 +16,25 @@ class AppRouter {
       final isGoingToSplash = state.matchedLocation == '/splash';
 
       if (isGoingToSplash) return null;
-      
+
+      // Check token expiry if authenticated
+      if (isAuthenticated) {
+        final token = StorageService.getToken();
+        if (token != null && JwtDecoder.isExpired(token)) {
+          // Token expired, clear storage and redirect to login
+          await StorageService.clearAll();
+          return '/login';
+        }
+      }
+
       if (!isAuthenticated && !isGoingToLogin) {
         return '/login';
       }
-      
+
       if (isAuthenticated && isGoingToLogin) {
         return '/home';
       }
-      
+
       return null;
     },
     routes: [
@@ -31,14 +42,8 @@ class AppRouter {
         path: '/splash',
         builder: (context, state) => const SplashScreen(),
       ),
-      GoRoute(
-        path: '/login',
-        builder: (context, state) => const LoginScreen(),
-      ),
-      GoRoute(
-        path: '/home',
-        builder: (context, state) => const HomeScreen(),
-      ),
+      GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
+      GoRoute(path: '/home', builder: (context, state) => const HomeScreen()),
       GoRoute(
         path: '/add-transaction',
         builder: (context, state) => const AddTransactionScreen(),

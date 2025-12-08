@@ -12,21 +12,23 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _userIdController = TextEditingController(text: 'demo@example.com');
-  final _passwordController = TextEditingController(text: 'password');
+  final _userIdController = TextEditingController(text: 'dewanta@gmail.com');
+  final _passwordController = TextEditingController(text: 'defLeppard');
+  // final _tenantIdController = TextEditingController(text: 'c4e70117-1e32-468d-a5e5-f954a5de218d');
   bool _obscurePassword = true;
 
   @override
   void dispose() {
     _userIdController.dispose();
     _passwordController.dispose();
+
     super.dispose();
   }
 
   Future<void> _handleLogin() async {
     if (_formKey.currentState!.validate()) {
       final authProvider = context.read<AuthProvider>();
-      
+
       final success = await authProvider.login(
         _userIdController.text.trim(),
         _passwordController.text,
@@ -90,11 +92,11 @@ class _LoginScreenState extends State<LoginScreen> {
                         const SizedBox(height: 8),
                         const Text(
                           'Login to your account',
-                          style: TextStyle(
-                            color: Colors.grey,
-                          ),
+                          style: TextStyle(color: Colors.grey),
                         ),
                         const SizedBox(height: 32),
+
+                        const SizedBox(height: 16),
                         TextFormField(
                           controller: _userIdController,
                           keyboardType: TextInputType.emailAddress,
@@ -157,7 +159,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                           strokeWidth: 2,
                                           valueColor:
                                               AlwaysStoppedAnimation<Color>(
-                                                  Colors.white),
+                                                Colors.white,
+                                              ),
                                         ),
                                       )
                                     : const Text('Login'),
@@ -169,10 +172,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         const Text(
                           'Demo Credentials:\ndemo@example.com / password',
                           textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.grey,
-                            fontSize: 12,
-                          ),
+                          style: TextStyle(color: Colors.grey, fontSize: 12),
                         ),
                       ],
                     ),

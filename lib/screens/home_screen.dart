@@ -30,7 +30,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Cosmic Chroma Budget'),
+        title: const Text('Manage Budget & Logs'),
         actions: [
           PopupMenuButton<String>(
             icon: CircleAvatar(
@@ -66,10 +66,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     Text(
                       user?.email ?? '',
-                      style: const TextStyle(
-                        color: Colors.grey,
-                        fontSize: 12,
-                      ),
+                      style: const TextStyle(color: Colors.grey, fontSize: 12),
                     ),
                     const Divider(),
                   ],
@@ -143,10 +140,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     children: [
                       const Text(
                         'Current Balance',
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.grey,
-                        ),
+                        style: TextStyle(fontSize: 16, color: Colors.grey),
                       ),
                       const SizedBox(height: 8),
                       Text(
@@ -206,10 +200,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   const Text(
                     'Recent Transactions',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   TextButton(
                     onPressed: () => context.push('/transactions'),
@@ -270,7 +261,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     return TransactionCard(
                       transaction: transaction,
                       onDelete: () async {
-                        final confirmed = await _showDeleteConfirmation(context);
+                        final confirmed = await _showDeleteConfirmation(
+                          context,
+                        );
                         if (confirmed == true) {
                           await transactionProvider.deleteTransaction(
                             transaction.id!,
@@ -287,7 +280,12 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildStatCard(String label, double amount, Color color, IconData icon) {
+  Widget _buildStatCard(
+    String label,
+    double amount,
+    Color color,
+    IconData icon,
+  ) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -298,13 +296,7 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           Icon(icon, color: color, size: 24),
           const SizedBox(height: 8),
-          Text(
-            label,
-            style: TextStyle(
-              color: Colors.grey[600],
-              fontSize: 12,
-            ),
-          ),
+          Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
           const SizedBox(height: 4),
           Text(
             '\$${amount.toStringAsFixed(2)}',
@@ -324,7 +316,9 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Transaction'),
-        content: const Text('Are you sure you want to delete this transaction?'),
+        content: const Text(
+          'Are you sure you want to delete this transaction?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
