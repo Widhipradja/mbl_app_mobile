@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../models/transaction.dart';
 import '../providers/transaction_provider.dart';
+import '../services/api_service.dart';
 import 'package:intl/intl.dart';
 
 class AddTransactionScreen extends StatefulWidget {
@@ -15,44 +16,88 @@ class AddTransactionScreen extends StatefulWidget {
 
 class _AddTransactionScreenState extends State<AddTransactionScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _titleController = TextEditingController();
   final _amountController = TextEditingController();
   final _descriptionController = TextEditingController();
-  
+  final _subCategoryController = TextEditingController();
+  final _picController = TextEditingController();
+
   TransactionType _selectedType = TransactionType.expense;
-  String _selectedCategory = 'Food';
+  String? _selectedCategory;
+  String? _selectedSubCategory;
   DateTime _selectedDate = DateTime.now();
+  bool _isLoadingCategories = true;
+  List<Map<String, dynamic>> _categories = [];
+  List<Map<String, dynamic>> _subCategories = [];
 
-  final List<String> _expenseCategories = [
-    'Food',
-    'Transportation',
-    'Shopping',
-    'Entertainment',
-    'Bills',
-    'Healthcare',
-    'Other',
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadCategories();
+  }
 
-  final List<String> _incomeCategories = [
-    'Salary',
-    'Business',
-    'Investment',
-    'Gift',
-    'Other',
-  ];
+  Future<void> _loadCategories() async {
+    try {
+      final apiService = ApiService();
+      final response = await apiService.getLookups('POS_KAS');
+
+      if (response.statusCode == 200) {
+        final dynamic data = response.data;
+        List<Map<String, dynamic>> categoryList = [];
+
+        // Handle different response structures
+        if (data is Map) {
+          if (data['data'] != null) {
+            categoryList = (data['data'] as List)
+                .map((item) => Map<String, dynamic>.from(item as Map))
+                .toList();
+          }
+        } else if (data is List) {
+          categoryList = data
+              .map((item) => Map<String, dynamic>.from(item as Map))
+              .toList();
+        }
+
+        // sort categories by 'value' field alphabetically
+        categoryList.sort((a, b) {
+          final valA = a['value']?.toString() ?? '';
+          final valB = b['value']?.toString() ?? '';
+          return valA.compareTo(valB);
+        });
+
+        setState(() {
+          _categories = categoryList;
+          if (_categories.isNotEmpty) {
+            _selectedCategory = _categories[0]['id']?.toString();
+          }
+          _isLoadingCategories = false;
+        });
+      } else {
+        throw Exception('Failed to load categories: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error loading categories: $e');
+      setState(() {
+        _isLoadingCategories = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load categories: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
 
   @override
   void dispose() {
-    _titleController.dispose();
     _amountController.dispose();
     _descriptionController.dispose();
+    _subCategoryController.dispose();
+    _picController.dispose();
     super.dispose();
   }
-
-  List<String> get _currentCategories =>
-      _selectedType == TransactionType.expense
-          ? _expenseCategories
-          : _incomeCategories;
 
   Future<void> _selectDate(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
@@ -71,14 +116,20 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   Future<void> _handleSubmit() async {
     if (_formKey.currentState!.validate()) {
       final transaction = Transaction(
-        title: _titleController.text.trim(),
+        title: '', // Not needed in backend model
         amount: double.parse(_amountController.text.trim()),
         type: _selectedType,
-        category: _selectedCategory,
+        category: _selectedCategory ?? '',
+        subCategory: _subCategories.isNotEmpty
+            ? _selectedSubCategory
+            : (_subCategoryController.text.trim().isEmpty
+                  ? null
+                  : _subCategoryController.text.trim()),
         date: _selectedDate,
-        description: _descriptionController.text.trim().isEmpty
+        description: _descriptionController.text.trim(),
+        pic: _picController.text.trim().isEmpty
             ? null
-            : _descriptionController.text.trim(),
+            : _picController.text.trim(),
       );
 
       final provider = context.read<TransactionProvider>();
@@ -108,9 +159,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Add Transaction'),
-      ),
+      appBar: AppBar(title: const Text('Add Transaction')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Form(
@@ -139,7 +188,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                             if (selected) {
                               setState(() {
                                 _selectedType = TransactionType.expense;
-                                _selectedCategory = _expenseCategories[0];
                               });
                             }
                           },
@@ -162,7 +210,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                             if (selected) {
                               setState(() {
                                 _selectedType = TransactionType.income;
-                                _selectedCategory = _incomeCategories[0];
                               });
                             }
                           },
@@ -175,27 +222,12 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
               ),
               const SizedBox(height: 20),
 
-              // Title Field
-              TextFormField(
-                controller: _titleController,
-                decoration: const InputDecoration(
-                  labelText: 'Title *',
-                  hintText: 'e.g., Grocery shopping',
-                  prefixIcon: Icon(Icons.title),
-                ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please enter a title';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-
               // Amount Field
               TextFormField(
                 controller: _amountController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
                 ],
@@ -218,23 +250,106 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
               const SizedBox(height: 16),
 
               // Category Dropdown
-              DropdownButtonFormField<String>(
-                value: _selectedCategory,
-                decoration: const InputDecoration(
-                  labelText: 'Category *',
-                  prefixIcon: Icon(Icons.category),
+              _isLoadingCategories
+                  ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(16.0),
+                        child: CircularProgressIndicator(),
+                      ),
+                    )
+                  : DropdownButtonFormField<String>(
+                      initialValue: _selectedCategory,
+                      decoration: const InputDecoration(
+                        labelText: 'Category *',
+                        prefixIcon: Icon(Icons.category),
+                      ),
+                      items: _categories.map((category) {
+                        final code = category['id']?.toString() ?? '';
+                        final name = category['value']?.toString() ?? code;
+                        return DropdownMenuItem<String>(
+                          value: code,
+                          child: Text(name),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedCategory = value;
+                          _selectedSubCategory = null;
+
+                          // Load sub-categories if available
+                          final selectedCat = _categories.firstWhere(
+                            (cat) => cat['id']?.toString() == value,
+                            orElse: () => {},
+                          );
+
+                          if (selectedCat['sub_lookup'] != null &&
+                              selectedCat['sub_lookup'] is List) {
+                            _subCategories = (selectedCat['sub_lookup'] as List)
+                                .map(
+                                  (item) =>
+                                      Map<String, dynamic>.from(item as Map),
+                                )
+                                .toList();
+                            if (_subCategories.isNotEmpty) {
+                              _selectedSubCategory = _subCategories[0]['id']
+                                  ?.toString();
+                            }
+                          } else {
+                            _subCategories = [];
+                          }
+                        });
+                      },
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please select a category';
+                        }
+                        return null;
+                      },
+                    ),
+              const SizedBox(height: 16),
+
+              // Sub Category Field/Dropdown
+              if (_subCategories.isNotEmpty)
+                DropdownButtonFormField<String>(
+                  initialValue: _selectedSubCategory,
+                  decoration: const InputDecoration(
+                    labelText: 'Sub Category',
+                    prefixIcon: Icon(Icons.subdirectory_arrow_right),
+                  ),
+                  items: _subCategories.map((subCat) {
+                    final code = subCat['id']?.toString() ?? '';
+                    final name = subCat['value']?.toString() ?? code;
+                    return DropdownMenuItem<String>(
+                      value: code,
+                      child: Text(name),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    setState(() {
+                      _selectedSubCategory = value;
+                    });
+                  },
+                )
+              else
+                TextFormField(
+                  controller: _subCategoryController,
+                  enabled: false,
+                  decoration: const InputDecoration(
+                    labelText: 'Sub Category (Optional)',
+                    hintText: 'No sub-categories available',
+                    prefixIcon: Icon(Icons.subdirectory_arrow_right),
+                  ),
                 ),
-                items: _currentCategories.map((category) {
-                  return DropdownMenuItem(
-                    value: category,
-                    child: Text(category),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _selectedCategory = value!;
-                  });
-                },
+              const SizedBox(height: 16),
+
+              // PIC Field
+              TextFormField(
+                controller: _picController,
+                decoration: const InputDecoration(
+                  labelText: 'PIC (Optional)',
+                  hintText: 'Person in charge',
+                  prefixIcon: Icon(Icons.person),
+                ),
               ),
               const SizedBox(height: 16),
 
@@ -262,8 +377,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                 controller: _descriptionController,
                 maxLines: 3,
                 decoration: const InputDecoration(
-                  labelText: 'Description (Optional)',
-                  hintText: 'Add notes about this transaction',
+                  labelText: 'Description *',
+                  hintText: 'Enter description',
                   prefixIcon: Icon(Icons.notes),
                   alignLabelWithHint: true,
                 ),
@@ -286,8 +401,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                               width: 20,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                valueColor:
-                                    AlwaysStoppedAnimation<Color>(Colors.white),
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
                               ),
                             )
                           : const Text(

@@ -16,6 +16,18 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
   String _filterType = 'all'; // all, income, expense
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final now = DateTime.now();
+      context.read<TransactionProvider>().fetchMonthlyTransactions(
+        now.month,
+        now.year,
+      );
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final transactionProvider = context.watch<TransactionProvider>();
 
@@ -42,7 +54,9 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('All Transactions'),
+        title: Text(
+          'Transactions - ${DateFormat('MMMM yyyy').format(DateTime.now())}',
+        ),
         actions: [
           PopupMenuButton<String>(
             icon: const Icon(Icons.filter_list),
@@ -56,10 +70,7 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
                 value: 'all',
                 child: Text('All Transactions'),
               ),
-              const PopupMenuItem(
-                value: 'income',
-                child: Text('Income Only'),
-              ),
+              const PopupMenuItem(value: 'income', child: Text('Income Only')),
               const PopupMenuItem(
                 value: 'expense',
                 child: Text('Expense Only'),
@@ -69,94 +80,107 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: () => transactionProvider.fetchTransactions(),
+        onRefresh: () {
+          final now = DateTime.now();
+          return transactionProvider.fetchMonthlyTransactions(
+            now.month,
+            now.year,
+          );
+        },
         child: transactionProvider.isLoading
             ? const Center(child: CircularProgressIndicator())
             : filteredTransactions.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.receipt_long,
-                          size: 64,
-                          color: Colors.grey[400],
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No transactions found',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ],
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.receipt_long, size: 64, color: Colors.grey[400]),
+                    const SizedBox(height: 16),
+                    Text(
+                      'No transactions found',
+                      style: TextStyle(fontSize: 16, color: Colors.grey[600]),
                     ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: groupedTransactions.length,
-                    itemBuilder: (context, index) {
-                      final dateKey = groupedTransactions.keys.elementAt(index);
-                      final transactions = groupedTransactions[dateKey]!;
-                      final dayTotal = transactions.fold<double>(
-                        0.0,
-                        (sum, t) => sum +
-                            (t.type == TransactionType.income
-                                ? t.amount
-                                : -t.amount),
-                      );
+                  ],
+                ),
+              )
+            : ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: groupedTransactions.length,
+                itemBuilder: (context, index) {
+                  final dateKey = groupedTransactions.keys.elementAt(index);
+                  final transactions = groupedTransactions[dateKey]!;
+                  final dayTotal = transactions.fold<double>(
+                    0.0,
+                    (sum, t) =>
+                        sum +
+                        (t.type == TransactionType.income
+                            ? t.amount
+                            : -t.amount),
+                  );
 
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 12,
-                              horizontal: 4,
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 12,
+                          horizontal: 4,
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              dateKey,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey,
+                              ),
                             ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  dateKey,
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                                Text(
-                                  '\$${dayTotal.abs().toStringAsFixed(2)}',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                    color: dayTotal >= 0
-                                        ? Colors.green
-                                        : Colors.red,
-                                  ),
-                                ),
-                              ],
+                            Text(
+                              NumberFormat.currency(
+                                locale: 'id_ID',
+                                symbol: 'Rp ',
+                                decimalDigits: 0,
+                              ).format(dayTotal.abs()),
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: dayTotal >= 0
+                                    ? Colors.green
+                                    : Colors.red,
+                              ),
                             ),
-                          ),
-                          ...transactions.map((transaction) {
-                            return TransactionCard(
-                              transaction: transaction,
-                              onDelete: () async {
-                                final confirmed =
-                                    await _showDeleteConfirmation(context);
-                                if (confirmed == true) {
-                                  await transactionProvider
-                                      .deleteTransaction(transaction.id!);
-                                }
-                              },
+                          ],
+                        ),
+                      ),
+                      ...transactions.map((transaction) {
+                        return TransactionCard(
+                          transaction: transaction,
+                          onDelete: () async {
+                            final confirmed = await _showDeleteConfirmation(
+                              context,
                             );
-                          }).toList(),
-                          const SizedBox(height: 8),
-                        ],
-                      );
-                    },
-                  ),
+                            if (confirmed == true) {
+                              await transactionProvider.deleteTransaction(
+                                transaction.id!,
+                              );
+                              // Refresh monthly transactions after delete
+                              final now = DateTime.now();
+                              await transactionProvider
+                                  .fetchMonthlyTransactions(
+                                    now.month,
+                                    now.year,
+                                  );
+                            }
+                          },
+                        );
+                      }),
+                      const SizedBox(height: 8),
+                    ],
+                  );
+                },
+              ),
       ),
     );
   }
@@ -166,7 +190,9 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Transaction'),
-        content: const Text('Are you sure you want to delete this transaction?'),
+        content: const Text(
+          'Are you sure you want to delete this transaction?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
