@@ -6,8 +6,12 @@ class Transaction {
   final double amount;
   final TransactionType type;
   final String category;
+  final String? subCategory;
   final DateTime date;
   final String? description;
+  final String? pic;
+  final String? remarks;
+  final String? requestedBy;
 
   Transaction({
     this.id,
@@ -15,33 +19,48 @@ class Transaction {
     required this.amount,
     required this.type,
     required this.category,
+    this.subCategory,
     required this.date,
     this.description,
+    this.pic,
+    this.remarks,
+    this.requestedBy,
   });
 
   factory Transaction.fromJson(Map<String, dynamic> json) {
     return Transaction(
       id: json['id'],
-      title: json['title'],
-      amount: (json['amount'] as num).toDouble(),
-      type: json['type'] == 'income' 
-          ? TransactionType.income 
+      title: json['title'] ?? json['description'] ?? '',
+      amount: (json['amount'] is String)
+          ? double.parse(json['amount'])
+          : (json['amount'] as num).toDouble(),
+      type: json['trx_type'] == 'income'
+          ? TransactionType.income
           : TransactionType.expense,
-      category: json['category'],
-      date: DateTime.parse(json['date']),
+      category: json['category'] ?? '',
+      subCategory: json['sub_category'],
+      date: json['requested_date'] != null
+          ? DateTime.parse(json['requested_date'])
+          : (json['date'] != null
+                ? DateTime.parse(json['date'])
+                : DateTime.now()),
       description: json['description'],
+      pic: json['pic'],
+      remarks: json['remarks'],
+      requestedBy: json['requested_by'],
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      if (id != null) 'id': id,
-      'title': title,
-      'amount': amount,
-      'type': type == TransactionType.income ? 'income' : 'expense',
+      'amount': amount.toString(),
+      'requested_date':
+          '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}',
+      'trx_type': type == TransactionType.income ? 'income' : 'expense',
+      'description': description ?? '',
       'category': category,
-      'date': date.toIso8601String(),
-      if (description != null) 'description': description,
+      'sub_category': subCategory ?? '',
+      if (pic != null && pic!.isNotEmpty) 'pic': pic,
     };
   }
 }
