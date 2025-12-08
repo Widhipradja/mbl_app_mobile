@@ -37,7 +37,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
 
       if (success) {
-        context.go('/home');
+        context.go('/dashboard');
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -167,12 +167,6 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             );
                           },
-                        ),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'Demo Credentials:\ndemo@example.com / password',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.grey, fontSize: 12),
                         ),
                       ],
                     ),

@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import '../providers/auth_provider.dart';
-import '../providers/transaction_provider.dart';
-import '../widgets/transaction_card.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/transaction_provider.dart';
+import '../../widgets/transaction_card.dart';
 import 'package:intl/intl.dart';
 
-class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+class BudgetHomeScreen extends StatefulWidget {
+  const BudgetHomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  State<BudgetHomeScreen> createState() => _BudgetHomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
   @override
   void initState() {
     super.initState();
@@ -32,6 +32,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.home),
+          tooltip: 'Back to Dashboard',
+          onPressed: () => context.go('/dashboard'),
+        ),
         title: const Text('Manage Budget & Logs'),
         actions: [
           PopupMenuButton<String>(
@@ -46,7 +51,9 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             onSelected: (value) async {
-              if (value == 'logout') {
+              if (value == 'dashboard') {
+                context.go('/dashboard');
+              } else if (value == 'logout') {
                 await authProvider.logout();
                 if (context.mounted) {
                   context.go('/login');
@@ -75,6 +82,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const PopupMenuItem(
+                value: 'dashboard',
+                child: Row(
+                  children: [
+                    Icon(Icons.home, color: Colors.blue),
+                    SizedBox(width: 8),
+                    Text('Back to Dashboard'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
                 value: 'logout',
                 child: Row(
                   children: [
@@ -99,44 +116,6 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Welcome Section
-              Card(
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Welcome back, ${user?.name ?? 'User'}! 👋',
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        DateFormat('EEEE, MMMM d, y').format(DateTime.now()),
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-
               // Balance Overview
               Card(
                 child: Padding(
@@ -212,7 +191,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: () => context.push('/add-transaction'),
+                      onPressed: () => context.push('/budget/add-transaction'),
                       icon: const Icon(Icons.add),
                       label: const Text('Add Transaction'),
                       style: ElevatedButton.styleFrom(
@@ -233,7 +212,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   TextButton(
-                    onPressed: () => context.push('/transactions'),
+                    onPressed: () => context.push('/budget/transactions'),
                     child: const Text('See All'),
                   ),
                 ],

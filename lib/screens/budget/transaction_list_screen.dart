@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../providers/transaction_provider.dart';
-import '../models/transaction.dart';
-import '../widgets/transaction_card.dart';
+import '../../providers/transaction_provider.dart';
+import '../../models/transaction.dart';
+import '../../widgets/transaction_card.dart';
 import 'package:intl/intl.dart';
 
 class TransactionListScreen extends StatefulWidget {

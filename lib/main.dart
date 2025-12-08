@@ -54,7 +54,7 @@ class _MyAppState extends State<MyApp> {
         ChangeNotifierProvider(create: (_) => TransactionProvider()),
       ],
       child: MaterialApp.router(
-        title: 'MBL App',
+        title: 'Manajemen Budget & Log',
         theme: AppTheme.lightTheme,
         darkTheme: AppTheme.darkTheme,
         themeMode: ThemeMode.system,

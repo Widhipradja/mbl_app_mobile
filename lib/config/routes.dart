@@ -1,9 +1,11 @@
 import 'package:go_router/go_router.dart';
 import '../screens/splash_screen.dart';
 import '../screens/login_screen.dart';
-import '../screens/home_screen.dart';
-import '../screens/add_transaction_screen.dart';
-import '../screens/transaction_list_screen.dart';
+import '../screens/dashboard_screen.dart';
+import '../screens/budget/budget_home_screen.dart';
+import '../screens/budget/add_transaction_screen.dart';
+import '../screens/budget/transaction_list_screen.dart';
+import '../screens/contacts/contacts_home_screen.dart';
 import '../services/storage_service.dart';
 import '../utils/jwt_decoder.dart';
 
@@ -32,7 +34,7 @@ class AppRouter {
       }
 
       if (isAuthenticated && isGoingToLogin) {
-        return '/home';
+        return '/dashboard';
       }
 
       return null;
@@ -43,7 +45,36 @@ class AppRouter {
         builder: (context, state) => const SplashScreen(),
       ),
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
-      GoRoute(path: '/home', builder: (context, state) => const HomeScreen()),
+      GoRoute(
+        path: '/dashboard',
+        builder: (context, state) => const DashboardScreen(),
+      ),
+
+      // Budget Module Routes
+      GoRoute(
+        path: '/budget',
+        builder: (context, state) => const BudgetHomeScreen(),
+      ),
+      GoRoute(
+        path: '/budget/add-transaction',
+        builder: (context, state) => const AddTransactionScreen(),
+      ),
+      GoRoute(
+        path: '/budget/transactions',
+        builder: (context, state) => const TransactionListScreen(),
+      ),
+
+      // Contacts Module Routes
+      GoRoute(
+        path: '/contacts',
+        builder: (context, state) => const ContactsHomeScreen(),
+      ),
+
+      // Keep legacy routes for backward compatibility
+      GoRoute(
+        path: '/home',
+        builder: (context, state) => const BudgetHomeScreen(),
+      ),
       GoRoute(
         path: '/add-transaction',
         builder: (context, state) => const AddTransactionScreen(),
