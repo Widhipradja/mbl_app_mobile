@@ -6,38 +6,7 @@ class TransactionCard extends StatelessWidget {
   final Transaction transaction;
   final VoidCallback? onDelete;
 
-  const TransactionCard({
-    super.key,
-    required this.transaction,
-    this.onDelete,
-  });
-
-  IconData _getCategoryIcon(String category) {
-    switch (category.toLowerCase()) {
-      case 'food':
-        return Icons.restaurant;
-      case 'transportation':
-        return Icons.directions_car;
-      case 'shopping':
-        return Icons.shopping_bag;
-      case 'entertainment':
-        return Icons.movie;
-      case 'bills':
-        return Icons.receipt;
-      case 'healthcare':
-        return Icons.medical_services;
-      case 'salary':
-        return Icons.account_balance_wallet;
-      case 'business':
-        return Icons.business;
-      case 'investment':
-        return Icons.trending_up;
-      case 'gift':
-        return Icons.card_giftcard;
-      default:
-        return Icons.attach_money;
-    }
-  }
+  const TransactionCard({super.key, required this.transaction, this.onDelete});
 
   @override
   Widget build(BuildContext context) {
@@ -47,30 +16,61 @@ class TransactionCard extends StatelessWidget {
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: color.withOpacity(0.1),
-          child: Icon(
-            _getCategoryIcon(transaction.category),
-            color: color,
+        leading: Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                DateFormat('MMM').format(transaction.date),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
+              ),
+              Text(
+                DateFormat('dd').format(transaction.date),
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
+              ),
+            ],
           ),
         ),
         title: Text(
           transaction.title,
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-          ),
+          style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(transaction.category),
-            if (transaction.description != null)
+            if (transaction.requestedBy != null)
               Text(
-                transaction.description!,
+                'By: ${transaction.requestedBy}',
                 style: TextStyle(
                   fontSize: 12,
                   color: Colors.grey[600],
+                  fontStyle: FontStyle.italic,
                 ),
+              ),
+            if (transaction.pic != null && transaction.pic!.isNotEmpty)
+              Text(
+                'PIC: ${transaction.pic}',
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              ),
+            if (transaction.description != null)
+              Text(
+                transaction.description!,
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -81,18 +81,11 @@ class TransactionCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Text(
-              '${isIncome ? '+' : '-'}\$${transaction.amount.toStringAsFixed(2)}',
+              '${isIncome ? '+' : '-'}Rp ${NumberFormat('#,##0', 'id_ID').format(transaction.amount)}',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
                 color: color,
-              ),
-            ),
-            Text(
-              DateFormat('HH:mm').format(transaction.date),
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[600],
               ),
             ),
           ],

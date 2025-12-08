@@ -115,9 +115,12 @@ class AuthProvider with ChangeNotifier {
         _error = 'Connection timeout. Please check your internet connection.';
       } else if (e.type == DioExceptionType.connectionError) {
         _error = 'Network error. Please check your internet connection.';
-      } else if (e.response?.data != null &&
-          e.response?.data['message'] != null) {
-        _error = e.response?.data['message'];
+      } else if (e.response?.data != null) {
+        // Check for both 'error' and 'message' fields from gin.H
+        _error =
+            e.response?.data['error'] ??
+            e.response?.data['message'] ??
+            'Login failed. Please try again.';
       } else {
         _error = 'Login failed. Please try again.';
       }

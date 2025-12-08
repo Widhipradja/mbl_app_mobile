@@ -1,11 +1,10 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../models/user.dart';
-import '../utils/constants.dart';
 
 class StorageService {
   static late SharedPreferences _prefs;
-  
+
   static const String _tokenKey = 'auth_token';
   static const String _userKey = 'user_data';
   static const String _tenantIdKey = 'tenant_id';

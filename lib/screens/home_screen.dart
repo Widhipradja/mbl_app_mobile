@@ -18,7 +18,9 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<TransactionProvider>().fetchTransactions();
+      final provider = context.read<TransactionProvider>();
+      provider.fetchSummary();
+      provider.fetchRecentTransactions(5);
     });
   }
 
@@ -87,7 +89,10 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: () => transactionProvider.fetchTransactions(),
+        onRefresh: () async {
+          await transactionProvider.fetchSummary();
+          await transactionProvider.fetchRecentTransactions(5);
+        },
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(16),
@@ -144,7 +149,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        '\$${transactionProvider.balance.toStringAsFixed(2)}',
+                        'Rp ${NumberFormat('#,##0', 'id_ID').format(transactionProvider.balance)}',
                         style: TextStyle(
                           fontSize: 36,
                           fontWeight: FontWeight.bold,
@@ -154,23 +159,48 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                       const SizedBox(height: 20),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          _buildStatCard(
-                            'Income',
-                            transactionProvider.totalIncome,
-                            Colors.green,
-                            Icons.arrow_upward,
-                          ),
-                          _buildStatCard(
-                            'Expense',
-                            transactionProvider.totalExpense,
-                            Colors.red,
-                            Icons.arrow_downward,
-                          ),
-                        ],
-                      ),
+                      transactionProvider.categories.isEmpty
+                          ? Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceAround,
+                              children: [
+                                _buildStatCard(
+                                  'Income',
+                                  transactionProvider.totalIncome,
+                                  Colors.green,
+                                  Icons.arrow_upward,
+                                ),
+                                _buildStatCard(
+                                  'Expense',
+                                  transactionProvider.totalExpense,
+                                  Colors.red,
+                                  Icons.arrow_downward,
+                                ),
+                              ],
+                            )
+                          : SizedBox(
+                              height: 120,
+                              child: PageView.builder(
+                                itemCount:
+                                    transactionProvider.categories.length,
+                                controller: PageController(
+                                  viewportFraction: 0.85,
+                                ),
+                                itemBuilder: (context, index) {
+                                  final category =
+                                      transactionProvider.categories[index];
+                                  return Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 4,
+                                    ),
+                                    child: _buildCategoryCard(
+                                      category['cat'],
+                                      category['net'],
+                                      category['cnt'],
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
                     ],
                   ),
                 ),
@@ -218,7 +248,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: CircularProgressIndicator(),
                   ),
                 )
-              else if (transactionProvider.transactions.isEmpty)
+              else if (transactionProvider.recentTransactions.isEmpty)
                 Center(
                   child: Padding(
                     padding: const EdgeInsets.all(40),
@@ -253,11 +283,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 ListView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  itemCount: transactionProvider.transactions.length > 5
-                      ? 5
-                      : transactionProvider.transactions.length,
+                  itemCount: transactionProvider.recentTransactions.length,
                   itemBuilder: (context, index) {
-                    final transaction = transactionProvider.transactions[index];
+                    final transaction =
+                        transactionProvider.recentTransactions[index];
                     return TransactionCard(
                       transaction: transaction,
                       onDelete: () async {
@@ -268,6 +297,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           await transactionProvider.deleteTransaction(
                             transaction.id!,
                           );
+                          // Refresh recent transactions after delete
+                          await transactionProvider.fetchRecentTransactions(5);
+                          await transactionProvider.fetchSummary();
                         }
                       },
                     );
@@ -286,6 +318,38 @@ class _HomeScreenState extends State<HomeScreen> {
     Color color,
     IconData icon,
   ) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: color, size: 24),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              style: TextStyle(color: Colors.grey[600], fontSize: 12),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Rp ${NumberFormat('#,##0', 'id_ID').format(amount)}',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCategoryCard(String category, double netAmount, int count) {
+    final color = netAmount >= 0 ? Colors.green : Colors.red;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -293,18 +357,33 @@ class _HomeScreenState extends State<HomeScreen> {
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: color, size: 24),
-          const SizedBox(height: 8),
-          Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+          Text(
+            category,
+            style: TextStyle(
+              color: Colors.grey[800],
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
           const SizedBox(height: 4),
           Text(
-            '\$${amount.toStringAsFixed(2)}',
+            '$count trx',
+            style: TextStyle(color: Colors.grey[600], fontSize: 11),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Rp ${NumberFormat('#,##0', 'id_ID').format(netAmount.abs())}',
             style: TextStyle(
-              fontSize: 18,
+              fontSize: 16,
               fontWeight: FontWeight.bold,
               color: color,
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),

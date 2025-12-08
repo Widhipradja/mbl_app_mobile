@@ -87,11 +87,27 @@ class ApiService {
 
   // Transaction endpoints
   Future<Response> getTransactions() async {
-    return await _dio.get('/transactions');
+    return await _dio.get('/api/transactions');
+  }
+
+  Future<Response> getRecentTransactions(int limit) async {
+    return await _dio.get('/api/transaction/recent/$limit');
+  }
+
+  Future<Response> getMonthlyTransactions(int month, int year) async {
+    return await _dio.get('/api/transaction/monthlysummary/$month/$year');
   }
 
   Future<Response> createTransaction(Map<String, dynamic> data) async {
-    return await _dio.post('/transactions', data: data);
+    return await _dio.post('/api/transaction/addtrx', data: data);
+  }
+
+  Future<Response> getLookups(String type) async {
+    return await _dio.get('/api/lookups/type/$type');
+  }
+
+  Future<Response> getTransactionSummary() async {
+    return await _dio.get('/api/transaction/summary/categories');
   }
 
   Future<Response> updateTransaction(
