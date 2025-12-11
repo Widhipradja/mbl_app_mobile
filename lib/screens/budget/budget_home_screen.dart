@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:mbl_app_mobile/services/storage_service.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/transaction_provider.dart';
@@ -28,7 +29,8 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
     final transactionProvider = context.watch<TransactionProvider>();
-    final user = authProvider.user;
+    final user = StorageService.getUser();
+    final username = user?.name ?? 'User';
 
     return Scaffold(
       appBar: AppBar(
@@ -38,72 +40,72 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
           onPressed: () => context.go('/dashboard'),
         ),
         title: const Text('Manage Budget & Logs'),
-        actions: [
-          PopupMenuButton<String>(
-            icon: CircleAvatar(
-              backgroundColor: Colors.white,
-              child: Text(
-                user?.name.substring(0, 1).toUpperCase() ?? 'U',
-                style: const TextStyle(
-                  color: Color(0xFF667EEA),
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            onSelected: (value) async {
-              if (value == 'dashboard') {
-                context.go('/dashboard');
-              } else if (value == 'logout') {
-                await authProvider.logout();
-                if (context.mounted) {
-                  context.go('/login');
-                }
-              }
-            },
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                enabled: false,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      user?.name ?? 'User',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    ),
-                    Text(
-                      user?.email ?? '',
-                      style: const TextStyle(color: Colors.grey, fontSize: 12),
-                    ),
-                    const Divider(),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'dashboard',
-                child: Row(
-                  children: [
-                    Icon(Icons.home, color: Colors.blue),
-                    SizedBox(width: 8),
-                    Text('Back to Dashboard'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'logout',
-                child: Row(
-                  children: [
-                    Icon(Icons.logout, color: Colors.red),
-                    SizedBox(width: 8),
-                    Text('Logout', style: TextStyle(color: Colors.red)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
+        // actions: [
+        //   PopupMenuButton<String>(
+        //     icon: CircleAvatar(
+        //       backgroundColor: Colors.white,
+        //       child: Text(
+        //         username.substring(0, 1).toUpperCase(),
+        //         style: const TextStyle(
+        //           color: Color(0xFF667EEA),
+        //           fontWeight: FontWeight.bold,
+        //         ),
+        //       ),
+        //     ),
+        //     onSelected: (value) async {
+        //       if (value == 'dashboard') {
+        //         context.go('/dashboard');
+        //       } else if (value == 'logout') {
+        //         await authProvider.logout();
+        //         if (context.mounted) {
+        //           context.go('/login');
+        //         }
+        //       }
+        //     },
+        //     itemBuilder: (context) => [
+        //       PopupMenuItem(
+        //         enabled: false,
+        //         child: Column(
+        //           crossAxisAlignment: CrossAxisAlignment.start,
+        //           children: [
+        //             Text(
+        //               user?.name ?? 'User',
+        //               style: const TextStyle(
+        //                 fontWeight: FontWeight.bold,
+        //                 fontSize: 16,
+        //               ),
+        //             ),
+        //             Text(
+        //               user?.email ?? '',
+        //               style: const TextStyle(color: Colors.grey, fontSize: 12),
+        //             ),
+        //             const Divider(),
+        //           ],
+        //         ),
+        //       ),
+        //       const PopupMenuItem(
+        //         value: 'dashboard',
+        //         child: Row(
+        //           children: [
+        //             Icon(Icons.home, color: Colors.blue),
+        //             SizedBox(width: 8),
+        //             Text('Back to Dashboard'),
+        //           ],
+        //         ),
+        //       ),
+        //       const PopupMenuItem(
+        //         value: 'logout',
+        //         child: Row(
+        //           children: [
+        //             Icon(Icons.logout, color: Colors.red),
+        //             SizedBox(width: 8),
+        //             Text('Logout', style: TextStyle(color: Colors.red)),
+        //           ],
+        //         ),
+        //       ),
+        //     ],
+        //   ),
+        // ],
       ),
       body: RefreshIndicator(
         onRefresh: () async {
@@ -268,6 +270,12 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
                         transactionProvider.recentTransactions[index];
                     return TransactionCard(
                       transaction: transaction,
+                      onEdit: () {
+                        context.push(
+                          '/budget/edit-transaction',
+                          extra: transaction,
+                        );
+                      },
                       onDelete: () async {
                         final confirmed = await _showDeleteConfirmation(
                           context,

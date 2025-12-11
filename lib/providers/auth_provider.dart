@@ -68,22 +68,84 @@ class AuthProvider with ChangeNotifier {
         // Save token
         await StorageService.saveToken(token);
 
-        // Decode JWT and extract user data
-        final userData = JwtDecoder.getUserDataFromToken(token);
-        print('🔵 USER DATA FROM JWT: $userData');
+        // Create user data from response (priority) or decode from JWT
+        Map<String, dynamic> userData;
 
-        if (userData == null) {
-          _error = 'Invalid authentication token. Please try again.';
-          await StorageService.clearAll();
-          _isLoading = false;
-          notifyListeners();
-          return false;
+        if (data['email'] != null && data['name'] != null) {
+          // Use data directly from login response
+          // Convert roles array if it's a list of strings
+          List<Map<String, dynamic>>? rolesData;
+          if (data['roles'] != null && data['roles'] is List) {
+            final rolesList = data['roles'] as List;
+            if (rolesList.isNotEmpty && rolesList.first is String) {
+              // Convert string array to Role objects
+              rolesData = rolesList
+                  .map(
+                    (roleName) => {
+                      'user_id': data['user_id'] ?? data['email'],
+                      'role_id': '',
+                      'role_name': roleName.toString(),
+                    },
+                  )
+                  .toList();
+            } else if (rolesList.isNotEmpty && rolesList.first is Map) {
+              // Already in correct format
+              rolesData = List<Map<String, dynamic>>.from(rolesList);
+            }
+          }
+
+          userData = {
+            'id': data['user_id'] ?? data['email'],
+            'name': data['name'],
+            'email': data['email'],
+            'user_id': data['user_id'],
+            'tenant_id': data['tenant_id'],
+            'roles': rolesData,
+          };
+        } else {
+          // Fallback: Decode JWT and extract user data
+          final decodedData = JwtDecoder.getUserDataFromToken(token);
+          if (decodedData == null) {
+            _error = 'Invalid authentication token. Please try again.';
+            await StorageService.clearAll();
+            _isLoading = false;
+            notifyListeners();
+            return false;
+          }
+
+          // Convert roles array if needed
+          List<Map<String, dynamic>>? rolesData;
+          if (decodedData['roles'] != null && decodedData['roles'] is List) {
+            final rolesList = decodedData['roles'] as List;
+            if (rolesList.isNotEmpty && rolesList.first is String) {
+              rolesData = rolesList
+                  .map(
+                    (roleName) => {
+                      'user_id': decodedData['user_id'] ?? decodedData['email'],
+                      'role_id': '',
+                      'role_name': roleName.toString(),
+                    },
+                  )
+                  .toList();
+            } else if (rolesList.isNotEmpty && rolesList.first is Map) {
+              rolesData = List<Map<String, dynamic>>.from(rolesList);
+            }
+          }
+
+          userData = {
+            'id': decodedData['user_id'] ?? decodedData['email'],
+            'name': decodedData['name'],
+            'email': decodedData['email'],
+            'user_id': decodedData['user_id'],
+            'tenant_id': decodedData['tenant_id'],
+            'roles': rolesData,
+          };
         }
 
         _user = User.fromJson(userData);
         await StorageService.saveUser(_user!);
 
-        // Save tenant ID from JWT
+        // Save tenant ID
         if (userData['tenant_id'] != null) {
           await StorageService.saveTenantId(userData['tenant_id']);
         }

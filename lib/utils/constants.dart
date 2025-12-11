@@ -6,7 +6,7 @@ class AppConstants {
   static const String? tenantId = null; // Multi-tenant mode
 
   // API Configuration
-  static const String apiBaseUrl = 'https://59141266354a.ngrok-free.app/mblapi';
+  static const String apiBaseUrl = 'https://1b32303d364b.ngrok-free.app/mblapi';
 
   // For local development
   static const String localApiUrl =

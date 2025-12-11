@@ -28,9 +28,9 @@ class ApiService {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
-          print('🔵 REQUEST: ${options.method} ${options.path}');
-          print('📤 DATA: ${options.data}');
-          print('🔵 LOGIN URL: ${AppConstants.apiBaseUrl}${options.path}');
+          // print('🔵 REQUEST: ${options.method} ${options.path}');
+          // print('📤 DATA: ${options.data}');
+          // print('🔵 LOGIN URL: ${AppConstants.apiBaseUrl}${options.path}');
 
           // Add auth token
           final token = StorageService.getToken();
@@ -61,6 +61,10 @@ class ApiService {
         onError: (error, handler) {
           print('🔴 ERROR: ${error.response?.statusCode} - ${error.message}');
           print('🔴 FULL ERROR: $error');
+          // print url that caused the error
+          print('🔴 ERROR URL: ${error.requestOptions.uri}');
+          //print the payload that caused the error
+          print('🔴 ERROR PAYLOAD: ${error.requestOptions.data}');
           if (error.response?.statusCode == 401) {
             // Token expired, logout user
             StorageService.clearAll();
@@ -69,8 +73,8 @@ class ApiService {
           return handler.next(error);
         },
         onResponse: (response, handler) {
-          print('🟢 RESPONSE: ${response.statusCode}');
-          print('🟢 DATA: ${response.data}');
+          // print('🟢 RESPONSE: ${response.statusCode}');
+          // print('🟢 DATA: ${response.data}');
           return handler.next(response);
         },
       ),
@@ -114,15 +118,34 @@ class ApiService {
     return await _dio.get('/api/transaction/summary/categories');
   }
 
+  Future<Response> inquiryTransactions({
+    String? category,
+    String? pic,
+    String? trxType,
+    String? description,
+    String? startDate,
+    String? endDate,
+  }) async {
+    final Map<String, dynamic> payload = {};
+    if (category != null) payload['category'] = category;
+    if (pic != null) payload['pic'] = pic;
+    if (trxType != null) payload['trx_type'] = trxType;
+    if (description != null) payload['description'] = description;
+    if (startDate != null) payload['start_date'] = startDate;
+    if (endDate != null) payload['end_date'] = endDate;
+
+    return await _dio.post('/api/transaction/inquiry', data: payload);
+  }
+
   Future<Response> updateTransaction(
     String id,
     Map<String, dynamic> data,
   ) async {
-    return await _dio.put('/transactions/$id', data: data);
+    return await _dio.put('/api/transaction/$id', data: data);
   }
 
   Future<Response> deleteTransaction(String id) async {
-    return await _dio.delete('/transactions/$id');
+    return await _dio.delete('/api/transaction/$id');
   }
 
   // User endpoints

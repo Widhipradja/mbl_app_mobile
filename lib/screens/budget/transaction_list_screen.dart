@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
 import '../../providers/transaction_provider.dart';
 import '../../models/transaction.dart';
 import '../../widgets/transaction_card.dart';
@@ -14,17 +15,114 @@ class TransactionListScreen extends StatefulWidget {
 
 class _TransactionListScreenState extends State<TransactionListScreen> {
   String _filterType = 'all'; // all, income, expense
+  String? _selectedCategory;
+  late int _selectedMonth;
+  late int _selectedYear;
 
   @override
   void initState() {
     super.initState();
+    final now = DateTime.now();
+    _selectedMonth = now.month;
+    _selectedYear = now.year;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final now = DateTime.now();
       context.read<TransactionProvider>().fetchMonthlyTransactions(
-        now.month,
-        now.year,
+        _selectedMonth,
+        _selectedYear,
       );
     });
+  }
+
+  Future<void> _showMonthYearPicker() async {
+    final now = DateTime.now();
+    int tempMonth = _selectedMonth;
+    int tempYear = _selectedYear;
+
+    await showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Select Month & Year'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Month Selector
+                  DropdownButtonFormField<int>(
+                    initialValue: tempMonth,
+                    decoration: const InputDecoration(
+                      labelText: 'Month',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: List.generate(12, (index) {
+                      return DropdownMenuItem(
+                        value: index + 1,
+                        child: Text(
+                          DateFormat('MMMM').format(DateTime(2024, index + 1)),
+                        ),
+                      );
+                    }),
+                    onChanged: (value) {
+                      if (value != null) {
+                        setDialogState(() {
+                          tempMonth = value;
+                        });
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  // Year Selector
+                  DropdownButtonFormField<int>(
+                    initialValue: tempYear,
+                    decoration: const InputDecoration(
+                      labelText: 'Year',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: List.generate(5, (index) {
+                      final year = now.year - 2 + index;
+                      return DropdownMenuItem(
+                        value: year,
+                        child: Text(year.toString()),
+                      );
+                    }),
+                    onChanged: (value) {
+                      if (value != null) {
+                        setDialogState(() {
+                          tempYear = value;
+                        });
+                      }
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() {
+                      _selectedMonth = tempMonth;
+                      _selectedYear = tempYear;
+                    });
+                    context
+                        .read<TransactionProvider>()
+                        .fetchMonthlyTransactions(
+                          _selectedMonth,
+                          _selectedYear,
+                        );
+                    Navigator.pop(context);
+                  },
+                  child: const Text('Apply'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -32,15 +130,27 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
     final transactionProvider = context.watch<TransactionProvider>();
 
     List<Transaction> filteredTransactions = transactionProvider.transactions;
+
+    // Filter by type
     if (_filterType == 'income') {
-      filteredTransactions = transactionProvider.transactions
+      filteredTransactions = filteredTransactions
           .where((t) => t.type == TransactionType.income)
           .toList();
     } else if (_filterType == 'expense') {
-      filteredTransactions = transactionProvider.transactions
+      filteredTransactions = filteredTransactions
           .where((t) => t.type == TransactionType.expense)
           .toList();
     }
+
+    // Filter by category
+    if (_selectedCategory != null && _selectedCategory != 'all') {
+      filteredTransactions = filteredTransactions
+          .where((t) => t.category == _selectedCategory)
+          .toList();
+    }
+
+    // Sort by date (descending - newest first)
+    filteredTransactions.sort((a, b) => b.date.compareTo(a.date));
 
     // Group transactions by date
     Map<String, List<Transaction>> groupedTransactions = {};
@@ -54,10 +164,69 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          'Transactions - ${DateFormat('MMMM yyyy').format(DateTime.now())}',
+        title: GestureDetector(
+          onTap: _showMonthYearPicker,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  DateFormat(
+                    'MMM yyyy',
+                  ).format(DateTime(_selectedYear, _selectedMonth)),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(Icons.calendar_today, size: 18),
+            ],
+          ),
         ),
         actions: [
+          // Search icon
+          IconButton(
+            icon: const Icon(Icons.search),
+            tooltip: 'Search Transactions',
+            onPressed: () {
+              context.push('/budget/search');
+            },
+          ),
+          // Category filter
+          PopupMenuButton<String>(
+            icon: Icon(
+              Icons.category,
+              color: _selectedCategory != null && _selectedCategory != 'all'
+                  ? Colors.blue
+                  : null,
+            ),
+            tooltip: 'Filter by Category',
+            onSelected: (value) {
+              setState(() {
+                _selectedCategory = value;
+              });
+            },
+            itemBuilder: (context) {
+              // Get unique categories from transactions
+              final categories = transactionProvider.transactions
+                  .map((t) => t.category)
+                  .toSet()
+                  .toList();
+              categories.sort();
+
+              return [
+                const PopupMenuItem(
+                  value: 'all',
+                  child: Text('All Categories'),
+                ),
+                const PopupMenuDivider(),
+                ...categories.map(
+                  (category) =>
+                      PopupMenuItem(value: category, child: Text(category)),
+                ),
+              ];
+            },
+          ),
+          // Type filter
           PopupMenuButton<String>(
             icon: const Icon(Icons.filter_list),
             onSelected: (value) {
@@ -81,10 +250,9 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: () {
-          final now = DateTime.now();
           return transactionProvider.fetchMonthlyTransactions(
-            now.month,
-            now.year,
+            _selectedMonth,
+            _selectedYear,
           );
         },
         child: transactionProvider.isLoading
@@ -157,6 +325,12 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
                       ...transactions.map((transaction) {
                         return TransactionCard(
                           transaction: transaction,
+                          onEdit: () {
+                            context.push(
+                              '/budget/edit-transaction',
+                              extra: transaction,
+                            );
+                          },
                           onDelete: () async {
                             final confirmed = await _showDeleteConfirmation(
                               context,

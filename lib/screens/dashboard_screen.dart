@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../services/storage_service.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -9,7 +10,12 @@ class DashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
-    final username = authProvider.user?.name ?? 'User';
+    final user = StorageService.getUser();
+    final username = user?.name ?? 'User';
+    final userRoles = user?.roleNames ?? [];
+    final rolesText = userRoles.isNotEmpty
+        ? userRoles.join(', ')
+        : 'No role assigned';
 
     return Scaffold(
       backgroundColor: const Color(0xFF1A1A2E),
@@ -106,6 +112,26 @@ class DashboardScreen extends StatelessWidget {
                                     fontWeight: FontWeight.bold,
                                   ),
                                   overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 4),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    rolesText,
+                                    style: TextStyle(
+                                      color: Colors.grey[300],
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
                               ],
                             ),

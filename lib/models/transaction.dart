@@ -63,4 +63,32 @@ class Transaction {
       if (pic != null && pic!.isNotEmpty) 'pic': pic,
     };
   }
+
+  Transaction copyWith({
+    String? id,
+    String? title,
+    double? amount,
+    TransactionType? type,
+    String? category,
+    String? subCategory,
+    DateTime? date,
+    String? description,
+    String? pic,
+    String? remarks,
+    String? requestedBy,
+  }) {
+    return Transaction(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      amount: amount ?? this.amount,
+      type: type ?? this.type,
+      category: category ?? this.category,
+      subCategory: subCategory ?? this.subCategory,
+      date: date ?? this.date,
+      description: description ?? this.description,
+      pic: pic ?? this.pic,
+      remarks: remarks ?? this.remarks,
+      requestedBy: requestedBy ?? this.requestedBy,
+    );
+  }
 }

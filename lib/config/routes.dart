@@ -5,6 +5,7 @@ import '../screens/dashboard_screen.dart';
 import '../screens/budget/budget_home_screen.dart';
 import '../screens/budget/add_transaction_screen.dart';
 import '../screens/budget/transaction_list_screen.dart';
+import '../screens/budget/search_transaction_screen.dart';
 import '../screens/contacts/contacts_home_screen.dart';
 import '../services/storage_service.dart';
 import '../utils/jwt_decoder.dart';
@@ -60,8 +61,19 @@ class AppRouter {
         builder: (context, state) => const AddTransactionScreen(),
       ),
       GoRoute(
+        path: '/budget/edit-transaction',
+        builder: (context, state) {
+          final transaction = state.extra as dynamic;
+          return AddTransactionScreen(transaction: transaction);
+        },
+      ),
+      GoRoute(
         path: '/budget/transactions',
         builder: (context, state) => const TransactionListScreen(),
+      ),
+      GoRoute(
+        path: '/budget/search',
+        builder: (context, state) => const SearchTransactionScreen(),
       ),
 
       // Contacts Module Routes

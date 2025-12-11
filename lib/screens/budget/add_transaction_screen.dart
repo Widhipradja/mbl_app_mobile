@@ -8,7 +8,9 @@ import '../../services/api_service.dart';
 import 'package:intl/intl.dart';
 
 class AddTransactionScreen extends StatefulWidget {
-  const AddTransactionScreen({super.key});
+  final Transaction? transaction;
+
+  const AddTransactionScreen({super.key, this.transaction});
 
   @override
   State<AddTransactionScreen> createState() => _AddTransactionScreenState();
@@ -33,6 +35,17 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   void initState() {
     super.initState();
     _loadCategories();
+
+    // If editing, populate fields with existing data
+    if (widget.transaction != null) {
+      final txn = widget.transaction!;
+      _amountController.text = txn.amount.toString();
+      _descriptionController.text = txn.description ?? '';
+      _picController.text = txn.pic ?? '';
+      _selectedType = txn.type;
+      _selectedDate = txn.date;
+      // Category and subcategory will be set after loading categories
+    }
   }
 
   Future<void> _loadCategories() async {
@@ -115,16 +128,36 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
   Future<void> _handleSubmit() async {
     if (_formKey.currentState!.validate()) {
+      // Get category text (value) from the selected category ID
+      final categoryText =
+          _categories
+              .firstWhere(
+                (cat) => cat['id']?.toString() == _selectedCategory,
+                orElse: () => {'value': _selectedCategory ?? ''},
+              )['value']
+              ?.toString() ??
+          '';
+
+      // Get subcategory text if from dropdown, otherwise use text input
+      final subCategoryText = _subCategories.isNotEmpty
+          ? (_selectedSubCategory != null
+                ? _subCategories
+                      .firstWhere(
+                        (sub) => sub['id']?.toString() == _selectedSubCategory,
+                        orElse: () => {'value': _selectedSubCategory ?? ''},
+                      )['value']
+                      ?.toString()
+                : null)
+          : (_subCategoryController.text.trim().isEmpty
+                ? null
+                : _subCategoryController.text.trim());
+
       final transaction = Transaction(
         title: '', // Not needed in backend model
         amount: double.parse(_amountController.text.trim()),
         type: _selectedType,
-        category: _selectedCategory ?? '',
-        subCategory: _subCategories.isNotEmpty
-            ? _selectedSubCategory
-            : (_subCategoryController.text.trim().isEmpty
-                  ? null
-                  : _subCategoryController.text.trim()),
+        category: categoryText,
+        subCategory: subCategoryText,
         date: _selectedDate,
         description: _descriptionController.text.trim(),
         pic: _picController.text.trim().isEmpty
@@ -133,14 +166,28 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       );
 
       final provider = context.read<TransactionProvider>();
-      final success = await provider.addTransaction(transaction);
+      final bool success;
+
+      // Check if editing or adding
+      if (widget.transaction != null) {
+        success = await provider.updateTransaction(
+          widget.transaction!.id!,
+          transaction,
+        );
+      } else {
+        success = await provider.addTransaction(transaction);
+      }
 
       if (!mounted) return;
 
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Transaction added successfully!'),
+          SnackBar(
+            content: Text(
+              widget.transaction != null
+                  ? 'Transaction updated successfully!'
+                  : 'Transaction added successfully!',
+            ),
             backgroundColor: Colors.green,
           ),
         );
@@ -148,7 +195,12 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(provider.error ?? 'Failed to add transaction'),
+            content: Text(
+              provider.error ??
+                  (widget.transaction != null
+                      ? 'Failed to update transaction'
+                      : 'Failed to add transaction'),
+            ),
             backgroundColor: Colors.red,
           ),
         );
@@ -159,7 +211,11 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Add Transaction')),
+      appBar: AppBar(
+        title: Text(
+          widget.transaction != null ? 'Edit Transaction' : 'Add Transaction',
+        ),
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Form(
