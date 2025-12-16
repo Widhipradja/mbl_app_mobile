@@ -88,7 +88,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         throw Exception('Failed to load categories: ${response.statusCode}');
       }
     } catch (e) {
-      print('Error loading categories: $e');
+      debugPrint('Error loading categories: $e');
       setState(() {
         _isLoadingCategories = false;
       });

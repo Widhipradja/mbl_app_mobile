@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'storage_service.dart';
+import 'config_service.dart';
 import '../utils/constants.dart';
 import '../utils/jwt_decoder.dart';
 import 'package:flutter/material.dart';
@@ -17,7 +18,7 @@ class ApiService {
   ApiService() {
     _dio = Dio(
       BaseOptions(
-        baseUrl: AppConstants.apiBaseUrl,
+        baseUrl: ConfigService.apiBaseUrl,
         connectTimeout: const Duration(seconds: 10),
         receiveTimeout: const Duration(seconds: 10),
         headers: {'Content-Type': 'application/json'},
@@ -28,16 +29,16 @@ class ApiService {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
-          // print('🔵 REQUEST: ${options.method} ${options.path}');
-          // print('📤 DATA: ${options.data}');
-          // print('🔵 LOGIN URL: ${AppConstants.apiBaseUrl}${options.path}');
+          // debugPrint('🔵 REQUEST: ${options.method} ${options.path}');
+          // debugPrint('📤 DATA: ${options.data}');
+          // debugPrint('🔵 LOGIN URL: ${AppConstants.apiBaseUrl}${options.path}');
 
           // Add auth token
           final token = StorageService.getToken();
           if (token != null) {
             // Check if token is expired before making request
             if (JwtDecoder.isExpired(token)) {
-              print('🔴 Token expired, clearing storage');
+              debugPrint('🔴 Token expired, clearing storage');
               StorageService.clearAll();
               tokenExpiredNotifier.value = true;
               return handler.reject(
@@ -59,12 +60,12 @@ class ApiService {
           return handler.next(options);
         },
         onError: (error, handler) {
-          print('🔴 ERROR: ${error.response?.statusCode} - ${error.message}');
-          print('🔴 FULL ERROR: $error');
-          // print url that caused the error
-          print('🔴 ERROR URL: ${error.requestOptions.uri}');
-          //print the payload that caused the error
-          print('🔴 ERROR PAYLOAD: ${error.requestOptions.data}');
+          debugPrint(
+            '🔴 ERROR: ${error.response?.statusCode} - ${error.message}',
+          );
+          debugPrint('🔴 FULL ERROR: $error');
+          debugPrint('🔴 ERROR URL: ${error.requestOptions.uri}');
+          debugPrint('🔴 ERROR PAYLOAD: ${error.requestOptions.data}');
           if (error.response?.statusCode == 401) {
             // Token expired, logout user
             StorageService.clearAll();
@@ -73,8 +74,8 @@ class ApiService {
           return handler.next(error);
         },
         onResponse: (response, handler) {
-          // print('🟢 RESPONSE: ${response.statusCode}');
-          // print('🟢 DATA: ${response.data}');
+          // debugPrint('🟢 RESPONSE: ${response.statusCode}');
+          // debugPrint('🟢 DATA: ${response.data}');
           return handler.next(response);
         },
       ),
@@ -148,8 +149,106 @@ class ApiService {
     return await _dio.delete('/api/transaction/$id');
   }
 
+  // Event endpoints
+  Future<Response> createEvent(Map<String, dynamic> data) async {
+    return await _dio.post('/api/events', data: data);
+  }
+
+  Future<Response> getEventsByYear(int year) async {
+    return await _dio.get('/api/events/year/$year');
+  }
+
+  Future<Response> getEventsByYearMonth({int? year, int? month}) async {
+    final now = DateTime.now();
+    final targetYear = year ?? now.year;
+    final targetMonth = month ?? now.month;
+    return await _dio.get('/api/events/year/$targetYear/month/$targetMonth');
+  }
+
+  Future<Response> getLatestEvents({int? year, int? month}) async {
+    final now = DateTime.now();
+    final targetYear = year ?? now.year;
+    final targetMonth = month ?? now.month;
+    return await _dio.get(
+      '/api/events/ongoing/year/$targetYear/month/$targetMonth',
+    );
+  }
+
+  Future<Response> getCompletedEvents({int? year, int? month}) async {
+    final now = DateTime.now();
+    final targetYear = year ?? now.year;
+    final targetMonth = month ?? now.month;
+    return await _dio.get(
+      '/api/events/completed/year/$targetYear/month/$targetMonth',
+    );
+  }
+
+  Future<Response> updateEvent(String id, Map<String, dynamic> data) async {
+    return await _dio.put('/api/events/$id', data: data);
+  }
+
+  Future<Response> updateEventStatus(String id, String status) async {
+    return await _dio.put('/api/events/$id/status', data: {'status': status});
+  }
+
+  Future<Response> deleteEvent(String id) async {
+    return await _dio.delete('/api/events/$id');
+  }
+
   // User endpoints
   Future<Response> getProfile() async {
     return await _dio.get('/user/profile');
+  }
+
+  // Attendance endpoints
+  Future<Response> markAttendance(
+    String eventId,
+    String userId,
+    bool isAttending,
+  ) async {
+    return await _dio.put(
+      '/api/events/$eventId/attendance/user/$userId',
+      data: {'is_attending': isAttending},
+    );
+  }
+
+  Future<Response> updateAttendanceRemark(
+    String eventId,
+    String userId,
+    String remark,
+  ) async {
+    return await _dio.put(
+      '/api/events/$eventId/attendance/user/$userId/remark',
+      data: {'remark': remark},
+    );
+  }
+
+  Future<Response> getEventAttendance(String eventId) async {
+    return await _dio.get('/api/events/$eventId/attendance');
+  }
+
+  Future<Response> syncEventAttendees(String eventId) async {
+    return await _dio.post('/api/events/$eventId/syncattendees');
+  }
+
+  // Member endpoints
+  Future<Response> getMembers() async {
+    return await _dio.get('/api/members');
+  }
+
+  Future<Response> getMemberById(String id) async {
+    return await _dio.get('/api/members/$id');
+  }
+
+  Future<Response> createMember(Map<String, dynamic> data) async {
+    return await _dio.post('/api/members', data: data);
+  }
+
+  Future<Response> updateMember(String id, Map<String, dynamic> data) async {
+    return await _dio.put('/api/members/$id', data: data);
+  }
+
+  Future<Response> deleteMember(String id) async {
+    return await _dio.delete('/api/members/$id');
   }
 }

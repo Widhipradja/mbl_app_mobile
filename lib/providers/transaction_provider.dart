@@ -94,6 +94,12 @@ class TransactionProvider with ChangeNotifier {
                       ? double.parse(cat['net'])
                       : (cat['net'] as num).toDouble(),
                   'cnt': cat['cnt'] ?? 0,
+                  'realloc_in': (cat['realloc_in'] is String)
+                      ? double.parse(cat['realloc_in'])
+                      : (cat['realloc_in'] as num?)?.toDouble() ?? 0.0,
+                  'realloc_out': (cat['realloc_out'] is String)
+                      ? double.parse(cat['realloc_out'])
+                      : (cat['realloc_out'] as num?)?.toDouble() ?? 0.0,
                 },
               )
               .toList();
@@ -109,9 +115,9 @@ class TransactionProvider with ChangeNotifier {
         notifyListeners();
       }
     } on DioException catch (e) {
-      print('Error fetching summary: ${e.response?.data}');
+      debugPrint('Error fetching summary: ${e.response?.data}');
     } catch (e) {
-      print('Error fetching summary: $e');
+      debugPrint('Error fetching summary: $e');
     }
   }
 
@@ -130,9 +136,9 @@ class TransactionProvider with ChangeNotifier {
         notifyListeners();
       }
     } on DioException catch (e) {
-      print('Error fetching recent transactions: ${e.response?.data}');
+      debugPrint('Error fetching recent transactions: ${e.response?.data}');
     } catch (e) {
-      print('Error fetching recent transactions: $e');
+      debugPrint('Error fetching recent transactions: $e');
     }
   }
 

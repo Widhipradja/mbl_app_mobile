@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:mbl_app_mobile/services/storage_service.dart';
 import 'package:provider/provider.dart';
-import '../../providers/auth_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../widgets/transaction_card.dart';
+import '../../widgets/category_card.dart';
 import 'package:intl/intl.dart';
 
 class BudgetHomeScreen extends StatefulWidget {
@@ -27,10 +26,7 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final authProvider = context.watch<AuthProvider>();
     final transactionProvider = context.watch<TransactionProvider>();
-    final user = StorageService.getUser();
-    final username = user?.name ?? 'User';
 
     return Scaffold(
       appBar: AppBar(
@@ -159,7 +155,7 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
                               ],
                             )
                           : SizedBox(
-                              height: 120,
+                              height: 240,
                               child: PageView.builder(
                                 itemCount:
                                     transactionProvider.categories.length,
@@ -173,10 +169,13 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
                                     padding: const EdgeInsets.symmetric(
                                       horizontal: 4,
                                     ),
-                                    child: _buildCategoryCard(
-                                      category['cat'],
-                                      category['net'],
-                                      category['cnt'],
+                                    child: CategoryCard(
+                                      category: category['cat'],
+                                      netAmount: category['net'],
+                                      count: category['cnt'],
+                                      reallocIn: category['realloc_in'] ?? 0.0,
+                                      reallocOut:
+                                          category['realloc_out'] ?? 0.0,
                                     ),
                                   );
                                 },
@@ -331,48 +330,6 @@ class _BudgetHomeScreenState extends State<BudgetHomeScreen> {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildCategoryCard(String category, double netAmount, int count) {
-    final color = netAmount >= 0 ? Colors.green : Colors.red;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            category,
-            style: TextStyle(
-              color: Colors.grey[800],
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '$count trx',
-            style: TextStyle(color: Colors.grey[600], fontSize: 11),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Rp ${NumberFormat('#,##0', 'id_ID').format(netAmount.abs())}',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
       ),
     );
   }

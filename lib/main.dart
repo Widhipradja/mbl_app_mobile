@@ -4,14 +4,19 @@ import 'config/theme.dart';
 import 'config/routes.dart';
 import 'providers/auth_provider.dart';
 import 'providers/transaction_provider.dart';
+import 'providers/event_provider.dart';
 import 'services/storage_service.dart';
 import 'services/api_service.dart';
+import 'services/config_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Initialize services
   await StorageService.init();
+
+  // Load remote configuration
+  await ConfigService.loadRemoteConfig();
 
   runApp(const MyApp());
 }
@@ -52,6 +57,7 @@ class _MyAppState extends State<MyApp> {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => TransactionProvider()),
+        ChangeNotifierProvider(create: (_) => EventProvider()),
       ],
       child: MaterialApp.router(
         title: 'Manajemen Budget & Log',

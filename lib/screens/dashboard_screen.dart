@@ -7,6 +7,14 @@ import '../services/storage_service.dart';
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
 
+  bool _hasRequiredRole(List<String> userRoles, List<String> requiredRoles) {
+    return userRoles.any(
+      (role) => requiredRoles.any(
+        (required) => role.toLowerCase() == required.toLowerCase(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
@@ -16,6 +24,25 @@ class DashboardScreen extends StatelessWidget {
     final rolesText = userRoles.isNotEmpty
         ? userRoles.join(', ')
         : 'No role assigned';
+
+    // Check role permissions
+    final canAccessBudget = _hasRequiredRole(userRoles, [
+      'Administrator',
+      'KU',
+      'KI',
+    ]);
+    final canAccessAttendance = _hasRequiredRole(userRoles, [
+      'Administrator',
+      'Penerobos',
+      'PNB',
+      'KI',
+    ]);
+    final canAccessMembers = _hasRequiredRole(userRoles, [
+      'Administrator',
+      'Penerobos',
+      'PNB',
+      'KI',
+    ]);
 
     return Scaffold(
       backgroundColor: const Color(0xFF1A1A2E),
@@ -184,32 +211,41 @@ class DashboardScreen extends StatelessWidget {
                       _buildModuleCard(
                         context: context,
                         title: 'Budget Manager',
-                        description: 'Track your income and expenses',
+                        description: canAccessBudget
+                            ? 'Track your income and expenses'
+                            : 'Requires Administrator or KU role',
                         icon: Icons.account_balance_wallet,
                         gradientColors: [
                           const Color(0xFF0F3460),
                           const Color(0xFF16213E),
                         ],
-                        route: '/budget',
+                        route: canAccessBudget ? '/budget' : null,
                       ),
                       _buildModuleCard(
                         context: context,
-                        title: 'Contacts',
-                        description: 'Manage contacts and attendance',
-                        icon: Icons.contacts,
+                        title: 'Attendance',
+                        description: canAccessAttendance
+                            ? 'Track attendance for events'
+                            : 'Requires Administrator, Penerobos or PNB role',
+                        icon: Icons.event_available,
                         gradientColors: [
                           const Color(0xFF533483),
                           const Color(0xFF3D2352),
                         ],
-                        route: '/contacts',
+                        route: canAccessAttendance ? '/attendance' : null,
                       ),
                       _buildModuleCard(
                         context: context,
-                        title: 'Coming Soon',
-                        description: 'More features on the way',
-                        icon: Icons.add_circle_outline,
-                        gradientColors: [Colors.grey[800]!, Colors.grey[900]!],
-                        route: null, // disabled
+                        title: 'Member',
+                        description: canAccessMembers
+                            ? 'Manage members'
+                            : 'Requires Administrator, Penerobos or PNB role',
+                        icon: Icons.people,
+                        gradientColors: [
+                          const Color(0xFF2E7D32),
+                          const Color(0xFF1B5E20),
+                        ],
+                        route: canAccessMembers ? '/members' : null,
                       ),
                     ],
                   ),
@@ -269,6 +305,7 @@ class DashboardScreen extends StatelessWidget {
             padding: const EdgeInsets.all(16.0),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 // Icon container
                 Container(
@@ -279,29 +316,29 @@ class DashboardScreen extends StatelessWidget {
                   ),
                   child: Icon(
                     icon,
-                    size: 40,
+                    size: 36,
                     color: isDisabled ? Colors.grey[600] : Colors.white,
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
                 Text(
                   title,
                   style: TextStyle(
                     color: isDisabled ? Colors.grey[600] : Colors.white,
-                    fontSize: 16,
+                    fontSize: 15,
                     fontWeight: FontWeight.bold,
                   ),
                   textAlign: TextAlign.center,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 Flexible(
                   child: Text(
                     description,
                     style: TextStyle(
                       color: isDisabled ? Colors.grey[700] : Colors.grey[300],
-                      fontSize: 11,
+                      fontSize: 10,
                       height: 1.3,
                     ),
                     textAlign: TextAlign.center,
@@ -310,10 +347,10 @@ class DashboardScreen extends StatelessWidget {
                   ),
                 ),
                 if (!isDisabled) ...[
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
                   Icon(
                     Icons.arrow_forward,
-                    size: 16,
+                    size: 14,
                     color: Colors.white.withOpacity(0.7),
                   ),
                 ],

@@ -30,7 +30,7 @@ class AuthProvider with ChangeNotifier {
       // Token expired, clear storage and logout
       await StorageService.clearAll();
       _user = null;
-      print('🔴 Token expired, user logged out');
+      debugPrint('🔴 Token expired, user logged out');
     }
 
     notifyListeners();
@@ -52,7 +52,7 @@ class AuthProvider with ChangeNotifier {
     try {
       final response = await _apiService.login(userId, password);
       // show response
-      // print('Login response: ${response.statusCode} - ${response.data}');
+      // debugPrint('Login response: ${response.statusCode} - ${response.data}');
       if (response.statusCode == 200) {
         final data = response.data;
         final token = data['token'];
@@ -162,9 +162,9 @@ class AuthProvider with ChangeNotifier {
       }
     } on DioException catch (e) {
       // Handle Dio-specific errors
-      print('🔴 DIO ERROR: ${e.type} - ${e.response?.statusCode}');
-      print('🔴 ERROR MESSAGE: ${e.message}');
-      print('🔴 RESPONSE DATA: ${e.response?.data}');
+      debugPrint('🔴 DIO ERROR: ${e.type} - ${e.response?.statusCode}');
+      debugPrint('🔴 ERROR MESSAGE: ${e.message}');
+      debugPrint('🔴 RESPONSE DATA: ${e.response?.data}');
 
       if (e.response?.statusCode == 401) {
         _error = 'Invalid user ID or password.';
@@ -192,7 +192,7 @@ class AuthProvider with ChangeNotifier {
       return false;
     } catch (e) {
       // Handle other errors
-      print('🔴 GENERAL ERROR: $e');
+      debugPrint('🔴 GENERAL ERROR: $e');
       _error = 'An unexpected error occurred. Please try again.';
       _isLoading = false;
       notifyListeners();

@@ -6,7 +6,7 @@ class JwtDecoder {
     try {
       return Jwt.parseJwt(token);
     } catch (e) {
-      print('Error decoding JWT: $e');
+      // debugPrint('Error decoding JWT: $e');
       return null;
     }
   }
@@ -16,7 +16,7 @@ class JwtDecoder {
     try {
       return Jwt.isExpired(token);
     } catch (e) {
-      print('Error checking token expiry: $e');
+      // debugPrint('Error checking token expiry: $e');
       return true;
     }
   }
@@ -26,7 +26,7 @@ class JwtDecoder {
     try {
       return Jwt.getExpiryDate(token);
     } catch (e) {
-      print('Error getting expiry date: $e');
+      // debugPrint('Error getting expiry date: $e');
       return null;
     }
   }
