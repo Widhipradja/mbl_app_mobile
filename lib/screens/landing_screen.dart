@@ -109,14 +109,29 @@ class _LandingScreenState extends State<LandingScreen>
                   ),
                 ),
                 const SizedBox(width: 12),
-                const Text(
-                  'MBL App',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.5,
-                  ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    Text(
+                      'MBL App',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Manage Balance & Log',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w400,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

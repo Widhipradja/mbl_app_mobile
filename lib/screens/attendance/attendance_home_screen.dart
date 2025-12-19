@@ -16,14 +16,13 @@ class AttendanceHomeScreen extends StatefulWidget {
 
 class _AttendanceHomeScreenState extends State<AttendanceHomeScreen>
     with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+  int _selectedTab = 0; // 0: Tambah, 1: Ongoing, 2: Completed
   List<Event> _completedEvents = [];
   bool _isLoadingCompleted = false;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _fetchCurrentMonthEvents();
     });
@@ -51,12 +50,6 @@ class _AttendanceHomeScreenState extends State<AttendanceHomeScreen>
 
     // Fetch completed events for current month
     _fetchCompletedEvents();
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
   }
 
   Future<void> _fetchCompletedEvents() async {
@@ -354,36 +347,44 @@ class _AttendanceHomeScreenState extends State<AttendanceHomeScreen>
     required bool showCreateButton,
   }) {
     return Padding(
-      padding: const EdgeInsets.all(16.0),
+      padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Create Event Button (only for ongoing tab)
-          if (showCreateButton) ...[
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _showCreateEventDialog,
-                icon: const Icon(Icons.add),
-                label: const Text('Create New Event'),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-          ],
-
           // Events List Header
           if (events.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Text(
-                'Events (${events.length})',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Daftar Event',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey.shade800,
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.indigo.shade100,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      '${events.length} event',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.indigo.shade700,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
 
@@ -396,29 +397,35 @@ class _AttendanceHomeScreenState extends State<AttendanceHomeScreen>
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(
-                          Icons.event_busy,
-                          size: 80,
-                          color: Colors.grey[400],
+                        Container(
+                          padding: const EdgeInsets.all(24),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.event_busy,
+                            size: 60,
+                            color: Colors.grey[400],
+                          ),
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 20),
                         Text(
                           emptyMessage,
                           style: TextStyle(
-                            fontSize: 18,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
                             color: Colors.grey[600],
                           ),
                         ),
-                        if (showCreateButton) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            'Create your first event to get started',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[500],
-                            ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Event akan muncul di sini',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[500],
                           ),
-                        ],
+                        ),
                       ],
                     ),
                   )
@@ -444,57 +451,345 @@ class _AttendanceHomeScreenState extends State<AttendanceHomeScreen>
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final eventProvider = context.watch<EventProvider>();
+  Widget _buildTabButton(String label, int index) {
+    final isActive = _selectedTab == index;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _selectedTab = index),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: isActive ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: isActive ? Colors.indigo.shade600 : Colors.white,
+              fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+              fontSize: 15,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAddTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Buat Event Baru',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey.shade800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Tambahkan event untuk melacak kehadiran',
+            style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _showCreateEventDialog,
+              icon: const Icon(Icons.add),
+              label: const Text('Create New Event'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.indigo.shade600,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 2,
+              ),
+            ),
+          ),
+          const SizedBox(height: 32),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.blue.shade200),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Colors.blue.shade700),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Tips Membuat Event',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue.shade900,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                _buildTipItem('Pilih nama event yang sesuai'),
+                _buildTipItem('Tentukan lokasi dengan jelas'),
+                _buildTipItem('Tambahkan catatan jika diperlukan'),
+                _buildTipItem('Pilih tanggal yang tepat'),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTipItem(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.check_circle, size: 16, color: Colors.blue.shade700),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(fontSize: 14, color: Colors.blue.shade900),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOngoingTab(EventProvider eventProvider) {
     final events = eventProvider.events
       ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
 
+    return _buildEventsList(
+      events: events,
+      isLoading: eventProvider.isLoading,
+      emptyMessage: 'Tidak ada event yang sedang berlangsung',
+      showCreateButton: false,
+    );
+  }
+
+  Widget _buildCompletedTab() {
+    return _buildEventsList(
+      events: _completedEvents,
+      isLoading: _isLoadingCompleted,
+      emptyMessage: 'Tidak ada event yang selesai',
+      showCreateButton: false,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final eventProvider = context.watch<EventProvider>();
+    final events = eventProvider.events;
+    final totalEvents = events.length + _completedEvents.length;
+
     return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.home),
-          tooltip: 'Back to Dashboard',
-          onPressed: () => context.go('/dashboard'),
-        ),
-        title: const Text('Attendance'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.search),
-            tooltip: 'Search Events',
-            onPressed: () => context.push('/attendance/inquiry'),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Colors.blue.shade50, Colors.indigo.shade50],
           ),
-        ],
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
-          indicatorColor: Colors.white,
-          tabs: const [
-            Tab(text: 'Ongoing'),
-            Tab(text: 'Completed'),
-          ],
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              // Header with gradient
+              Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                    colors: [Colors.indigo.shade600, Colors.purple.shade600],
+                  ),
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(24),
+                    bottomRight: Radius.circular(24),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.indigo.withOpacity(0.3),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Title Row
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: const Icon(
+                              Icons.event_available,
+                              color: Colors.white,
+                              size: 24,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Kehadiran',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                Text(
+                                  'Kelola kehadiran event',
+                                  style: TextStyle(
+                                    color: Colors.white.withOpacity(0.9),
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.home, color: Colors.white),
+                            tooltip: 'Dashboard',
+                            onPressed: () => context.go('/dashboard'),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.search, color: Colors.white),
+                            tooltip: 'Cari Event',
+                            onPressed: () =>
+                                context.push('/attendance/inquiry'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      // Stats Card
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.3),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: _buildHeaderStat(
+                                'Total',
+                                totalEvents.toString(),
+                                Icons.event,
+                              ),
+                            ),
+                            Container(
+                              width: 1,
+                              height: 40,
+                              color: Colors.white.withOpacity(0.3),
+                            ),
+                            Expanded(
+                              child: _buildHeaderStat(
+                                'Ongoing',
+                                events.length.toString(),
+                                Icons.schedule,
+                              ),
+                            ),
+                            Container(
+                              width: 1,
+                              height: 40,
+                              color: Colors.white.withOpacity(0.3),
+                            ),
+                            Expanded(
+                              child: _buildHeaderStat(
+                                'Completed',
+                                _completedEvents.length.toString(),
+                                Icons.check_circle,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      // Tab Navigation
+                      Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          children: [
+                            _buildTabButton('Tambah', 0),
+                            const SizedBox(width: 4),
+                            _buildTabButton('Ongoing', 1),
+                            const SizedBox(width: 4),
+                            _buildTabButton('Completed', 2),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              // Tab Content
+              Expanded(
+                child: _selectedTab == 0
+                    ? _buildAddTab()
+                    : _selectedTab == 1
+                    ? _buildOngoingTab(eventProvider)
+                    : _buildCompletedTab(),
+              ),
+            ],
+          ),
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          // Ongoing Events Tab
-          _buildEventsList(
-            events: events,
-            isLoading: eventProvider.isLoading,
-            emptyMessage: 'No ongoing events',
-            showCreateButton: true,
+    );
+  }
+
+  Widget _buildHeaderStat(String label, String value, IconData icon) {
+    return Column(
+      children: [
+        Icon(icon, color: Colors.white, size: 20),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
           ),
-          // Completed Events Tab
-          _buildEventsList(
-            events: _completedEvents,
-            isLoading: _isLoadingCompleted,
-            emptyMessage: 'No completed events',
-            showCreateButton: false,
-          ),
-        ],
-      ),
+        ),
+        Text(
+          label,
+          style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 12),
+        ),
+      ],
     );
   }
 }

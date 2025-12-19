@@ -1,3 +1,4 @@
+// ...existing imports...
 import 'package:dio/dio.dart';
 import 'storage_service.dart';
 import 'config_service.dart';
@@ -6,6 +7,22 @@ import '../utils/jwt_decoder.dart';
 import 'package:flutter/material.dart';
 
 class ApiService {
+  Future<Response> getMemberStatisticsByCategory({
+    required String category,
+    required int year,
+    int? month,
+    required String sex,
+    required String familyId,
+  }) async {
+    final payload = {
+      'category': category,
+      'year': year,
+      if (month != null) 'month': month,
+      'sex': sex,
+      'family_id': familyId,
+    };
+    return await _dio.post('/api/members/event/statistics', data: payload);
+  }
   // static const String baseUrl = 'https://8ff4edc65c2d.ngrok-free.app/mblapi';
   // static const String baseUrl = 'https://59141266354a.ngrok-free.app/mblapi';
   // static const String mblAPIUrl = 'https://59141266354a.ngrok-free.app/mblapi';

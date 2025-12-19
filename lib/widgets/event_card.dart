@@ -24,187 +24,200 @@ class EventCard extends StatelessWidget {
     final isToday = eventDay.isAtSameMomentAs(today);
     final isUpcoming = eventDate.isAfter(now);
 
-    return Card(
+    final statusColor = isToday
+        ? Colors.orange
+        : (isUpcoming ? Colors.blue : Colors.grey);
+    final statusBgColor = isToday
+        ? Colors.orange.shade50
+        : (isUpcoming ? Colors.blue.shade50 : Colors.grey.shade100);
+
+    return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(16),
-        leading: Container(
-          width: 60,
-          height: 60,
-          decoration: BoxDecoration(
-            color: (isUpcoming || isToday) ? Colors.blue[50] : Colors.grey[200],
-            borderRadius: BorderRadius.circular(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
           ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+        ],
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
             children: [
-              Text(
-                DateFormat('MMM').format(eventDate),
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: (isUpcoming || isToday)
-                      ? Colors.blue[700]
-                      : Colors.grey[600],
+              // Date Icon
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: statusBgColor,
+                  borderRadius: BorderRadius.circular(12),
                 ),
-              ),
-              Text(
-                DateFormat('dd').format(eventDate),
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: (isUpcoming || isToday)
-                      ? Colors.blue[700]
-                      : Colors.grey[600],
-                ),
-              ),
-            ],
-          ),
-        ),
-        title: Text(
-          event.name,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 4),
-            // Location
-            if (event.location.isNotEmpty)
-              Row(
-                children: [
-                  Icon(Icons.location_on, size: 14, color: Colors.grey[600]),
-                  const SizedBox(width: 4),
-                  Flexible(
-                    child: Text(
-                      event.location,
-                      style: TextStyle(color: Colors.grey[600]),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-            const SizedBox(height: 4),
-            // Date
-            Row(
-              children: [
-                Icon(Icons.calendar_today, size: 14, color: Colors.grey[600]),
-                const SizedBox(width: 4),
-                Flexible(
-                  child: Text(
-                    DateFormat('EEEE, MMM dd, yyyy').format(eventDate),
-                    style: TextStyle(color: Colors.grey[600]),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            // Category
-            Row(
-              children: [
-                Icon(Icons.category, size: 14, color: Colors.grey[600]),
-                const SizedBox(width: 4),
-                Flexible(
-                  child: Text(
-                    event.category,
-                    style: TextStyle(color: Colors.grey[600]),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-            // Remark
-            if (event.remark != null && event.remark!.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  Icon(Icons.note, size: 14, color: Colors.grey[600]),
-                  const SizedBox(width: 4),
-                  Flexible(
-                    child: Text(
-                      event.remark!,
-                      style: TextStyle(color: Colors.grey[600]),
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-            const SizedBox(height: 4),
-            // Status
-            Row(
-              children: [
-                Icon(
-                  isToday
-                      ? Icons.today
-                      : (isUpcoming ? Icons.upcoming : Icons.history),
-                  size: 14,
-                  color: Colors.grey[600],
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  isToday ? 'Today' : (isUpcoming ? 'Upcoming' : 'Past'),
-                  style: TextStyle(
-                    color: (isToday || isUpcoming)
-                        ? Colors.blue[700]
-                        : Colors.grey[600],
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-        trailing: onDelete != null
-            ? PopupMenuButton<String>(
-                icon: const Icon(Icons.more_vert),
-                onSelected: (value) {
-                  if (value == 'delete') {
-                    showDialog(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: const Text('Delete Event'),
-                        content: const Text(
-                          'Are you sure you want to delete this event?',
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text('Cancel'),
-                          ),
-                          TextButton(
-                            onPressed: () {
-                              Navigator.pop(context);
-                              onDelete!();
-                            },
-                            style: TextButton.styleFrom(
-                              foregroundColor: Colors.red,
-                            ),
-                            child: const Text('Delete'),
-                          ),
-                        ],
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      DateFormat('MMM').format(eventDate).toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: statusColor.shade700,
+                        letterSpacing: 0.5,
                       ),
-                    );
-                  }
-                },
-                itemBuilder: (context) => [
-                  const PopupMenuItem(
-                    value: 'delete',
-                    child: Row(
+                    ),
+                    Text(
+                      DateFormat('dd').format(eventDate),
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: statusColor.shade700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              // Event Info
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
                       children: [
-                        Icon(Icons.delete, color: Colors.red),
-                        SizedBox(width: 8),
-                        Text('Delete'),
+                        Expanded(
+                          child: Text(
+                            event.name,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              color: Colors.grey.shade900,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: statusBgColor,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            isToday
+                                ? 'Hari Ini'
+                                : (isUpcoming ? 'Akan Datang' : 'Selesai'),
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: statusColor.shade700,
+                            ),
+                          ),
+                        ),
                       ],
                     ),
-                  ),
-                ],
-              )
-            : null,
-        onTap: onTap,
+                    const SizedBox(height: 8),
+                    // Location
+                    if (event.location.isNotEmpty)
+                      _buildInfoRow(
+                        Icons.location_on_outlined,
+                        event.location,
+                        Colors.grey.shade600,
+                      ),
+                    const SizedBox(height: 4),
+                    // Category
+                    _buildInfoRow(
+                      Icons.category_outlined,
+                      event.category,
+                      Colors.grey.shade600,
+                    ),
+                    // Remark
+                    if (event.remark != null && event.remark!.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      _buildInfoRow(
+                        Icons.note_outlined,
+                        event.remark!,
+                        Colors.grey.shade600,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              // More Menu
+              if (onDelete != null)
+                PopupMenuButton<String>(
+                  icon: Icon(Icons.more_vert, color: Colors.grey.shade600),
+                  onSelected: (value) {
+                    if (value == 'delete') {
+                      showDialog(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('Hapus Event'),
+                          content: const Text(
+                            'Yakin ingin menghapus event ini?',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('Batal'),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                Navigator.pop(context);
+                                onDelete!();
+                              },
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.red,
+                              ),
+                              child: const Text('Hapus'),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete_outline, color: Colors.red),
+                          SizedBox(width: 8),
+                          Text('Hapus Event'),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+        ),
       ),
+    );
+  }
+
+  Widget _buildInfoRow(IconData icon, String text, Color color) {
+    return Row(
+      children: [
+        Icon(icon, size: 14, color: color),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(color: color, fontSize: 13),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
     );
   }
 }

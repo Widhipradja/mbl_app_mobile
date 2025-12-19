@@ -19,63 +19,58 @@ class CategoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final originalBalance = netAmount - reallocOut + reallocIn;
+    // Original = nilai sekarang + Lent (yang dipinjamkan keluar) - Borrowed (yang dipinjam masuk)
+    final originalBalance = netAmount + reallocOut - reallocIn;
     final hasRealloc = reallocIn != 0 || reallocOut != 0;
 
     return Container(
-      padding: const EdgeInsets.all(14),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Colors.white, Colors.grey[50]!],
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.grey[200]!, width: 1.5),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey[200]!, width: 1),
         boxShadow: [
           BoxShadow(
-            color: Colors.blue.withOpacity(0.08),
-            spreadRadius: 2,
-            blurRadius: 8,
-            offset: const Offset(0, 3),
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
         children: [
-          // Category name and transaction count
+          // Main row - Category name, count, and net amount
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
+              // Category name
               Expanded(
+                flex: 3,
                 child: Text(
                   category,
                   style: TextStyle(
-                    color: Colors.grey[700],
                     fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: 0.3,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey[800],
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
               const SizedBox(width: 8),
+
+              // Transaction count
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   color: Colors.blue[50],
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.blue[200]!, width: 1),
+                  borderRadius: BorderRadius.circular(6),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.receipt_long, size: 12, color: Colors.blue[700]),
-                    const SizedBox(width: 4),
+                    Icon(Icons.receipt_long, size: 11, color: Colors.blue[700]),
+                    const SizedBox(width: 3),
                     Text(
                       '$count',
                       style: TextStyle(
@@ -87,166 +82,105 @@ class CategoryCard extends StatelessWidget {
                   ],
                 ),
               ),
+              const SizedBox(width: 12),
+
+              // Net amount
+              Text(
+                'Rp ${NumberFormat('#,##0', 'id_ID').format(netAmount.abs())}',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: netAmount >= 0 ? Colors.green[700] : Colors.red[700],
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 4),
-          // Net amount - large and prominent
-          Text(
-            'Rp ${NumberFormat('#,##0', 'id_ID').format(netAmount.abs())}',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: Colors.blue[600],
-              letterSpacing: -0.5,
-            ),
-          ),
 
+          // Show reallocation details if present
           if (hasRealloc) ...[
-            const SizedBox(height: 10),
-            // Divider
-            Container(
-              height: 1,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.grey[300]!,
-                    Colors.grey[200]!,
-                    Colors.grey[300]!,
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            // Original balance
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.grey[300]!, width: 1),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'ORIGINAL BALANCE',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.grey[500],
-                      letterSpacing: 0.8,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Rp ${NumberFormat('#,##0', 'id_ID').format(originalBalance.abs())}',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey[800],
-                    ),
-                  ),
-                ],
-              ),
-            ),
             const SizedBox(height: 8),
-            // Lent or Borrowed
-            if (reallocOut > 0)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Colors.red[50]!, Colors.pink[50]!],
+            Divider(height: 1, color: Colors.grey[200]),
+            const SizedBox(height: 8),
+
+            // Reallocation details in table format
+            Row(
+              children: [
+                // Original Balance
+                Expanded(
+                  child: _buildInfoCell(
+                    'Original',
+                    '${originalBalance < 0 ? '-' : ''}Rp ${NumberFormat('#,##0', 'id_ID').format(originalBalance.abs())}',
+                    originalBalance < 0 ? Colors.red[600]! : Colors.grey[600]!,
+                    isNegative: originalBalance < 0,
                   ),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.red[200]!, width: 1),
                 ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(5),
-                      decoration: BoxDecoration(
-                        color: Colors.red[100],
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(
-                        Icons.arrow_forward_rounded,
-                        size: 16,
-                        color: Colors.red[700],
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
+
+                // Lent amount
+                if (reallocOut > 0)
+                  Expanded(
+                    child: _buildInfoCell(
                       'Lent',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.red[700],
-                      ),
-                    ),
-                    const Spacer(),
-                    Text(
                       'Rp ${NumberFormat('#,##0', 'id_ID').format(reallocOut)}',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.red[800],
-                      ),
+                      Colors.red[600]!,
                     ),
-                  ],
-                ),
-              ),
-            if (reallocIn > 0)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Colors.blue[50]!, Colors.lightBlue[50]!],
                   ),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.blue[200]!, width: 1),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(5),
-                      decoration: BoxDecoration(
-                        color: Colors.blue[100],
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(
-                        Icons.arrow_downward_rounded,
-                        size: 16,
-                        color: Colors.blue[700],
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
+
+                // Borrowed amount
+                if (reallocIn > 0)
+                  Expanded(
+                    child: _buildInfoCell(
                       'Borrowed',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.blue[700],
-                      ),
-                    ),
-                    const Spacer(),
-                    Text(
                       'Rp ${NumberFormat('#,##0', 'id_ID').format(reallocIn)}',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue[800],
-                      ),
+                      Colors.blue[600]!,
                     ),
-                  ],
-                ),
-              ),
+                  ),
+              ],
+            ),
           ],
         ],
       ),
+    );
+  }
+
+  Widget _buildInfoCell(
+    String label,
+    String value,
+    Color color, {
+    bool isNegative = false,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10,
+                color: Colors.grey[500],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            if (isNegative) ...[
+              const SizedBox(width: 4),
+              Icon(
+                Icons.warning_amber_rounded,
+                size: 12,
+                color: Colors.orange[600],
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: color,
+          ),
+        ),
+      ],
     );
   }
 }

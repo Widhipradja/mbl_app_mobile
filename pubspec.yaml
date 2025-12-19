@@ -1,5 +1,5 @@
 name: mbl_app
-description: "Manajemen Budget & Log - Mobile application for managing budget and logs"
+description: "Manage Balance & Log - Mobile application for managing balance and logs"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -60,6 +60,9 @@ dependencies:
   
   # JWT Decoder
   jwt_decode: ^0.3.1
+
+  # Charting
+  fl_chart: ^0.66.0
 
 dev_dependencies:
   flutter_test:

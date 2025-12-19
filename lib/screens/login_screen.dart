@@ -117,9 +117,6 @@ class _LoginScreenState extends State<LoginScreen> {
                             if (value == null || value.isEmpty) {
                               return 'Please enter your user ID';
                             }
-                            if (!value.contains('@')) {
-                              return 'Please enter a valid user ID';
-                            }
                             return null;
                           },
                         ),

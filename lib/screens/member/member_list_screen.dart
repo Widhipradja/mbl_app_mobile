@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../models/member.dart';
 import '../../services/api_service.dart';
 import '../../widgets/family_group_card.dart';
+import 'member_statistics_category_screen.dart';
 
 class MemberListScreen extends StatefulWidget {
   const MemberListScreen({super.key});
@@ -17,6 +18,7 @@ class _MemberListScreenState extends State<MemberListScreen> {
   final Map<String, List<Member>> _familyGroups = {};
   bool _isLoading = true;
   String? _error;
+  int _selectedTab = 0; // 0: Tambah, 1: Daftar Keluarga, 2: Statistik
 
   @override
   void initState() {
@@ -370,584 +372,635 @@ class _MemberListScreenState extends State<MemberListScreen> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/dashboard'),
+  Widget _buildTabButton(String label, int index) {
+    final isActive = _selectedTab == index;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedTab = index),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: isActive
+              ? Colors.white
+              : Colors.grey.shade200.withOpacity(0.85),
+          borderRadius: BorderRadius.circular(12),
         ),
-        title: const Text('Member Management'),
-      ),
-      body: SafeArea(
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : _error != null
-            ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(
-                      Icons.error_outline,
-                      size: 64,
-                      color: Colors.red,
-                    ),
-                    const SizedBox(height: 16),
-                    Text('Error: $_error'),
-                    const SizedBox(height: 16),
-                    ElevatedButton(
-                      onPressed: _loadMembers,
-                      child: const Text('Retry'),
-                    ),
-                  ],
-                ),
-              )
-            : _members.isEmpty
-            ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.people_outline,
-                      size: 80,
-                      color: Colors.grey[400],
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'No members yet',
-                      style: TextStyle(fontSize: 18, color: Colors.grey[600]),
-                    ),
-                  ],
-                ),
-              )
-            : ListView.builder(
-                padding: const EdgeInsets.only(
-                  left: 16,
-                  right: 16,
-                  top: 16,
-                  bottom: 80,
-                ),
-                itemCount: _familyGroups.length + 1,
-                itemBuilder: (context, index) {
-                  // First item is the summary
-                  if (index == 0) {
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 16),
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [Colors.green[700]!, Colors.green[500]!],
-                        ),
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.green.withOpacity(0.3),
-                            blurRadius: 8,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Member Summary',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _buildSummaryItem(
-                                  icon: Icons.family_restroom,
-                                  label: 'Families',
-                                  value: _familyGroups.values
-                                      .where(
-                                        (family) => !_familyGroups.keys
-                                            .elementAt(
-                                              _familyGroups.values
-                                                  .toList()
-                                                  .indexOf(family),
-                                            )
-                                            .startsWith('no-family-'),
-                                      )
-                                      .length
-                                      .toString(),
-                                ),
-                              ),
-                              Expanded(
-                                child: _buildSummaryItem(
-                                  icon: Icons.people,
-                                  label: 'Members',
-                                  value: _members.length.toString(),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _buildSummaryItem(
-                                  icon: Icons.male,
-                                  label: 'Male',
-                                  value: _members
-                                      .where((m) => m.gender == 'male')
-                                      .length
-                                      .toString(),
-                                ),
-                              ),
-                              Expanded(
-                                child: _buildSummaryItem(
-                                  icon: Icons.female,
-                                  label: 'Female',
-                                  value: _members
-                                      .where((m) => m.gender == 'female')
-                                      .length
-                                      .toString(),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _buildSummaryItem(
-                                  icon: Icons.people_outline,
-                                  label: 'Umum',
-                                  value: _members
-                                      .where((m) => m.category == 'Umum')
-                                      .length
-                                      .toString(),
-                                ),
-                              ),
-                              Expanded(
-                                child: _buildSummaryItem(
-                                  icon: Icons.child_care,
-                                  label: 'Generus',
-                                  value: _members
-                                      .where((m) => m.category == 'Generus')
-                                      .length
-                                      .toString(),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    );
-                  }
-
-                  // Family groups (index - 1 because first item is summary)
-                  final familyIndex = index - 1;
-
-                  // Sort family groups by head of family name
-                  final sortedFamilyKeys = _familyGroups.keys.toList()
-                    ..sort((a, b) {
-                      final familyA = _familyGroups[a]!;
-                      final familyB = _familyGroups[b]!;
-
-                      // Find head of family in each group
-                      final headA = familyA.firstWhere(
-                        (m) => m.isHeadOfFamily,
-                        orElse: () => familyA.first,
-                      );
-                      final headB = familyB.firstWhere(
-                        (m) => m.isHeadOfFamily,
-                        orElse: () => familyB.first,
-                      );
-
-                      return headA.firstName.toLowerCase().compareTo(
-                        headB.firstName.toLowerCase(),
-                      );
-                    });
-
-                  final familyId = sortedFamilyKeys[familyIndex];
-                  final familyMembers = _familyGroups[familyId]!;
-                  final isNoFamily = familyId.startsWith('no-family-');
-
-                  return FamilyGroupCard(
-                    familyId: familyId,
-                    familyMembers: familyMembers,
-                    isNoFamily: isNoFamily,
-                    onEditMember: (member) => _showMemberDialog(member: member),
-                    onDeleteMember: _deleteMember,
-                    onAddFamilyMember: _showMemberDialog,
-                  );
-                  /*return Card(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (!isNoFamily)
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.blue[50],
-                              borderRadius: const BorderRadius.only(
-                                topLeft: Radius.circular(4),
-                                topRight: Radius.circular(4),
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.family_restroom,
-                                  size: 20,
-                                  color: Colors.blue[700],
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    'Family Group',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.blue[700],
-                                    ),
-                                  ),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.person_add),
-                                  color: Colors.blue[700],
-                                  iconSize: 20,
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints(),
-                                  tooltip: 'Add family member',
-                                  onPressed: () =>
-                                      _showMemberDialog(familyId: familyId),
-                                ),
-                              ],
-                            ),
-                          ),
-                        // Separate Umum (adults) and Generus (children)
-                        ...familyMembers
-                            .where((m) => m.category == 'Umum')
-                            .map(
-                              (member) => ListTile(
-                                leading: CircleAvatar(
-                                  backgroundColor: member.gender == 'male'
-                                      ? Colors.blue[100]
-                                      : Colors.pink[100],
-                                  child: Text(
-                                    member.fullName.isNotEmpty
-                                        ? member.fullName[0].toUpperCase()
-                                        : '?',
-                                    style: TextStyle(
-                                      color: member.gender == 'male'
-                                          ? Colors.blue[700]
-                                          : Colors.pink[700],
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                                title: Row(
-                                  children: [
-                                    if (member.isHeadOfFamily)
-                                      Container(
-                                        margin: const EdgeInsets.only(right: 8),
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 6,
-                                          vertical: 2,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: Colors.amber[700],
-                                          borderRadius: BorderRadius.circular(
-                                            4,
-                                          ),
-                                        ),
-                                        child: const Text(
-                                          'HEAD',
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                      ),
-                                    Expanded(
-                                      child: Text(
-                                        member.fullName,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                subtitle: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    if (member.surname.isNotEmpty)
-                                      Text('Surname: ${member.surname}'),
-                                    if (member.relationship.isNotEmpty &&
-                                        !member.isHeadOfFamily)
-                                      Text(
-                                        'Relationship: ${member.relationship}',
-                                      ),
-                                    Text(member.email),
-                                    if (member.phone.isNotEmpty)
-                                      Text(member.phone),
-                                  ],
-                                ),
-                                trailing: PopupMenuButton(
-                                  itemBuilder: (context) => [
-                                    const PopupMenuItem(
-                                      value: 'edit',
-                                      child: Row(
-                                        children: [
-                                          Icon(Icons.edit, size: 20),
-                                          SizedBox(width: 8),
-                                          Text('Edit'),
-                                        ],
-                                      ),
-                                    ),
-                                    const PopupMenuItem(
-                                      value: 'delete',
-                                      child: Row(
-                                        children: [
-                                          Icon(
-                                            Icons.delete,
-                                            size: 20,
-                                            color: Colors.red,
-                                          ),
-                                          SizedBox(width: 8),
-                                          Text(
-                                            'Delete',
-                                            style: TextStyle(color: Colors.red),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                  onSelected: (value) {
-                                    if (value == 'edit') {
-                                      _showMemberDialog(member: member);
-                                    } else if (value == 'delete') {
-                                      _deleteMember(member);
-                                    }
-                                  },
-                                ),
-                              ),
-                            )
-                            .toList(),
-                        // Generus (children) section
-                        if (familyMembers.any((m) => m.category == 'Generus'))
-                          Container(
-                            margin: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.purple[50],
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: Colors.purple[200]!,
-                                width: 1,
-                              ),
-                            ),
-                            child: Column(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: Colors.purple[100],
-                                    borderRadius: const BorderRadius.only(
-                                      topLeft: Radius.circular(7),
-                                      topRight: Radius.circular(7),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        Icons.child_care,
-                                        size: 18,
-                                        color: Colors.purple[700],
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        'Children',
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.purple[700],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                ...familyMembers
-                                    .where((m) => m.category == 'Generus')
-                                    .map(
-                                      (member) => Container(
-                                        decoration: BoxDecoration(
-                                          border: Border(
-                                            bottom: BorderSide(
-                                              color: Colors.purple[100]!,
-                                              width: 0.5,
-                                            ),
-                                          ),
-                                        ),
-                                        child: ListTile(
-                                          dense: true,
-                                          contentPadding:
-                                              const EdgeInsets.symmetric(
-                                                horizontal: 12,
-                                                vertical: 4,
-                                              ),
-                                          leading: CircleAvatar(
-                                            radius: 18,
-                                            backgroundColor:
-                                                member.gender == 'male'
-                                                ? Colors.purple[100]
-                                                : Colors.pink[100],
-                                            child: Icon(
-                                              Icons.child_care,
-                                              size: 16,
-                                              color: member.gender == 'male'
-                                                  ? Colors.purple[700]
-                                                  : Colors.pink[700],
-                                            ),
-                                          ),
-                                          title: Text(
-                                            member.fullName,
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.w500,
-                                              fontSize: 14,
-                                              color: Colors.purple[900],
-                                            ),
-                                          ),
-                                          subtitle: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              if (member.surname.isNotEmpty)
-                                                Text(
-                                                  'Surname: ${member.surname}',
-                                                  style: const TextStyle(
-                                                    fontSize: 12,
-                                                  ),
-                                                ),
-                                              if (member
-                                                  .relationship
-                                                  .isNotEmpty)
-                                                Text(
-                                                  'Relationship: ${member.relationship}',
-                                                  style: const TextStyle(
-                                                    fontSize: 12,
-                                                  ),
-                                                ),
-                                              if (member.email.isNotEmpty)
-                                                Text(
-                                                  member.email,
-                                                  style: const TextStyle(
-                                                    fontSize: 12,
-                                                  ),
-                                                ),
-                                              if (member.phone.isNotEmpty)
-                                                Text(
-                                                  member.phone,
-                                                  style: const TextStyle(
-                                                    fontSize: 12,
-                                                  ),
-                                                ),
-                                            ],
-                                          ),
-                                          trailing: PopupMenuButton(
-                                            itemBuilder: (context) => [
-                                              const PopupMenuItem(
-                                                value: 'edit',
-                                                child: Row(
-                                                  children: [
-                                                    Icon(Icons.edit, size: 18),
-                                                    SizedBox(width: 8),
-                                                    Text('Edit'),
-                                                  ],
-                                                ),
-                                              ),
-                                              const PopupMenuItem(
-                                                value: 'delete',
-                                                child: Row(
-                                                  children: [
-                                                    Icon(
-                                                      Icons.delete,
-                                                      size: 18,
-                                                      color: Colors.red,
-                                                    ),
-                                                    SizedBox(width: 8),
-                                                    Text(
-                                                      'Delete',
-                                                      style: TextStyle(
-                                                        color: Colors.red,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ],
-                                            onSelected: (value) {
-                                              if (value == 'edit') {
-                                                _showMemberDialog(
-                                                  member: member,
-                                                );
-                                              } else if (value == 'delete') {
-                                                _deleteMember(member);
-                                              }
-                                            },
-                                          ),
-                                        ),
-                                      ),
-                                    )
-                                    .toList(),
-                              ],
-                            ),
-                          ),
-                      ],
-                    ),
-                  );*/
-                },
-              ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showMemberDialog(),
-        child: const Icon(Icons.add),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: isActive ? Colors.indigo.shade600 : Colors.indigo.shade400,
+            fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+            fontSize: 15,
+          ),
+        ),
       ),
     );
   }
 
-  Widget _buildSummaryItem({
-    required IconData icon,
-    required String label,
-    required String value,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(8),
-      child: Row(
+  Widget _buildAddTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: Colors.white, size: 20),
+          Text(
+            'Tambah Member Baru',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey.shade800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Tambahkan anggota keluarga baru',
+            style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () => _showMemberDialog(),
+              icon: const Icon(Icons.person_add),
+              label: const Text('Tambah Member'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.indigo.shade600,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 2,
+              ),
+            ),
+          ),
+          const SizedBox(height: 32),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.blue.shade200),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Colors.blue.shade700),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Tips Mengelola Member',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue.shade900,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                _buildTipItem('Tandai kepala keluarga untuk setiap keluarga'),
+                _buildTipItem(
+                  'Gunakan relationship untuk menunjukkan hubungan',
+                ),
+                _buildTipItem('Pisahkan kategori Umum dan Generus'),
+                _buildTipItem(
+                  'Lengkapi data kontak untuk kemudahan komunikasi',
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTipItem(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.check_circle, size: 16, color: Colors.blue.shade700),
           const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(fontSize: 14, color: Colors.blue.shade900),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMembersListTab() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.red.shade100,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.error_outline,
+                size: 60,
+                color: Colors.red,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Terjadi Kesalahan',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: Colors.grey[600],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _error!,
+              style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _loadMembers,
+              child: const Text('Coba Lagi'),
+            ),
+          ],
+        ),
+      );
+    }
+    if (_members.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.people_outline,
+                size: 60,
+                color: Colors.grey[400],
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Belum ada member',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: Colors.grey[600],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Tambahkan member pertama Anda',
+              style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+            ),
+          ],
+        ),
+      );
+    }
+    // List of family groups
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        ..._familyGroups.entries.map((entry) {
+          final familyId = entry.key;
+          final familyMembers = entry.value;
+          final isNoFamily = familyId.startsWith('no-family-');
+          return FamilyGroupCard(
+            familyId: familyId,
+            familyMembers: familyMembers,
+            isNoFamily: isNoFamily,
+            onEditMember: (member) => _showMemberDialog(member: member),
+            onDeleteMember: _deleteMember,
+            onAddFamilyMember: _showMemberDialog,
+          );
+        }),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Colors.blue.shade50, Colors.indigo.shade50],
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
             children: [
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
+              // Gradient Header
+              Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                    colors: [Colors.indigo.shade600, Colors.purple.shade600],
+                  ),
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(24),
+                    bottomRight: Radius.circular(24),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.indigo.withOpacity(0.3),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: const Icon(
+                              Icons.groups,
+                              color: Colors.white,
+                              size: 24,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Anggota Keluarga',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                Text(
+                                  'Kelola data anggota keluarga',
+                                  style: TextStyle(
+                                    color: Colors.indigo.shade100,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => context.go('/dashboard'),
+                            icon: const Icon(
+                              Icons.home_outlined,
+                              color: Colors.white,
+                            ),
+                            tooltip: 'Dashboard',
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      // Stats Row (example)
+                      Row(
+                        children: [
+                          _buildHeaderStat(
+                            'Keluarga',
+                            _familyGroups.length.toString(),
+                            Icons.family_restroom,
+                          ),
+                          const SizedBox(width: 16),
+                          _buildHeaderStat(
+                            'Member',
+                            _members.length.toString(),
+                            Icons.people,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              Text(
-                label,
-                style: const TextStyle(fontSize: 12, color: Colors.white70),
+              // Tab Navigation
+              Container(
+                color: Colors.white,
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Container(
+                  decoration: BoxDecoration(
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.withOpacity(0.1),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(child: _buildTabButton('Tambah', 0)),
+                      const SizedBox(width: 8),
+                      Expanded(child: _buildTabButton('Daftar', 1)),
+                      const SizedBox(width: 8),
+                      Expanded(child: _buildTabButton('Statistik', 2)),
+                    ],
+                  ),
+                ),
+              ),
+              // Tab Content
+              Expanded(
+                child: _selectedTab == 0
+                    ? _buildAddTab()
+                    : _selectedTab == 1
+                    ? _buildMembersListTab()
+                    : _buildStatisticsTab(),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeaderStat(String label, String value, IconData icon) {
+    return Column(
+      children: [
+        Icon(icon, color: Colors.white, size: 20),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        Text(
+          label,
+          style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 12),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatisticsTab() {
+    final familiesCount = _familyGroups.values
+        .where(
+          (family) => !_familyGroups.keys
+              .elementAt(_familyGroups.values.toList().indexOf(family))
+              .startsWith('no-family-'),
+        )
+        .length;
+    final maleCount = _members.where((m) => m.gender == 'male').length;
+    final femaleCount = _members.where((m) => m.gender == 'female').length;
+    final umumCount = _members.where((m) => m.category == 'Umum').length;
+    final generusCount = _members.where((m) => m.category == 'Generus').length;
+    final currentYear = DateTime.now().year;
+
+    void openStatistics({
+      String category = 'all',
+      String sex = 'all',
+      String familyId = 'all',
+    }) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => MemberStatisticsCategoryScreen(
+            category: category,
+            year: currentYear,
+            sex: sex,
+            familyId: familyId,
+          ),
+        ),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minWidth: constraints.maxWidth,
+              maxWidth: constraints.maxWidth,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Statistik Member',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey.shade800,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                // Total Overview
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.indigo.shade600, Colors.purple.shade600],
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.indigo.withOpacity(0.3),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.people,
+                          size: 40,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Total Member',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                              ),
+                            ),
+                            Text(
+                              _members.length.toString(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 36,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                // Statistics Grid (tappable cards)
+                Wrap(
+                  spacing: 16,
+                  runSpacing: 16,
+                  children: [
+                    GestureDetector(
+                      onTap: () => openStatistics(
+                        category: 'all',
+                        sex: 'all',
+                        familyId: 'all',
+                      ),
+                      child: _buildStatCard(
+                        'Keluarga',
+                        familiesCount.toString(),
+                        Icons.family_restroom,
+                        Colors.green,
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => openStatistics(
+                        category: 'all',
+                        sex: 'M',
+                        familyId: 'all',
+                      ),
+                      child: _buildStatCard(
+                        'Laki-laki',
+                        maleCount.toString(),
+                        Icons.male,
+                        Colors.blue,
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => openStatistics(
+                        category: 'all',
+                        sex: 'F',
+                        familyId: 'all',
+                      ),
+                      child: _buildStatCard(
+                        'Wanita',
+                        femaleCount.toString(),
+                        Icons.female,
+                        Colors.pink,
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => openStatistics(
+                        category: 'Umum',
+                        sex: 'all',
+                        familyId: 'all',
+                      ),
+                      child: _buildStatCard(
+                        'Umum',
+                        umumCount.toString(),
+                        Icons.people_outline,
+                        Colors.orange,
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => openStatistics(
+                        category: 'Generus',
+                        sex: 'all',
+                        familyId: 'all',
+                      ),
+                      child: _buildStatCard(
+                        'Generus',
+                        generusCount.toString(),
+                        Icons.child_care,
+                        Colors.purple,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildStatCard(
+    String label,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 150),
+      curve: Curves.easeInOut,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: color, size: 28),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey.shade800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+            textAlign: TextAlign.center,
           ),
         ],
       ),
