@@ -5,6 +5,7 @@ import 'config/routes.dart';
 import 'providers/auth_provider.dart';
 import 'providers/transaction_provider.dart';
 import 'providers/event_provider.dart';
+import 'providers/kbm_provider.dart';
 import 'services/storage_service.dart';
 import 'services/api_service.dart';
 import 'services/config_service.dart';
@@ -58,6 +59,7 @@ class _MyAppState extends State<MyApp> {
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => TransactionProvider()),
         ChangeNotifierProvider(create: (_) => EventProvider()),
+        ChangeNotifierProvider(create: (_) => KbmProvider()),
       ],
       child: MaterialApp.router(
         title: 'Manage Balance & Log',

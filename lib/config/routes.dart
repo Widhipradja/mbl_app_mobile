@@ -10,6 +10,9 @@ import '../screens/budget/search_transaction_screen.dart';
 import '../screens/attendance/attendance_home_screen.dart';
 import '../screens/attendance/event_detail_screen.dart';
 import '../screens/attendance/event_inquiry_screen.dart';
+import '../screens/kbm/kbm_setup_screen.dart';
+import '../screens/kbm/kbm_list_screen.dart';
+import '../screens/kbm/kbm_home_screen.dart';
 import '../screens/member/member_list_screen.dart';
 import '../models/event.dart';
 import '../services/storage_service.dart';
@@ -110,6 +113,13 @@ class AppRouter {
       GoRoute(
         path: '/members',
         builder: (context, state) => const MemberListScreen(),
+      ),
+
+      // KBM Module Routes
+      GoRoute(path: '/kbm', builder: (context, state) => const KbmHomeScreen()),
+      GoRoute(
+        path: '/kbm/setup',
+        builder: (context, state) => const KbmSetupScreen(),
       ),
 
       // Contacts - redirect to attendance

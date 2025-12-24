@@ -43,6 +43,11 @@ class DashboardScreen extends StatelessWidget {
       'PNB',
       'KI',
     ]);
+    final canAccessKbm = _hasRequiredRole(userRoles, [
+      'Administrator',
+      'Teacher',
+      'KI',
+    ]);
 
     return Scaffold(
       backgroundColor: const Color(0xFF1A1A2E),
@@ -246,6 +251,19 @@ class DashboardScreen extends StatelessWidget {
                           const Color(0xFF1B5E20),
                         ],
                         route: canAccessMembers ? '/members' : null,
+                      ),
+                      _buildModuleCard(
+                        context: context,
+                        title: 'KBM',
+                        description: canAccessKbm
+                            ? 'Manage teaching sessions'
+                            : 'Requires Administrator or Teacher role',
+                        icon: Icons.school,
+                        gradientColors: [
+                          const Color(0xFF6A1B9A),
+                          const Color(0xFF4A148C),
+                        ],
+                        route: canAccessKbm ? '/kbm' : null,
                       ),
                     ],
                   ),
