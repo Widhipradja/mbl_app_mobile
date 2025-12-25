@@ -365,8 +365,9 @@ class _KbmSetupScreenState extends State<KbmSetupScreen> {
     );
     if (ok == true) {
       classes.removeWhere((c) => c.id == classId);
-      if (selectedClassForRegistration == classId)
+      if (selectedClassForRegistration == classId) {
         selectedClassForRegistration = null;
+      }
       setState(() {});
     }
   }
@@ -611,7 +612,7 @@ class _KbmSetupScreenState extends State<KbmSetupScreen> {
                             ),
                             const SizedBox(height: 8),
                             DropdownButtonFormField<String>(
-                              value: selectedSubjectId,
+                              initialValue: selectedSubjectId,
                               decoration: InputDecoration(
                                 isDense: true,
                                 filled: true,
@@ -854,7 +855,7 @@ class _KbmSetupScreenState extends State<KbmSetupScreen> {
                             ),
                             const SizedBox(height: 8),
                             DropdownButtonFormField<String>(
-                              value: newGradeLevel,
+                              initialValue: newGradeLevel,
                               decoration: InputDecoration(
                                 isDense: true,
                                 filled: true,

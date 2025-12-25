@@ -11,7 +11,6 @@ import '../screens/attendance/attendance_home_screen.dart';
 import '../screens/attendance/event_detail_screen.dart';
 import '../screens/attendance/event_inquiry_screen.dart';
 import '../screens/kbm/kbm_setup_screen.dart';
-import '../screens/kbm/kbm_list_screen.dart';
 import '../screens/kbm/kbm_home_screen.dart';
 import '../screens/member/member_list_screen.dart';
 import '../models/event.dart';
