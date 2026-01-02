@@ -5,8 +5,14 @@ import 'package:intl/intl.dart';
 class TransactionCard extends StatelessWidget {
   final Transaction transaction;
   final VoidCallback? onDelete;
+  final VoidCallback? onEdit;
 
-  const TransactionCard({super.key, required this.transaction, this.onDelete});
+  const TransactionCard({
+    super.key,
+    required this.transaction,
+    this.onDelete,
+    this.onEdit,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -53,26 +59,16 @@ class TransactionCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(transaction.category),
-            if (transaction.requestedBy != null)
+            if (transaction.subCategory != null &&
+                transaction.subCategory!.isNotEmpty)
               Text(
-                'By: ${transaction.requestedBy}',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
-                  fontStyle: FontStyle.italic,
-                ),
+                transaction.subCategory!,
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
               ),
             if (transaction.pic != null && transaction.pic!.isNotEmpty)
               Text(
                 'PIC: ${transaction.pic}',
                 style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-              ),
-            if (transaction.description != null)
-              Text(
-                transaction.description!,
-                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
               ),
           ],
         ),
@@ -90,7 +86,7 @@ class TransactionCard extends StatelessWidget {
             ),
           ],
         ),
-        onLongPress: onDelete != null
+        onLongPress: (onDelete != null || onEdit != null)
             ? () {
                 showModalBottomSheet(
                   context: context,
@@ -98,17 +94,30 @@ class TransactionCard extends StatelessWidget {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        ListTile(
-                          leading: const Icon(Icons.delete, color: Colors.red),
-                          title: const Text(
-                            'Delete Transaction',
-                            style: TextStyle(color: Colors.red),
+                        if (onEdit != null)
+                          ListTile(
+                            leading: const Icon(Icons.edit, color: Colors.blue),
+                            title: const Text('Edit Transaction'),
+                            onTap: () {
+                              Navigator.pop(context);
+                              onEdit!();
+                            },
                           ),
-                          onTap: () {
-                            Navigator.pop(context);
-                            onDelete!();
-                          },
-                        ),
+                        if (onDelete != null)
+                          ListTile(
+                            leading: const Icon(
+                              Icons.delete,
+                              color: Colors.red,
+                            ),
+                            title: const Text(
+                              'Delete Transaction',
+                              style: TextStyle(color: Colors.red),
+                            ),
+                            onTap: () {
+                              Navigator.pop(context);
+                              onDelete!();
+                            },
+                          ),
                       ],
                     ),
                   ),

@@ -1,5 +1,5 @@
-name: mbl_app_mobile
-description: "Mobile MBL application"
+name: mbl_app
+description: "Manage Balance & Log - Mobile application for managing balance and logs"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -61,6 +61,9 @@ dependencies:
   # JWT Decoder
   jwt_decode: ^0.3.1
 
+  # Charting
+  fl_chart: ^0.66.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -71,6 +74,20 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  
+  # App Icon Generator
+  flutter_launcher_icons: ^0.13.1
+
+# Flutter Launcher Icons Configuration
+flutter_launcher_icons:
+  android: true
+  ios: true
+  web:
+    generate: true
+  image_path: "assets/icon/app_icon.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/icon/app_icon_foreground.png"
+  remove_alpha_ios: true
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

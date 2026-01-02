@@ -4,19 +4,53 @@ import 'config/theme.dart';
 import 'config/routes.dart';
 import 'providers/auth_provider.dart';
 import 'providers/transaction_provider.dart';
+import 'providers/event_provider.dart';
+import 'providers/kbm_provider.dart';
 import 'services/storage_service.dart';
+import 'services/api_service.dart';
+import 'services/config_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Initialize services
   await StorageService.init();
-  
+
+  // Load remote configuration
+  await ConfigService.loadRemoteConfig();
+
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  @override
+  void initState() {
+    super.initState();
+    // Listen for token expiration
+    ApiService.tokenExpiredNotifier.addListener(_handleTokenExpiration);
+  }
+
+  @override
+  void dispose() {
+    ApiService.tokenExpiredNotifier.removeListener(_handleTokenExpiration);
+    super.dispose();
+  }
+
+  void _handleTokenExpiration() {
+    if (ApiService.tokenExpiredNotifier.value) {
+      // Reset the notifier
+      ApiService.tokenExpiredNotifier.value = false;
+      // Navigate to login
+      AppRouter.router.go('/login');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -24,9 +58,11 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => TransactionProvider()),
+        ChangeNotifierProvider(create: (_) => EventProvider()),
+        ChangeNotifierProvider(create: (_) => KbmProvider()),
       ],
       child: MaterialApp.router(
-        title: 'MBL App',
+        title: 'Manage Balance & Log',
         theme: AppTheme.lightTheme,
         darkTheme: AppTheme.darkTheme,
         themeMode: ThemeMode.system,

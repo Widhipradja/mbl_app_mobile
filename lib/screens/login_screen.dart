@@ -12,8 +12,8 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _userIdController = TextEditingController(text: 'dewanta@gmail.com');
-  final _passwordController = TextEditingController(text: 'defLeppard');
+  final _userIdController = TextEditingController(text: '');
+  final _passwordController = TextEditingController(text: '');
   // final _tenantIdController = TextEditingController(text: 'c4e70117-1e32-468d-a5e5-f954a5de218d');
   bool _obscurePassword = true;
 
@@ -37,7 +37,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
 
       if (success) {
-        context.go('/home');
+        context.go('/dashboard');
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -52,6 +52,15 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => context.go('/landing'),
+        ),
+      ),
+      extendBodyBehindAppBar: true,
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
@@ -107,9 +116,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           validator: (value) {
                             if (value == null || value.isEmpty) {
                               return 'Please enter your user ID';
-                            }
-                            if (!value.contains('@')) {
-                              return 'Please enter a valid user ID';
                             }
                             return null;
                           },
@@ -169,10 +175,12 @@ class _LoginScreenState extends State<LoginScreen> {
                           },
                         ),
                         const SizedBox(height: 16),
-                        const Text(
-                          'Demo Credentials:\ndemo@example.com / password',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.grey, fontSize: 12),
+                        TextButton(
+                          onPressed: () => context.go('/landing'),
+                          child: const Text(
+                            'Back to Home',
+                            style: TextStyle(color: Color(0xFF667EEA)),
+                          ),
                         ),
                       ],
                     ),
