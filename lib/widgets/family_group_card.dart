@@ -66,9 +66,9 @@ class FamilyGroupCard extends StatelessWidget {
                 ],
               ),
             ),
-          // Separate Umum (adults) and Generus (children)
+          // Non-children section (anyone whose relationship is not 'Anak')
           ...familyMembers
-              .where((m) => m.category == 'Umum')
+              .where((m) => m.relationship != 'Anak')
               .map(
                 (member) => ListTile(
                   leading: CircleAvatar(
@@ -162,8 +162,8 @@ class FamilyGroupCard extends StatelessWidget {
                   ),
                 ),
               ),
-          // Generus (children) section
-          if (familyMembers.any((m) => m.category == 'Generus'))
+          // Children section (relationship == 'Anak')
+          if (familyMembers.any((m) => m.relationship == 'Anak'))
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
@@ -202,7 +202,7 @@ class FamilyGroupCard extends StatelessWidget {
                     ),
                   ),
                   ...familyMembers
-                      .where((m) => m.category == 'Generus')
+                      .where((m) => m.relationship == 'Anak')
                       .map(
                         (member) => Container(
                           decoration: BoxDecoration(
@@ -225,7 +225,11 @@ class FamilyGroupCard extends StatelessWidget {
                                   ? Colors.purple[100]
                                   : Colors.pink[100],
                               child: Icon(
-                                Icons.child_care,
+                                member.category == 'Balita'
+                                    ? Icons.child_care
+                                    : (member.gender == 'male'
+                                          ? Icons.boy
+                                          : Icons.girl),
                                 size: 16,
                                 color: member.gender == 'male'
                                     ? Colors.purple[700]

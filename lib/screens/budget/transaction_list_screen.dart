@@ -50,7 +50,7 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
                 children: [
                   // Month Selector
                   DropdownButtonFormField<int>(
-                    initialValue: tempMonth,
+                    value: tempMonth,
                     decoration: const InputDecoration(
                       labelText: 'Month',
                       border: OutlineInputBorder(),
@@ -74,7 +74,7 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
                   const SizedBox(height: 16),
                   // Year Selector
                   DropdownButtonFormField<int>(
-                    initialValue: tempYear,
+                    value: tempYear,
                     decoration: const InputDecoration(
                       labelText: 'Year',
                       border: OutlineInputBorder(),

@@ -101,6 +101,7 @@ class AuthProvider with ChangeNotifier {
             'user_id': data['user_id'],
             'tenant_id': data['tenant_id'],
             'roles': rolesData,
+            'group_name': data['group_name'],
           };
         } else {
           // Fallback: Decode JWT and extract user data
@@ -139,6 +140,7 @@ class AuthProvider with ChangeNotifier {
             'user_id': decodedData['user_id'],
             'tenant_id': decodedData['tenant_id'],
             'roles': rolesData,
+            'group_name': decodedData['group_name'],
           };
         }
 

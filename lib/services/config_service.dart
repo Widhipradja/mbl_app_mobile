@@ -6,8 +6,7 @@ class ConfigService {
       'https://widhipradja.github.io/mblapp-config/config.json';
   static String? _apiBaseUrl;
 
-  static String get apiBaseUrl =>
-      _apiBaseUrl ?? 'http://100.108.230.38:3000/api';
+  static String get apiBaseUrl => _apiBaseUrl ?? 'http://192.168.0.13:3000';
 
   static Future<void> loadRemoteConfig() async {
     try {

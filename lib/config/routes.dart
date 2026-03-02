@@ -10,9 +10,14 @@ import '../screens/budget/search_transaction_screen.dart';
 import '../screens/attendance/attendance_home_screen.dart';
 import '../screens/attendance/event_detail_screen.dart';
 import '../screens/attendance/event_inquiry_screen.dart';
+import '../screens/attendance/attendance_trend_screen.dart';
 import '../screens/kbm/kbm_setup_screen.dart';
 import '../screens/kbm/kbm_home_screen.dart';
 import '../screens/member/member_list_screen.dart';
+import '../screens/zakatfitrah/add_muzakki_screen.dart';
+import '../screens/zakatfitrah/zakat_transaction_screen.dart';
+import '../models/muzakki.dart';
+import '../screens/zakatfitrah/zakat_shell_screen.dart';
 import '../models/event.dart';
 import '../services/storage_service.dart';
 import '../utils/jwt_decoder.dart';
@@ -101,6 +106,10 @@ class AppRouter {
         builder: (context, state) => const EventInquiryScreen(),
       ),
       GoRoute(
+        path: '/attendance/trend',
+        builder: (context, state) => const AttendanceTrendScreen(),
+      ),
+      GoRoute(
         path: '/attendance/event-detail',
         builder: (context, state) {
           final event = state.extra as Event;
@@ -119,6 +128,44 @@ class AppRouter {
       GoRoute(
         path: '/kbm/setup',
         builder: (context, state) => const KbmSetupScreen(),
+      ),
+
+      // Zakat Fitrah Module Routes
+      GoRoute(
+        path: '/zakat-fitrah',
+        builder: (context, state) => const ZakatShellScreen(),
+      ),
+      GoRoute(
+        path: '/zakat-fitrah/muzakki',
+        builder: (context, state) => const ZakatShellScreen(initialTab: 1),
+      ),
+      GoRoute(
+        path: '/zakat-fitrah/laporan',
+        builder: (context, state) => const ZakatShellScreen(initialTab: 2),
+      ),
+      GoRoute(
+        path: '/zakat-fitrah/configuration',
+        builder: (context, state) => const ZakatShellScreen(initialTab: 4),
+      ),
+      GoRoute(
+        path: '/zakat-fitrah/mustahiq',
+        builder: (context, state) => const ZakatShellScreen(initialTab: 3),
+      ),
+      GoRoute(
+        path: '/zakat-fitrah/add',
+        builder: (context, state) => AddMuzakkiScreen(
+          initialFamilyId: state.uri.queryParameters['family_id'] ?? '',
+          initialMuzakki:
+              state.extra is Muzakki ? state.extra as Muzakki : null,
+        ),
+      ),
+      GoRoute(
+        path: '/zakat-fitrah/transaction',
+        builder: (context, state) {
+          final muzakki = state.extra as Muzakki?;
+          if (muzakki == null) return const ZakatShellScreen(initialTab: 0);
+          return ZakatTransactionScreen(muzakki: muzakki);
+        },
       ),
 
       // Contacts - redirect to attendance

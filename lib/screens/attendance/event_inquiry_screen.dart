@@ -110,7 +110,7 @@ class _EventInquiryScreenState extends State<EventInquiryScreen> {
               children: [
                 // Year Dropdown
                 DropdownButtonFormField<int>(
-                  initialValue: _selectedYear,
+                  value: _selectedYear,
                   decoration: const InputDecoration(
                     labelText: 'Year',
                     border: OutlineInputBorder(),
@@ -135,7 +135,7 @@ class _EventInquiryScreenState extends State<EventInquiryScreen> {
                 const SizedBox(height: 12),
                 // Month Dropdown
                 DropdownButtonFormField<int>(
-                  initialValue: _selectedMonth,
+                  value: _selectedMonth,
                   decoration: const InputDecoration(
                     labelText: 'Month',
                     border: OutlineInputBorder(),

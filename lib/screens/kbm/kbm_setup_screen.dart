@@ -1,7 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../../providers/kbm_provider.dart';
-import 'package:go_router/go_router.dart';
 
 class SubjectModel {
   String id;
@@ -511,10 +508,10 @@ class _KbmSetupScreenState extends State<KbmSetupScreen> {
               children: [
                 const Icon(Icons.book, color: Colors.blue),
                 const SizedBox(width: 10),
-                Expanded(
+                const Expanded(
                   child: Text(
                     'Mata Pelajaran',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.w700,
                       fontSize: 14,
                     ),
@@ -612,7 +609,7 @@ class _KbmSetupScreenState extends State<KbmSetupScreen> {
                             ),
                             const SizedBox(height: 8),
                             DropdownButtonFormField<String>(
-                              initialValue: selectedSubjectId,
+                              value: selectedSubjectId,
                               decoration: InputDecoration(
                                 isDense: true,
                                 filled: true,
@@ -697,10 +694,10 @@ class _KbmSetupScreenState extends State<KbmSetupScreen> {
                         ConstrainedBox(
                           constraints: const BoxConstraints(maxHeight: 340),
                           child: subjects.isEmpty
-                              ? Center(
+                              ? const Center(
                                   child: Column(
                                     mainAxisSize: MainAxisSize.min,
-                                    children: const [
+                                    children: [
                                       Icon(
                                         Icons.menu_book_outlined,
                                         size: 40,
@@ -809,10 +806,10 @@ class _KbmSetupScreenState extends State<KbmSetupScreen> {
               children: [
                 const Icon(Icons.class_, color: Colors.purple),
                 const SizedBox(width: 10),
-                Expanded(
+                const Expanded(
                   child: Text(
                     'Kelas & Pendaftaran',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.w700,
                       fontSize: 14,
                     ),
@@ -855,7 +852,7 @@ class _KbmSetupScreenState extends State<KbmSetupScreen> {
                             ),
                             const SizedBox(height: 8),
                             DropdownButtonFormField<String>(
-                              initialValue: newGradeLevel,
+                              value: newGradeLevel,
                               decoration: InputDecoration(
                                 isDense: true,
                                 filled: true,
@@ -934,10 +931,10 @@ class _KbmSetupScreenState extends State<KbmSetupScreen> {
                             ConstrainedBox(
                               constraints: const BoxConstraints(maxHeight: 340),
                               child: classes.isEmpty
-                                  ? Center(
+                                  ? const Center(
                                       child: Column(
                                         mainAxisSize: MainAxisSize.min,
-                                        children: const [
+                                        children: [
                                           Icon(
                                             Icons.class_,
                                             size: 40,
@@ -1055,10 +1052,10 @@ class _KbmSetupScreenState extends State<KbmSetupScreen> {
                       ),
                       const Divider(height: 1),
                       if (selectedClassForRegistration == null)
-                        Padding(
-                          padding: const EdgeInsets.all(24),
+                        const Padding(
+                          padding: EdgeInsets.all(24),
                           child: Column(
-                            children: const [
+                            children: [
                               Icon(
                                 Icons.info_outline,
                                 size: 48,

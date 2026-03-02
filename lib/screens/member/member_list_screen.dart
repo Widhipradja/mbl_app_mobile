@@ -19,6 +19,14 @@ class _MemberListScreenState extends State<MemberListScreen> {
   bool _isLoading = true;
   String? _error;
   int _selectedTab = 0; // 0: Tambah, 1: Daftar Keluarga, 2: Statistik
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -34,6 +42,7 @@ class _MemberListScreenState extends State<MemberListScreen> {
 
     try {
       final response = await _apiService.getMembers();
+
       if (response.statusCode == 200) {
         final List<dynamic> memberData = response.data is List
             ? response.data
@@ -45,6 +54,11 @@ class _MemberListScreenState extends State<MemberListScreen> {
                 a.firstName.toLowerCase().compareTo(b.firstName.toLowerCase()),
           );
           _groupMembersByFamily();
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _error = 'Server error: ${response.statusCode}';
           _isLoading = false;
         });
       }
@@ -96,7 +110,7 @@ class _MemberListScreenState extends State<MemberListScreen> {
       text: member?.relationship ?? '',
     );
     String selectedGender = member?.gender ?? 'male';
-    String selectedCategory = member?.category ?? 'Umum';
+    String selectedCategory = member?.category ?? 'Dewasa';
     bool isHeadOfFamily = member?.isHeadOfFamily ?? false;
     final String? memberFamilyId = member?.familyId ?? familyId;
 
@@ -182,7 +196,7 @@ class _MemberListScreenState extends State<MemberListScreen> {
                     ),
                     const SizedBox(height: 16),
                     DropdownButtonFormField<String>(
-                      initialValue: selectedGender,
+                      value: selectedGender,
                       decoration: const InputDecoration(
                         labelText: 'Gender',
                         border: OutlineInputBorder(),
@@ -202,13 +216,16 @@ class _MemberListScreenState extends State<MemberListScreen> {
                     ),
                     const SizedBox(height: 16),
                     DropdownButtonFormField<String>(
-                      initialValue: selectedCategory,
+                      value: selectedCategory,
                       decoration: const InputDecoration(
                         labelText: 'Category',
                         border: OutlineInputBorder(),
                       ),
                       items: const [
-                        DropdownMenuItem(value: 'Umum', child: Text('Umum')),
+                        DropdownMenuItem(
+                          value: 'Dewasa',
+                          child: Text('Dewasa'),
+                        ),
                         DropdownMenuItem(
                           value: 'Generus',
                           child: Text('Generus'),
@@ -466,7 +483,9 @@ class _MemberListScreenState extends State<MemberListScreen> {
                 _buildTipItem(
                   'Gunakan relationship untuk menunjukkan hubungan',
                 ),
-                _buildTipItem('Pisahkan kategori Umum dan Generus'),
+                _buildTipItem(
+                  'Gunakan relationship "Anak" untuk menandai anak',
+                ),
                 _buildTipItem(
                   'Lengkapi data kontak untuk kemudahan komunikasi',
                 ),
@@ -577,29 +596,122 @@ class _MemberListScreenState extends State<MemberListScreen> {
         ),
       );
     }
-    // List of family groups
-    return ListView(
-      padding: const EdgeInsets.all(20),
-      children: [
-        ..._familyGroups.entries.map((entry) {
-          final familyId = entry.key;
-          final familyMembers = entry.value;
-          final isNoFamily = familyId.startsWith('no-family-');
-          return FamilyGroupCard(
-            familyId: familyId,
-            familyMembers: familyMembers,
-            isNoFamily: isNoFamily,
-            onEditMember: (member) => _showMemberDialog(member: member),
-            onDeleteMember: _deleteMember,
-            onAddFamilyMember: _showMemberDialog,
+    // Filter family groups by search query
+    final query = _searchQuery.toLowerCase();
+    final filteredGroups = query.isEmpty
+        ? _familyGroups
+        : Map.fromEntries(
+            _familyGroups.entries
+                .map((entry) {
+                  final matchingMembers = entry.value
+                      .where((m) => m.fullName.toLowerCase().contains(query))
+                      .toList();
+                  return MapEntry(entry.key, matchingMembers);
+                })
+                .where((entry) => entry.value.isNotEmpty),
           );
-        }),
+
+    if (filteredGroups.isEmpty && query.isNotEmpty) {
+      return Column(
+        children: [
+          _buildSearchBar(),
+          Expanded(
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.search_off, size: 60, color: Colors.grey[400]),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Tidak ada member "$_searchQuery"',
+                    style: TextStyle(fontSize: 15, color: Colors.grey[600]),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    // List of family groups
+    return Column(
+      children: [
+        _buildSearchBar(),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+            children: [
+              ...filteredGroups.entries.map((entry) {
+                final familyId = entry.key;
+                final familyMembers = entry.value;
+                final isNoFamily = familyId.startsWith('no-family-');
+                return FamilyGroupCard(
+                  familyId: familyId,
+                  familyMembers: familyMembers,
+                  isNoFamily: isNoFamily,
+                  onEditMember: (member) => _showMemberDialog(member: member),
+                  onDeleteMember: _deleteMember,
+                  onAddFamilyMember: _showMemberDialog,
+                );
+              }),
+            ],
+          ),
+        ),
       ],
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+      child: TextField(
+        controller: _searchController,
+        onChanged: (value) => setState(() => _searchQuery = value),
+        decoration: InputDecoration(
+          hintText: 'Cari nama member...',
+          prefixIcon: const Icon(Icons.search, color: Colors.indigo),
+          suffixIcon: _searchQuery.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.clear),
+                  onPressed: () => setState(() {
+                    _searchQuery = '';
+                    _searchController.clear();
+                  }),
+                )
+              : null,
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(vertical: 0),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: Colors.indigo.shade200),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: Colors.indigo.shade200),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: Colors.indigo.shade500, width: 1.5),
+          ),
+        ),
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final familiesCount = _familyGroups.values
+        .where(
+          (family) => !_familyGroups.keys
+              .elementAt(_familyGroups.values.toList().indexOf(family))
+              .startsWith('no-family-'),
+        )
+        .length;
+    final maleCount = _members.where((m) => m.gender == 'male').length;
+    final femaleCount = _members.where((m) => m.gender == 'female').length;
+    final generusCount = _members.where((m) => m.relationship == 'Anak').length;
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(
@@ -685,20 +797,14 @@ class _MemberListScreenState extends State<MemberListScreen> {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      // Stats Row (example)
+                      // Stats Row
                       Row(
                         children: [
-                          _buildHeaderStat(
-                            'Keluarga',
-                            _familyGroups.length.toString(),
-                            Icons.family_restroom,
-                          ),
-                          const SizedBox(width: 16),
-                          _buildHeaderStat(
-                            'Member',
-                            _members.length.toString(),
-                            Icons.people,
-                          ),
+                          Expanded(child: _buildHeaderStat('KK', familiesCount.toString(), Icons.family_restroom)),
+                          Expanded(child: _buildHeaderStat('Member', _members.length.toString(), Icons.people)),
+                          Expanded(child: _buildHeaderStat('L', maleCount.toString(), Icons.male)),
+                          Expanded(child: _buildHeaderStat('P', femaleCount.toString(), Icons.female)),
+                          Expanded(child: _buildHeaderStat('Anak', generusCount.toString(), Icons.child_care)),
                         ],
                       ),
                     ],
@@ -767,17 +873,6 @@ class _MemberListScreenState extends State<MemberListScreen> {
   }
 
   Widget _buildStatisticsTab() {
-    final familiesCount = _familyGroups.values
-        .where(
-          (family) => !_familyGroups.keys
-              .elementAt(_familyGroups.values.toList().indexOf(family))
-              .startsWith('no-family-'),
-        )
-        .length;
-    final maleCount = _members.where((m) => m.gender == 'male').length;
-    final femaleCount = _members.where((m) => m.gender == 'female').length;
-    final umumCount = _members.where((m) => m.category == 'Umum').length;
-    final generusCount = _members.where((m) => m.category == 'Generus').length;
     final currentYear = DateTime.now().year;
 
     void openStatistics({
@@ -800,7 +895,7 @@ class _MemberListScreenState extends State<MemberListScreen> {
     return LayoutBuilder(
       builder: (context, constraints) {
         return SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
           child: ConstrainedBox(
             constraints: BoxConstraints(
               minWidth: constraints.maxWidth,
@@ -809,201 +904,251 @@ class _MemberListScreenState extends State<MemberListScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Statistik Member',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey.shade800,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                // Total Overview
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Colors.indigo.shade600, Colors.purple.shade600],
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.indigo.withOpacity(0.3),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(12),
+                // Per-Category breakdown
+                Builder(
+                  builder: (context) {
+                    // Count per category
+                    final Map<String, int> categoryCount = {};
+                    // Count per category per sex
+                    final Map<String, int> categoryMale = {};
+                    final Map<String, int> categoryFemale = {};
+                    for (final m in _members) {
+                      categoryCount[m.category] =
+                          (categoryCount[m.category] ?? 0) + 1;
+                      if (m.sex == 'M') {
+                        categoryMale[m.category] =
+                            (categoryMale[m.category] ?? 0) + 1;
+                      } else {
+                        categoryFemale[m.category] =
+                            (categoryFemale[m.category] ?? 0) + 1;
+                      }
+                    }
+                    final categoryOrder = [
+                      'Dewasa',
+                      'Usia Nikah',
+                      'Remaja',
+                      'Pra Remaja',
+                      'Generus',
+                      'CR',
+                    ];
+                    final sortedCategories = categoryCount.entries.toList()
+                      ..sort((a, b) {
+                        final idxA = categoryOrder.indexOf(a.key);
+                        final idxB = categoryOrder.indexOf(b.key);
+                        if (idxA == -1 && idxB == -1) {
+                          return a.key.compareTo(b.key);
+                        }
+                        if (idxA == -1) return 1;
+                        if (idxB == -1) return -1;
+                        return idxA.compareTo(idxB);
+                      });
+                    final maxCount = sortedCategories.isEmpty
+                        ? 1
+                        : sortedCategories.first.value;
+
+                    IconData categoryIcon(String cat) {
+                      switch (cat) {
+                        case 'Dewasa':
+                          return Icons.people_outline;
+                        case 'Balita':
+                          return Icons.child_care;
+                        case 'Remaja':
+                          return Icons.school;
+                        case 'CR':
+                          return Icons.boy;
+                        case 'Generus':
+                          return Icons.star_outline;
+                        default:
+                          return Icons.group_outlined;
+                      }
+                    }
+
+                    final categoryColors = [
+                      Colors.indigo,
+                      Colors.teal,
+                      Colors.orange,
+                      Colors.purple,
+                      Colors.green,
+                      Colors.pink,
+                      Colors.cyan,
+                      Colors.amber,
+                    ];
+
+                    // Helper: small column header
+                    Widget colHeader(String label, Color color) => SizedBox(
+                      width: 36,
+                      child: Text(
+                        label,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: color,
                         ),
-                        child: const Icon(
-                          Icons.people,
-                          size: 40,
-                          color: Colors.white,
+                      ),
+                    );
+
+                    // Helper: small count cell
+                    Widget colCell(int count, Color color) => SizedBox(
+                      width: 36,
+                      child: Text(
+                        count.toString(),
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: color,
                         ),
                       ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Total Member',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 14,
+                    );
+
+                    return Card(
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Column(
+                        children: [
+                          // Table header
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.indigo.shade50,
+                              borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(16),
                               ),
                             ),
-                            Text(
-                              _members.length.toString(),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 36,
-                                fontWeight: FontWeight.bold,
-                              ),
+                            child: Row(
+                              children: [
+                                const SizedBox(width: 28),
+                                Expanded(
+                                  child: Text(
+                                    'Kategori',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.indigo.shade700,
+                                    ),
+                                  ),
+                                ),
+                                colHeader('L', Colors.blue.shade700),
+                                const SizedBox(width: 4),
+                                colHeader('P', Colors.pink.shade700),
+                                const SizedBox(width: 4),
+                                colHeader('Total', Colors.indigo.shade700),
+                              ],
                             ),
-                          ],
-                        ),
+                          ),
+                          // Table rows
+                          ...sortedCategories.asMap().entries.map((entry) {
+                            final idx = entry.key;
+                            final cat = entry.value.key;
+                            final count = entry.value.value;
+                            final male = categoryMale[cat] ?? 0;
+                            final female = categoryFemale[cat] ?? 0;
+                            final color =
+                                categoryColors[idx % categoryColors.length];
+                            final isLast = idx == sortedCategories.length - 1;
+
+                            return InkWell(
+                              onTap: () => openStatistics(
+                                category: cat,
+                                sex: 'all',
+                                familyId: 'all',
+                              ),
+                              borderRadius: isLast
+                                  ? const BorderRadius.vertical(
+                                      bottom: Radius.circular(16),
+                                    )
+                                  : BorderRadius.zero,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 10,
+                                ),
+                                decoration: BoxDecoration(
+                                  border: isLast
+                                      ? null
+                                      : Border(
+                                          bottom: BorderSide(
+                                            color: Colors.grey.shade100,
+                                          ),
+                                        ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      categoryIcon(cat),
+                                      size: 20,
+                                      color: color,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            cat,
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          ClipRRect(
+                                            borderRadius: BorderRadius.circular(
+                                              4,
+                                            ),
+                                            child: LinearProgressIndicator(
+                                              value: count / maxCount,
+                                              backgroundColor: color
+                                                  .withOpacity(0.1),
+                                              valueColor:
+                                                  AlwaysStoppedAnimation(
+                                                    color.withOpacity(0.7),
+                                                  ),
+                                              minHeight: 5,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    colCell(male, Colors.blue.shade600),
+                                    const SizedBox(width: 4),
+                                    colCell(female, Colors.pink.shade600),
+                                    const SizedBox(width: 4),
+                                    SizedBox(
+                                      width: 36,
+                                      child: Text(
+                                        count.toString(),
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.bold,
+                                          color: color,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }),
+                        ],
                       ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-                // Statistics Grid (tappable cards)
-                Wrap(
-                  spacing: 16,
-                  runSpacing: 16,
-                  children: [
-                    GestureDetector(
-                      onTap: () => openStatistics(
-                        category: 'all',
-                        sex: 'all',
-                        familyId: 'all',
-                      ),
-                      child: _buildStatCard(
-                        'Keluarga',
-                        familiesCount.toString(),
-                        Icons.family_restroom,
-                        Colors.green,
-                      ),
-                    ),
-                    GestureDetector(
-                      onTap: () => openStatistics(
-                        category: 'all',
-                        sex: 'M',
-                        familyId: 'all',
-                      ),
-                      child: _buildStatCard(
-                        'Laki-laki',
-                        maleCount.toString(),
-                        Icons.male,
-                        Colors.blue,
-                      ),
-                    ),
-                    GestureDetector(
-                      onTap: () => openStatistics(
-                        category: 'all',
-                        sex: 'F',
-                        familyId: 'all',
-                      ),
-                      child: _buildStatCard(
-                        'Wanita',
-                        femaleCount.toString(),
-                        Icons.female,
-                        Colors.pink,
-                      ),
-                    ),
-                    GestureDetector(
-                      onTap: () => openStatistics(
-                        category: 'Umum',
-                        sex: 'all',
-                        familyId: 'all',
-                      ),
-                      child: _buildStatCard(
-                        'Umum',
-                        umumCount.toString(),
-                        Icons.people_outline,
-                        Colors.orange,
-                      ),
-                    ),
-                    GestureDetector(
-                      onTap: () => openStatistics(
-                        category: 'Generus',
-                        sex: 'all',
-                        familyId: 'all',
-                      ),
-                      child: _buildStatCard(
-                        'Generus',
-                        generusCount.toString(),
-                        Icons.child_care,
-                        Colors.purple,
-                      ),
-                    ),
-                  ],
+                    );
+                  },
                 ),
               ],
             ),
           ),
         );
       },
-    );
-  }
-
-  Widget _buildStatCard(
-    String label,
-    String value,
-    IconData icon,
-    Color color,
-  ) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 150),
-      curve: Curves.easeInOut,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, color: color, size: 28),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: Colors.grey.shade800,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
     );
   }
 }

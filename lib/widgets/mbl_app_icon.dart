@@ -27,7 +27,7 @@ class _MblIconPainter extends CustomPainter {
       Radius.circular(width * 0.215),
     );
 
-    final backgroundGradient = LinearGradient(
+    const backgroundGradient = LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
       colors: [Color(0xFFFFFFFF), Color(0xFFF8FAFC)],
@@ -64,7 +64,7 @@ class _MblIconPainter extends CustomPainter {
     );
 
     // Blue gradient for main container
-    final blueGradient = LinearGradient(
+    const blueGradient = LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
       colors: [Color(0xFF3B82F6), Color(0xFF1D4ED8)],
@@ -123,8 +123,8 @@ class _MblIconPainter extends CustomPainter {
     // Top-left decorative circle (blue)
     final blueCircleGradient = RadialGradient(
       colors: [
-        Color(0xFF3B82F6).withOpacity(0.09),
-        Color(0xFF3B82F6).withOpacity(0.05),
+        const Color(0xFF3B82F6).withOpacity(0.09),
+        const Color(0xFF3B82F6).withOpacity(0.05),
       ],
     );
 
@@ -144,8 +144,8 @@ class _MblIconPainter extends CustomPainter {
     // Bottom-right decorative circle (green accent)
     final greenCircleGradient = RadialGradient(
       colors: [
-        Color(0xFF10B981).withOpacity(0.09),
-        Color(0xFF10B981).withOpacity(0.05),
+        const Color(0xFF10B981).withOpacity(0.09),
+        const Color(0xFF10B981).withOpacity(0.05),
       ],
     );
 
@@ -169,8 +169,8 @@ class _MblIconPainter extends CustomPainter {
 
     final orangeGradient = LinearGradient(
       colors: [
-        Color(0xFFF59E0B).withOpacity(0.06),
-        Color(0xFFD97706).withOpacity(0.04),
+        const Color(0xFFF59E0B).withOpacity(0.06),
+        const Color(0xFFD97706).withOpacity(0.04),
       ],
     );
 
@@ -347,8 +347,8 @@ class _MblIconPainter extends CustomPainter {
     // Left dot (green accent)
     final leftDotGradient = RadialGradient(
       colors: [
-        Color(0xFF10B981).withOpacity(0.95),
-        Color(0xFF059669).withOpacity(0.75),
+        const Color(0xFF10B981).withOpacity(0.95),
+        const Color(0xFF059669).withOpacity(0.75),
       ],
     );
 
@@ -369,8 +369,8 @@ class _MblIconPainter extends CustomPainter {
     // Right dot (orange accent)
     final rightDotGradient = RadialGradient(
       colors: [
-        Color(0xFFF59E0B).withOpacity(0.95),
-        Color(0xFFD97706).withOpacity(0.75),
+        const Color(0xFFF59E0B).withOpacity(0.95),
+        const Color(0xFFD97706).withOpacity(0.75),
       ],
     );
 

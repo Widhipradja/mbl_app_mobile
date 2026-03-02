@@ -30,13 +30,13 @@ class KbmHomeScreen extends StatelessWidget {
                   final maxWidth = math.min(constraints.maxWidth * 0.9, 720.0);
                   return SizedBox(
                     width: maxWidth,
-                    child: TabBar(
+                    child: const TabBar(
                       isScrollable: false,
                       labelColor: Colors.white,
                       unselectedLabelColor: Colors.white70,
                       indicatorColor: Colors.white,
-                      labelStyle: const TextStyle(fontWeight: FontWeight.w600),
-                      tabs: const [
+                      labelStyle: TextStyle(fontWeight: FontWeight.w600),
+                      tabs: [
                         Tab(text: 'Setup'),
                         Tab(text: 'Attendance'),
                         Tab(text: 'Scores'),

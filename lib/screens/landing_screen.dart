@@ -109,9 +109,9 @@ class _LandingScreenState extends State<LandingScreen>
                   ),
                 ),
                 const SizedBox(width: 12),
-                Column(
+                const Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
+                  children: [
                     Text(
                       'MBL App',
                       style: TextStyle(

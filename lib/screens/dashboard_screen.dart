@@ -18,12 +18,11 @@ class DashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
-    final user = StorageService.getUser();
+    final user = authProvider.user ?? StorageService.getUser();
     final username = user?.name ?? 'User';
     final userRoles = user?.roleNames ?? [];
-    final rolesText = userRoles.isNotEmpty
-        ? userRoles.join(', ')
-        : 'No role assigned';
+    final rolesText =
+        userRoles.isNotEmpty ? userRoles.join(', ') : 'No role assigned';
 
     // Check role permissions
     final canAccessBudget = _hasRequiredRole(userRoles, [
@@ -72,14 +71,14 @@ class DashboardScreen extends StatelessWidget {
         ],
       ),
       body: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              const Color(0xFF16213E),
-              const Color(0xFF1A1A2E),
-              const Color(0xFF0F0F1E),
+              Color(0xFF16213E),
+              Color(0xFF1A1A2E),
+              Color(0xFF0F0F1E),
             ],
           ),
         ),
@@ -142,6 +141,17 @@ class DashboardScreen extends StatelessWidget {
                                     color: Colors.white,
                                     fontSize: 22,
                                     fontWeight: FontWeight.bold,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  StorageService.getUser()?.groupName ??
+                                      'MBL 1',
+                                  style: TextStyle(
+                                    color: Colors.white.withOpacity(0.85),
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
                                   ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -264,6 +274,18 @@ class DashboardScreen extends StatelessWidget {
                           const Color(0xFF4A148C),
                         ],
                         route: canAccessKbm ? '/kbm' : null,
+                      ),
+                      _buildModuleCard(
+                        context: context,
+                        title: 'Zakat Fitrah',
+                        description:
+                            'Kelola data muzakki dan zakat fitrah 1447H',
+                        icon: Icons.volunteer_activism,
+                        gradientColors: [
+                          const Color(0xFF066046),
+                          const Color(0xFF044D36),
+                        ],
+                        route: '/zakat-fitrah',
                       ),
                     ],
                   ),

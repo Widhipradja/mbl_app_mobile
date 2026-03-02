@@ -8,10 +8,11 @@ class Member {
   final String surname;
   final String sex; // M/F
   final String address;
-  final String category; // Umum, Generus
+  final String category; // Dewasa, Generus
   final String relationship; // suami, istri, anak, dll
   final String? familyId;
   final bool isHeadOfFamily;
+  final String groupName;
 
   Member({
     required this.id,
@@ -23,10 +24,11 @@ class Member {
     this.surname = '',
     required this.sex,
     this.address = '',
-    this.category = 'Umum',
+    this.category = 'Dewasa',
     this.relationship = '',
     this.familyId,
     this.isHeadOfFamily = false,
+    this.groupName = '',
   });
 
   String get fullName => '$firstName $lastName'.trim();
@@ -44,10 +46,11 @@ class Member {
       surname: json['surname'] ?? '',
       sex: json['sex'] ?? 'M',
       address: json['address'] ?? '',
-      category: json['category'] ?? 'Umum',
+      category: json['category'] ?? 'Dewasa',
       relationship: json['relationship'] ?? '',
       familyId: json['family_id'],
       isHeadOfFamily: json['is_head_of_family'] ?? false,
+      groupName: json['group_name'] ?? '',
     );
   }
 
@@ -66,6 +69,7 @@ class Member {
       'relationship': relationship,
       if (familyId != null) 'family_id': familyId,
       'is_head_of_family': isHeadOfFamily,
+      'group_name': groupName,
     };
   }
 }

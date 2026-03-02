@@ -12,6 +12,7 @@ class Transaction {
   final String? pic;
   final String? remarks;
   final String? requestedBy;
+  final List<String>? tags;
 
   Transaction({
     this.id,
@@ -25,6 +26,7 @@ class Transaction {
     this.pic,
     this.remarks,
     this.requestedBy,
+    this.tags,
   });
 
   factory Transaction.fromJson(Map<String, dynamic> json) {
@@ -42,12 +44,21 @@ class Transaction {
       date: json['requested_date'] != null
           ? DateTime.parse(json['requested_date'])
           : (json['date'] != null
-                ? DateTime.parse(json['date'])
-                : DateTime.now()),
+              ? DateTime.parse(json['date'])
+              : DateTime.now()),
       description: json['description'],
       pic: json['pic'],
       remarks: json['remarks'],
       requestedBy: json['requested_by'],
+      tags: json['tags'] != null
+          ? (json['tags'] is List
+              ? List<String>.from(json['tags'] as List)
+              : (json['tags'] as String)
+                  .split(',')
+                  .map((e) => e.trim())
+                  .where((e) => e.isNotEmpty)
+                  .toList())
+          : null,
     );
   }
 
@@ -61,6 +72,7 @@ class Transaction {
       'category': category,
       'sub_category': subCategory ?? '',
       if (pic != null && pic!.isNotEmpty) 'pic': pic,
+      if (tags != null && tags!.isNotEmpty) 'tags': tags!.join(','),
     };
   }
 
@@ -76,6 +88,7 @@ class Transaction {
     String? pic,
     String? remarks,
     String? requestedBy,
+    List<String>? tags,
   }) {
     return Transaction(
       id: id ?? this.id,
@@ -89,6 +102,7 @@ class Transaction {
       pic: pic ?? this.pic,
       remarks: remarks ?? this.remarks,
       requestedBy: requestedBy ?? this.requestedBy,
+      tags: tags ?? this.tags,
     );
   }
 }

@@ -22,6 +22,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   final _descriptionController = TextEditingController();
   final _subCategoryController = TextEditingController();
   final _picController = TextEditingController();
+  final _tagsInputController = TextEditingController();
+  final _tagsFocusNode = FocusNode();
+  List<String> _tags = [];
 
   TransactionType _selectedType = TransactionType.expense;
   String? _selectedCategory;
@@ -42,6 +45,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       _amountController.text = txn.amount.toString();
       _descriptionController.text = txn.description ?? '';
       _picController.text = txn.pic ?? '';
+      _tags = List<String>.from(txn.tags ?? []);
       _selectedType = txn.type;
       _selectedDate = txn.date;
       // Category and subcategory will be set after loading categories
@@ -79,9 +83,49 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
         setState(() {
           _categories = categoryList;
-          if (_categories.isNotEmpty) {
-            _selectedCategory = _categories[0]['id']?.toString();
+
+          if (widget.transaction != null) {
+            // When editing, match category by value (text) to find the correct ID
+            final txnCategory = widget.transaction!.category;
+            final matchedCat = categoryList.firstWhere(
+              (cat) =>
+                  cat['value']?.toString() == txnCategory ||
+                  cat['id']?.toString() == txnCategory,
+              orElse: () => categoryList.isNotEmpty ? categoryList[0] : {},
+            );
+            _selectedCategory = matchedCat['id']?.toString();
+
+            // Load sub-categories for the matched category
+            if (matchedCat['sub_lookup'] != null &&
+                matchedCat['sub_lookup'] is List) {
+              _subCategories = (matchedCat['sub_lookup'] as List)
+                  .map((item) => Map<String, dynamic>.from(item as Map))
+                  .toList();
+
+              final txnSubCategory = widget.transaction!.subCategory;
+              if (txnSubCategory != null) {
+                final matchedSub = _subCategories.firstWhere(
+                  (sub) =>
+                      sub['value']?.toString() == txnSubCategory ||
+                      sub['id']?.toString() == txnSubCategory,
+                  orElse: () => {},
+                );
+                _selectedSubCategory = matchedSub['id']?.toString();
+              } else if (_subCategories.isNotEmpty) {
+                _selectedSubCategory = _subCategories[0]['id']?.toString();
+              }
+            }
+          } else {
+            if (_categories.isNotEmpty) {
+              // Default to "Umum", fallback to first item
+              final umum = _categories.firstWhere(
+                (cat) => cat['value']?.toString() == 'Umum',
+                orElse: () => _categories[0],
+              );
+              _selectedCategory = umum['id']?.toString();
+            }
           }
+
           _isLoadingCategories = false;
         });
       } else {
@@ -109,6 +153,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     _descriptionController.dispose();
     _subCategoryController.dispose();
     _picController.dispose();
+    _tagsInputController.dispose();
+    _tagsFocusNode.dispose();
     super.dispose();
   }
 
@@ -126,11 +172,21 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     }
   }
 
+  void _addTagFromInput() {
+    final raw = _tagsInputController.text.trim().replaceAll(',', '').trim();
+    if (raw.isNotEmpty && !_tags.contains(raw)) {
+      setState(() {
+        _tags.add(raw);
+      });
+    }
+    _tagsInputController.clear();
+    _tagsFocusNode.requestFocus();
+  }
+
   Future<void> _handleSubmit() async {
     if (_formKey.currentState!.validate()) {
       // Get category text (value) from the selected category ID
-      final categoryText =
-          _categories
+      final categoryText = _categories
               .firstWhere(
                 (cat) => cat['id']?.toString() == _selectedCategory,
                 orElse: () => {'value': _selectedCategory ?? ''},
@@ -141,16 +197,16 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       // Get subcategory text if from dropdown, otherwise use text input
       final subCategoryText = _subCategories.isNotEmpty
           ? (_selectedSubCategory != null
-                ? _subCategories
-                      .firstWhere(
-                        (sub) => sub['id']?.toString() == _selectedSubCategory,
-                        orElse: () => {'value': _selectedSubCategory ?? ''},
-                      )['value']
-                      ?.toString()
-                : null)
+              ? _subCategories
+                  .firstWhere(
+                    (sub) => sub['id']?.toString() == _selectedSubCategory,
+                    orElse: () => {'value': _selectedSubCategory ?? ''},
+                  )['value']
+                  ?.toString()
+              : null)
           : (_subCategoryController.text.trim().isEmpty
-                ? null
-                : _subCategoryController.text.trim());
+              ? null
+              : _subCategoryController.text.trim());
 
       final transaction = Transaction(
         title: '', // Not needed in backend model
@@ -163,6 +219,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         pic: _picController.text.trim().isEmpty
             ? null
             : _picController.text.trim(),
+        tags: _tags.isEmpty ? null : _tags,
       );
 
       final provider = context.read<TransactionProvider>();
@@ -314,7 +371,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                       ),
                     )
                   : DropdownButtonFormField<String>(
-                      initialValue: _selectedCategory,
+                      value: _selectedCategory,
                       decoration: const InputDecoration(
                         labelText: 'Category *',
                         prefixIcon: Icon(Icons.category),
@@ -347,8 +404,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                                 )
                                 .toList();
                             if (_subCategories.isNotEmpty) {
-                              _selectedSubCategory = _subCategories[0]['id']
-                                  ?.toString();
+                              _selectedSubCategory =
+                                  _subCategories[0]['id']?.toString();
                             }
                           } else {
                             _subCategories = [];
@@ -367,7 +424,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
               // Sub Category Field/Dropdown
               if (_subCategories.isNotEmpty)
                 DropdownButtonFormField<String>(
-                  initialValue: _selectedSubCategory,
+                  value: _selectedSubCategory,
                   decoration: const InputDecoration(
                     labelText: 'Sub Category',
                     prefixIcon: Icon(Icons.subdirectory_arrow_right),
@@ -406,6 +463,65 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                   hintText: 'Person in charge',
                   prefixIcon: Icon(Icons.person),
                 ),
+              ),
+              const SizedBox(height: 16),
+
+              // Tags Field
+              // Tags Chip Input
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Existing chips
+                  if (_tags.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: _tags.map((tag) {
+                          return Chip(
+                            label: Text(
+                              '#$tag',
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                            deleteIcon: const Icon(Icons.close, size: 16),
+                            onDeleted: () {
+                              setState(() {
+                                _tags.remove(tag);
+                              });
+                            },
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  // Text input for new tag
+                  TextFormField(
+                    controller: _tagsInputController,
+                    focusNode: _tagsFocusNode,
+                    decoration: InputDecoration(
+                      labelText: 'Tags (Optional)',
+                      hintText: 'Type a tag and press Enter',
+                      prefixIcon: const Icon(Icons.label_outline),
+                      helperText: 'Press Enter or comma to add a tag',
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.add),
+                        onPressed: _addTagFromInput,
+                      ),
+                    ),
+                    onFieldSubmitted: (_) => _addTagFromInput(),
+                    onChanged: (value) {
+                      // Auto-add on comma
+                      if (value.endsWith(',')) {
+                        _addTagFromInput();
+                      }
+                    },
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
 

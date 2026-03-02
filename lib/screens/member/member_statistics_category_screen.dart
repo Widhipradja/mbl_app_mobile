@@ -202,7 +202,7 @@ class _MemberStatisticsCategoryScreenState
               children: [
                 Expanded(
                   child: DropdownButtonFormField<int>(
-                    initialValue: _selectedMonth,
+                    value: _selectedMonth,
                     decoration: const InputDecoration(labelText: 'Bulan'),
                     items: List.generate(12, (i) => i + 1)
                         .map(
@@ -226,7 +226,7 @@ class _MemberStatisticsCategoryScreenState
                 SizedBox(
                   width: 140,
                   child: DropdownButtonFormField<int>(
-                    initialValue: _selectedYear,
+                    value: _selectedYear,
                     decoration: const InputDecoration(labelText: 'Tahun'),
                     items: _yearOptions
                         .map(
@@ -346,8 +346,8 @@ class _MemberStatisticsCategoryScreenState
           padding: const EdgeInsets.only(bottom: 32.0),
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            child: SizedBox(
-              width: screenWidth,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: screenWidth),
               child: Column(
                 children: [
                   Expanded(
@@ -356,21 +356,36 @@ class _MemberStatisticsCategoryScreenState
                       child: DataTable(
                         columns: [
                           DataColumn(
-                            label: InkWell(
-                              onTap: () => _showClickedText('Nama'),
-                              child: const Text('Nama'),
+                            label: Flexible(
+                              child: InkWell(
+                                onTap: () => _showClickedText('Nama'),
+                                child: const Text(
+                                  'Nama',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
                             ),
                           ),
                           DataColumn(
-                            label: InkWell(
-                              onTap: () => _showClickedText('Kehadiran'),
-                              child: const Text('Kehadiran'),
+                            label: Flexible(
+                              child: InkWell(
+                                onTap: () => _showClickedText('Kehadiran'),
+                                child: const Text(
+                                  'Kehadiran',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
                             ),
                           ),
                           DataColumn(
-                            label: InkWell(
-                              onTap: () => _showClickedText('%'),
-                              child: const Text('%'),
+                            label: Flexible(
+                              child: InkWell(
+                                onTap: () => _showClickedText('%'),
+                                child: const Text(
+                                  '%',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
                             ),
                           ),
                         ],

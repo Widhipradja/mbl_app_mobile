@@ -64,6 +64,9 @@ class _EventDetailScreenState extends State<EventDetailScreen>
             ? attendanceResponse.data
             : (attendanceResponse.data['attendance'] ?? []);
 
+        debugPrint('Attendance data length: ${attendanceData.length}');
+        debugPrint('Attendance sample: ${attendanceData.isNotEmpty ? attendanceData.take(5).toList() : []}');
+
         // Parse users and their attendance status
         _users.clear();
         _attendance.clear();
@@ -283,11 +286,12 @@ class _EventDetailScreenState extends State<EventDetailScreen>
         .where((u) => _attendance[u.id] ?? false)
         .length;
     final attendingCount = _attendance.values.where((v) => v).length;
+    final remarkCount = _users.where((u) => u.remark != null && u.remark!.isNotEmpty).length;
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Event Summary'),
+        title: const Text('Ringkasan Event'),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -316,7 +320,7 @@ class _EventDetailScreenState extends State<EventDetailScreen>
               if (_currentEvent.category.isNotEmpty) ...[
                 const SizedBox(height: 4),
                 Text(
-                  'Category: ${_currentEvent.category}',
+                  'Kategori: ${_currentEvent.category}',
                   style: TextStyle(color: Colors.grey[700]),
                 ),
               ],
@@ -325,35 +329,40 @@ class _EventDetailScreenState extends State<EventDetailScreen>
               const SizedBox(height: 16),
               // Attendance Statistics
               const Text(
-                'Attendance Statistics',
+                'Statistik Kehadiran',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
               _buildSummaryRow(
-                'Total Attendees',
+                'Total Jamaah',
                 '${_users.length}',
                 Colors.blue,
               ),
               _buildSummaryRow(
-                'Total Attending',
+                'Total Hadir',
                 '$attendingCount',
                 Colors.green,
               ),
               _buildSummaryRow(
-                'Attendance Rate',
+                'Tingkat Kehadiran',
                 '${(_users.isEmpty ? 0 : (attendingCount / _users.length * 100)).toStringAsFixed(1)}%',
                 Colors.orange,
+              ),
+              _buildSummaryRow(
+                'Memiliki Catatan',
+                '$remarkCount orang',
+                Colors.purple,
               ),
               const SizedBox(height: 12),
               const Divider(),
               const SizedBox(height: 12),
               _buildSummaryRow(
-                'Male',
+                'Pria',
                 '$maleAttending / ${maleUsers.length}',
                 Colors.blue[700]!,
               ),
               _buildSummaryRow(
-                'Female',
+                'Wanita',
                 '$femaleAttending / ${femaleUsers.length}',
                 Colors.pink[700]!,
               ),
@@ -363,14 +372,14 @@ class _EventDetailScreenState extends State<EventDetailScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
+            child: const Text('Tutup'),
           ),
           ElevatedButton.icon(
             onPressed: () async {
               await _copySummaryToClipboard();
             },
             icon: const Icon(Icons.copy),
-            label: const Text('Copy'),
+            label: const Text('Salin'),
           ),
         ],
       ),
@@ -407,6 +416,7 @@ class _EventDetailScreenState extends State<EventDetailScreen>
         .where((u) => _attendance[u.id] ?? false)
         .length;
     final attendingCount = _attendance.values.where((v) => v).length;
+    final remarkCount = _users.where((u) => u.remark != null && u.remark!.isNotEmpty).length;
     final attendanceRate = _users.isEmpty
         ? 0
         : (attendingCount / _users.length * 100);
@@ -425,6 +435,7 @@ class _EventDetailScreenState extends State<EventDetailScreen>
 • Total Jamaah: ${_users.length}
 • Total Hadir: $attendingCount
 • Rata-rata Kehadiran: ${attendanceRate.toStringAsFixed(1)}%
+• Izin: $remarkCount orang
 
 ━━━━━━━━━━━━━━━━━━━━
 
@@ -508,7 +519,7 @@ class _EventDetailScreenState extends State<EventDetailScreen>
                   isLoadingEventTypes
                       ? const Center(child: CircularProgressIndicator())
                       : DropdownButtonFormField<String>(
-                          initialValue: selectedEventName,
+                          value: selectedEventName,
                           isExpanded: true,
                           decoration: const InputDecoration(
                             labelText: 'Event Name',
@@ -538,7 +549,7 @@ class _EventDetailScreenState extends State<EventDetailScreen>
                   isLoadingLocations
                       ? const Center(child: CircularProgressIndicator())
                       : DropdownButtonFormField<String>(
-                          initialValue: selectedLocation,
+                          value: selectedLocation,
                           isExpanded: true,
                           decoration: const InputDecoration(
                             labelText: 'Location',
@@ -568,7 +579,7 @@ class _EventDetailScreenState extends State<EventDetailScreen>
                   isLoadingCategories
                       ? const Center(child: CircularProgressIndicator())
                       : DropdownButtonFormField<String>(
-                          initialValue: selectedCategory,
+                          value: selectedCategory,
                           isExpanded: true,
                           decoration: const InputDecoration(
                             labelText: 'Category',
@@ -740,12 +751,12 @@ class _EventDetailScreenState extends State<EventDetailScreen>
                   ),
                 ),
                 if (user.remark != null && user.remark!.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 4),
+                  const Padding(
+                    padding: EdgeInsets.only(right: 4),
                     child: Icon(
                       Icons.note,
                       size: 16,
-                      color: const Color.fromARGB(255, 96, 102, 108),
+                      color: Color.fromARGB(255, 96, 102, 108),
                     ),
                   ),
                 IconButton(
@@ -838,7 +849,7 @@ class _EventDetailScreenState extends State<EventDetailScreen>
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
-                '$attendingCount of ${_users.length} attending',
+                '$attendingCount dari ${_users.length} hadir',
                 style: TextStyle(
                   color: Colors.blue[700],
                   fontWeight: FontWeight.w600,
@@ -853,7 +864,7 @@ class _EventDetailScreenState extends State<EventDetailScreen>
                 child: ElevatedButton.icon(
                   onPressed: _completeEvent,
                   icon: const Icon(Icons.check_circle),
-                  label: const Text('Complete Event'),
+                  label: const Text('Selesaikan Event'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.green,
                     foregroundColor: Colors.white,
@@ -878,7 +889,7 @@ class _EventDetailScreenState extends State<EventDetailScreen>
                     Icon(Icons.check_circle, color: Colors.green[700]),
                     const SizedBox(width: 8),
                     Text(
-                      'Event Completed',
+                      'Event Selesai',
                       style: TextStyle(
                         color: Colors.green[700],
                         fontWeight: FontWeight.w600,
@@ -894,7 +905,7 @@ class _EventDetailScreenState extends State<EventDetailScreen>
                 child: ElevatedButton.icon(
                   onPressed: _showEventSummary,
                   icon: const Icon(Icons.summarize),
-                  label: const Text('View Summary'),
+                  label: const Text('Lihat Ringkasan'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.blue,
                     foregroundColor: Colors.white,
@@ -919,12 +930,12 @@ class _EventDetailScreenState extends State<EventDetailScreen>
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.go('/attendance'),
         ),
-        title: const Text('Event Details'),
+        title: const Text('Detail Event'),
         actions: [
           IconButton(
             icon: const Icon(Icons.edit),
             onPressed: _showEditEventDialog,
-            tooltip: 'Edit Event',
+            tooltip: 'Edit Event',  
           ),
         ],
         bottom: TabBar(
@@ -948,13 +959,13 @@ class _EventDetailScreenState extends State<EventDetailScreen>
                   const Icon(Icons.error_outline, size: 64, color: Colors.red),
                   const SizedBox(height: 16),
                   Text(
-                    'Error loading data',
+                    'Gagal memuat data',
                     style: TextStyle(fontSize: 18, color: Colors.grey[600]),
                   ),
                   const SizedBox(height: 8),
                   ElevatedButton(
                     onPressed: _loadData,
-                    child: const Text('Retry'),
+                    child: const Text('Coba Lagi'),
                   ),
                 ],
               ),
@@ -996,6 +1007,9 @@ class _EventDetailScreenState extends State<EventDetailScreen>
                 (user.surname?.toLowerCase().contains(_searchQuery) ?? false);
           }).toList();
 
+
+debugPrint(      'Filtered users count: ${filteredUsers.length} for search query: $_searchQuery',
+    );
     return CustomScrollView(
       slivers: [
         SliverToBoxAdapter(child: _buildHeaderCard(attendingCount)),
@@ -1005,7 +1019,7 @@ class _EventDetailScreenState extends State<EventDetailScreen>
             child: Row(
               children: [
                 Text(
-                  'Attendees',
+                  'Peserta',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -1016,7 +1030,7 @@ class _EventDetailScreenState extends State<EventDetailScreen>
                 IconButton(
                   icon: const Icon(Icons.sync),
                   onPressed: _syncAttendees,
-                  tooltip: 'Sync Attendees',
+                  tooltip: 'Sinkronkan Peserta',
                   iconSize: 20,
                 ),
               ],
@@ -1029,7 +1043,7 @@ class _EventDetailScreenState extends State<EventDetailScreen>
             child: TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                hintText: 'Search by name...',
+                hintText: 'Cari nama...',
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: _searchQuery.isNotEmpty
                     ? IconButton(
@@ -1048,26 +1062,32 @@ class _EventDetailScreenState extends State<EventDetailScreen>
             ),
           ),
         ),
-        SliverToBoxAdapter(child: const SizedBox(height: 8)),
+        const SliverToBoxAdapter(child: SizedBox(height: 8)),
         filteredUsers.isEmpty
             ? SliverFillRemaining(
                 child: Center(
                   child: Text(
                     _searchQuery.isEmpty
-                        ? 'No users found'
-                        : 'No matching users',
+                        ? 'Tidak ada peserta'
+                        : 'Tidak ada yang cocok',
                     style: TextStyle(fontSize: 16, color: Colors.grey[600]),
                   ),
                 ),
               )
             : SliverPadding(
-                padding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
+                padding: EdgeInsets.only(
+                  left: 16,
+                  right: 16,
+                  bottom: 16 + MediaQuery.of(context).padding.bottom,
+                ),
                 sliver: SliverList(
                   delegate: SliverChildBuilderDelegate((context, index) {
                     final user = filteredUsers[index];
                     final isAttending = _attendance[user.id] ?? false;
                     final isCompleted = _currentEvent.status == 'Completed';
-
+                    debugPrint('User first name: ${user.firstname}');
+  debugPrint(      'Building list item for user: ${user.name}, isAttending: $isAttending, isCompleted: $isCompleted',
+    );
                     return Card(
                       margin: const EdgeInsets.only(bottom: 4),
                       child: CheckboxListTile(
@@ -1088,12 +1108,12 @@ class _EventDetailScreenState extends State<EventDetailScreen>
                               ),
                             ),
                             if (user.remark != null && user.remark!.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(right: 4),
+                              const Padding(
+                                padding: EdgeInsets.only(right: 4),
                                 child: Icon(
                                   Icons.note,
                                   size: 16,
-                                  color: const Color.fromARGB(
+                                  color: Color.fromARGB(
                                     255,
                                     96,
                                     102,

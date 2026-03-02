@@ -5,12 +5,12 @@ class KbmReportScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
+    return const Center(
       child: Padding(
-        padding: const EdgeInsets.all(24.0),
+        padding: EdgeInsets.all(24.0),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          children: const [
+          children: [
             Icon(Icons.insert_chart_outlined, size: 64, color: Colors.purple),
             SizedBox(height: 12),
             Text(

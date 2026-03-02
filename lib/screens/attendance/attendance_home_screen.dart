@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../models/event.dart';
 import '../../providers/event_provider.dart';
 import '../../services/api_service.dart';
 import '../../widgets/event_card.dart';
+import 'create_event_dialog.dart';
 
 class AttendanceHomeScreen extends StatefulWidget {
   const AttendanceHomeScreen({super.key});
@@ -41,8 +41,8 @@ class _AttendanceHomeScreenState extends State<AttendanceHomeScreen>
             ? ongoingResponse.data
             : (ongoingResponse.data['events'] ?? []);
         context.read<EventProvider>().setEvents(
-          data.map((json) => Event.fromJson(json)).toList(),
-        );
+              data.map((json) => Event.fromJson(json)).toList(),
+            );
       }
     } catch (e) {
       debugPrint('Error fetching ongoing events: $e');
@@ -81,252 +81,8 @@ class _AttendanceHomeScreenState extends State<AttendanceHomeScreen>
     }
   }
 
-  void _showCreateEventDialog() async {
-    final formKey = GlobalKey<FormState>();
-    final remarkController = TextEditingController();
-    DateTime selectedDate = DateTime.now();
-
-    // Fetch event types and locations
-    List<Map<String, dynamic>> eventTypes = [];
-    List<Map<String, dynamic>> eventLocations = [];
-    List<Map<String, dynamic>> eventCategories = [];
-    String? selectedEventName = 'Pengajian Kelompok';
-    String? selectedLocation = 'MBL';
-    String? selectedCategory = 'Umum';
-    bool isLoadingEventTypes = true;
-    bool isLoadingLocations = true;
-    bool isLoadingCategories = true;
-
-    try {
-      final eventResponse = await ApiService().getLookups('EVENT');
-      if (eventResponse.statusCode == 200) {
-        eventTypes = List<Map<String, dynamic>>.from(eventResponse.data);
-      }
-    } catch (e) {
-      debugPrint('Error loading event types: $e');
-    }
-    isLoadingEventTypes = false;
-
-    try {
-      final locationResponse = await ApiService().getLookups('EVENT_LOC');
-      if (locationResponse.statusCode == 200) {
-        eventLocations = List<Map<String, dynamic>>.from(locationResponse.data);
-      }
-    } catch (e) {
-      debugPrint('Error loading event locations: $e');
-    }
-    isLoadingLocations = false;
-
-    try {
-      final categoryResponse = await ApiService().getLookups('EVENT_CATEGORY');
-      if (categoryResponse.statusCode == 200) {
-        eventCategories = List<Map<String, dynamic>>.from(
-          categoryResponse.data,
-        );
-      }
-    } catch (e) {
-      debugPrint('Error loading event categories: $e');
-    }
-    isLoadingCategories = false;
-
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Create New Event'),
-          content: Form(
-            key: formKey,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Event Name Dropdown
-                  isLoadingEventTypes
-                      ? const Center(child: CircularProgressIndicator())
-                      : DropdownButtonFormField<String>(
-                          initialValue: selectedEventName,
-                          isExpanded: true,
-                          decoration: const InputDecoration(
-                            labelText: 'Event Name',
-                            border: OutlineInputBorder(),
-                          ),
-                          hint: const Text('Select event type'),
-                          items: eventTypes.map((eventType) {
-                            return DropdownMenuItem<String>(
-                              value: eventType['value'],
-                              child: Text(eventType['value']),
-                            );
-                          }).toList(),
-                          onChanged: (value) {
-                            setDialogState(() {
-                              selectedEventName = value;
-                            });
-                          },
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Please select an event type';
-                            }
-                            return null;
-                          },
-                        ),
-                  const SizedBox(height: 16),
-                  // Location Dropdown
-                  isLoadingLocations
-                      ? const Center(child: CircularProgressIndicator())
-                      : DropdownButtonFormField<String>(
-                          initialValue: selectedLocation,
-                          isExpanded: true,
-                          decoration: const InputDecoration(
-                            labelText: 'Location',
-                            border: OutlineInputBorder(),
-                          ),
-                          hint: const Text('Select event location'),
-                          items: eventLocations.map((location) {
-                            return DropdownMenuItem<String>(
-                              value: location['value'],
-                              child: Text(location['value']),
-                            );
-                          }).toList(),
-                          onChanged: (value) {
-                            setDialogState(() {
-                              selectedLocation = value;
-                            });
-                          },
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Please select a location';
-                            }
-                            return null;
-                          },
-                        ),
-                  const SizedBox(height: 16),
-                  // Category Dropdown
-                  isLoadingCategories
-                      ? const Center(child: CircularProgressIndicator())
-                      : DropdownButtonFormField<String>(
-                          initialValue: selectedCategory,
-                          isExpanded: true,
-                          decoration: const InputDecoration(
-                            labelText: 'Category',
-                            border: OutlineInputBorder(),
-                          ),
-                          hint: const Text('Select event category'),
-                          items: eventCategories.map((category) {
-                            return DropdownMenuItem<String>(
-                              value: category['value'],
-                              child: Text(category['value']),
-                            );
-                          }).toList(),
-                          onChanged: (value) {
-                            setDialogState(() {
-                              selectedCategory = value;
-                            });
-                          },
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Please select a category';
-                            }
-                            return null;
-                          },
-                        ),
-                  const SizedBox(height: 16),
-                  // Date Picker
-                  InkWell(
-                    onTap: () async {
-                      final date = await showDatePicker(
-                        context: context,
-                        initialDate: selectedDate,
-                        firstDate: DateTime(2000),
-                        lastDate: DateTime.now().add(const Duration(days: 365)),
-                      );
-                      if (date != null) {
-                        setDialogState(() {
-                          selectedDate = date;
-                        });
-                      }
-                    },
-                    child: InputDecorator(
-                      decoration: const InputDecoration(
-                        labelText: 'Event Date',
-                        border: OutlineInputBorder(),
-                        suffixIcon: Icon(Icons.calendar_today),
-                      ),
-                      child: Text(
-                        DateFormat('EEEE, MMM dd, yyyy').format(selectedDate),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  // Remark Field
-                  TextFormField(
-                    controller: remarkController,
-                    decoration: const InputDecoration(
-                      labelText: 'Remark (Optional)',
-                      hintText: 'Add additional details about this event',
-                      border: OutlineInputBorder(),
-                    ),
-                    maxLines: 3,
-                    textCapitalization: TextCapitalization.sentences,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                if (formKey.currentState!.validate()) {
-                  final eventDateTime = DateTime(
-                    selectedDate.year,
-                    selectedDate.month,
-                    selectedDate.day,
-                  );
-
-                  final event = Event(
-                    name: selectedEventName!,
-                    dateTime: eventDateTime,
-                    location: selectedLocation!,
-                    category: selectedCategory!,
-                    remark: remarkController.text.trim().isEmpty
-                        ? null
-                        : remarkController.text.trim(),
-                  );
-
-                  Navigator.pop(context);
-
-                  final success = await context
-                      .read<EventProvider>()
-                      .createEvent(event);
-
-                  if (mounted) {
-                    if (success) {
-                      // Refresh the event list
-                      context.read<EventProvider>().fetchLatestEvents();
-                    }
-
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          success
-                              ? 'Event created successfully'
-                              : 'Failed to create event',
-                        ),
-                      ),
-                    );
-                  }
-                }
-              },
-              child: const Text('Create'),
-            ),
-          ],
-        ),
-      ),
-    );
+  void _showCreateEventDialog() {
+    showCreateEventDialog(context);
   }
 
   void _deleteEvent(String id) async {
@@ -359,7 +115,7 @@ class _AttendanceHomeScreenState extends State<AttendanceHomeScreen>
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'Daftar Event',
+                    'Daftar Event Bulan Ini',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -393,58 +149,58 @@ class _AttendanceHomeScreenState extends State<AttendanceHomeScreen>
             child: isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : events.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(24),
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade100,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            Icons.event_busy,
-                            size: 60,
-                            color: Colors.grey[400],
-                          ),
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(24),
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade100,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.event_busy,
+                                size: 60,
+                                color: Colors.grey[400],
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            Text(
+                              emptyMessage,
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Event akan muncul di sini',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey[500],
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 20),
-                        Text(
-                          emptyMessage,
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Event akan muncul di sini',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[500],
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                : ListView.builder(
-                    itemCount: events.length,
-                    itemBuilder: (context, index) {
-                      final event = events[index];
-                      return EventCard(
-                        event: event,
-                        onDelete: () => _deleteEvent(event.id!),
-                        onTap: () {
-                          context.push(
-                            '/attendance/event-detail',
-                            extra: event,
+                      )
+                    : ListView.builder(
+                        itemCount: events.length,
+                        itemBuilder: (context, index) {
+                          final event = events[index];
+                          return EventCard(
+                            event: event,
+                            onDelete: () => _deleteEvent(event.id!),
+                            onTap: () {
+                              context.push(
+                                '/attendance/event-detail',
+                                extra: event,
+                              );
+                            },
                           );
                         },
-                      );
-                    },
-                  ),
+                      ),
           ),
         ],
       ),
@@ -680,6 +436,12 @@ class _AttendanceHomeScreenState extends State<AttendanceHomeScreen>
                             onPressed: () => context.go('/dashboard'),
                           ),
                           IconButton(
+                            icon: const Icon(Icons.bar_chart,
+                                color: Colors.white),
+                            tooltip: 'Tren Kehadiran',
+                            onPressed: () => context.push('/attendance/trend'),
+                          ),
+                          IconButton(
                             icon: const Icon(Icons.search, color: Colors.white),
                             tooltip: 'Cari Event',
                             onPressed: () =>
@@ -762,8 +524,8 @@ class _AttendanceHomeScreenState extends State<AttendanceHomeScreen>
                 child: _selectedTab == 0
                     ? _buildAddTab()
                     : _selectedTab == 1
-                    ? _buildOngoingTab(eventProvider)
-                    : _buildCompletedTab(),
+                        ? _buildOngoingTab(eventProvider)
+                        : _buildCompletedTab(),
               ),
             ],
           ),

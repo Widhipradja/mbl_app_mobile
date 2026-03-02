@@ -11,7 +11,7 @@ class AppTheme {
   
   static ThemeData lightTheme = ThemeData(
     useMaterial3: true,
-    colorScheme: ColorScheme.light(
+    colorScheme: const ColorScheme.light(
       primary: primaryColor,
       secondary: secondaryColor,
       error: errorColor,
@@ -52,7 +52,7 @@ class AppTheme {
         borderSide: const BorderSide(color: primaryColor, width: 2),
       ),
     ),
-    cardTheme: CardThemeData(
+    cardTheme: CardTheme(
       elevation: 2,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
@@ -62,11 +62,11 @@ class AppTheme {
 
   static ThemeData darkTheme = ThemeData(
     useMaterial3: true,
-    colorScheme: ColorScheme.dark(
+    colorScheme: const ColorScheme.dark(
       primary: primaryColor,
       secondary: secondaryColor,
       error: errorColor,
-      surface: const Color(0xFF1E1E1E),
+      surface: Color(0xFF1E1E1E),
       onPrimary: Colors.white,
       onSecondary: Colors.white,
     ),
