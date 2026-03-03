@@ -588,6 +588,44 @@ class ApiService {
     return await _dio.delete('/api/zakat-fitrah/asnaf-bobot/$id');
   }
 
+  // ── Distribution endpoints ───────────────────────────────────────────────
+
+  /// Fetch list of zakat fitrah distributions (tree structure).
+  ///
+  /// Endpoint: `GET /api/zakat-fitrah/distributions`
+  Future<Response> getZakatDistributions({String? yearId}) async {
+    return await _dio.get(
+      '/api/zakat-fitrah/distributions',
+      queryParameters: {
+        if (yearId != null && yearId.isNotEmpty) 'year_id': yearId,
+      },
+    );
+  }
+
+  /// Create a new zakat fitrah distribution node.
+  ///
+  /// Endpoint: `POST /api/zakat-fitrah/distributions`
+  Future<Response> createZakatDistribution(Map<String, dynamic> data) async {
+    return await _dio.post('/api/zakat-fitrah/distributions', data: data);
+  }
+
+  /// Update a zakat fitrah distribution node.
+  ///
+  /// Endpoint: `PUT /api/zakat-fitrah/distributions/{id}`
+  Future<Response> updateZakatDistribution(
+    String id,
+    Map<String, dynamic> data,
+  ) async {
+    return await _dio.put('/api/zakat-fitrah/distributions/$id', data: data);
+  }
+
+  /// Delete a zakat fitrah distribution node.
+  ///
+  /// Endpoint: `DELETE /api/zakat-fitrah/distributions/{id}`
+  Future<Response> deleteZakatDistribution(String id) async {
+    return await _dio.delete('/api/zakat-fitrah/distributions/$id');
+  }
+
   // ── Configuration endpoints ──────────────────────────────────────────────
 
   Future<Response> getConfigurations() async {

@@ -1083,10 +1083,10 @@ class _MustahiqScreenState extends State<MustahiqScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
             mainAxisAlignment: MainAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'Asnaf & Bobot',
                 style: TextStyle(
                   fontSize: 13,

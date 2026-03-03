@@ -5,6 +5,7 @@ import '../../models/app_configuration.dart';
 import '../../providers/zakat_provider.dart';
 import '../../providers/configuration_provider.dart';
 import '../../services/api_service.dart';
+import 'distribution_config_screen.dart';
 
 class ConfigurationScreen extends StatefulWidget {
   const ConfigurationScreen({super.key});
@@ -421,8 +422,9 @@ class _ConfigurationScreenState extends State<ConfigurationScreen> {
       source = raw['data'];
     }
 
-    if (source is List)
+    if (source is List) {
       return source.whereType<Map<String, dynamic>>().toList();
+    }
     if (source is Map<String, dynamic>) return [source];
     return const [];
   }
@@ -510,274 +512,292 @@ class _ConfigurationScreenState extends State<ConfigurationScreen> {
               c.value.toLowerCase().contains(query);
         }).toList();
 
+        // Build the config list slivers depending on state
+        final Widget listSliver;
+        if (provider.isLoading) {
+          listSliver = const SliverFillRemaining(
+            hasScrollBody: false,
+            child: Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 48),
+                child: CircularProgressIndicator(color: _green),
+              ),
+            ),
+          );
+        } else if (items.isEmpty) {
+          listSliver = const SliverFillRemaining(
+            hasScrollBody: false,
+            child: Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 48),
+                child: Text(
+                  'Belum ada data configuration',
+                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                ),
+              ),
+            ),
+          );
+        } else {
+          listSliver = SliverPadding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 84),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final item = items[index];
+                  return Padding(
+                    padding: EdgeInsets.only(
+                        bottom: index < items.length - 1 ? 6 : 0),
+                    child: Dismissible(
+                      key: ValueKey('cfg-${item.oid}'),
+                      background: _swipeBackground(
+                        alignment: Alignment.centerLeft,
+                        color: const Color(0xFF059669),
+                        icon: Icons.edit_outlined,
+                        label: 'Edit',
+                      ),
+                      secondaryBackground: _swipeBackground(
+                        alignment: Alignment.centerRight,
+                        color: const Color(0xFFDC2626),
+                        icon: Icons.delete_outline,
+                        label: 'Hapus',
+                      ),
+                      confirmDismiss: (direction) async {
+                        if (direction == DismissDirection.startToEnd) {
+                          await _openConfigDialog(initial: item);
+                          return false;
+                        }
+                        return _confirmDelete(item);
+                      },
+                      child: _ConfigurationTile(item: item),
+                    ),
+                  );
+                },
+                childCount: items.length,
+              ),
+            ),
+          );
+        }
+
         return RefreshIndicator(
           color: _green,
           onRefresh: () => provider.fetchConfigurations(
               module: ConfigurationProvider.moduleZakatFitrah),
-          child: Column(
-            children: [
-              Container(
-                color: Colors.white,
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
-                child: Column(
-                  children: [
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _sectionBadge('MASTER ASNAF & BOBOT'),
-                          const SizedBox(height: 6),
-                          Row(
-                            children: [
-                              const Expanded(
-                                child: Text(
-                                  'Asnaf & Bobot',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                    color: Color(0xFF1A1A1A),
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              // ── Header sections ──────────────────────────────────────────
+              SliverToBoxAdapter(
+                child: Container(
+                  color: Colors.white,
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
+                  child: Column(
+                    children: [
+                      // ASNAF & BOBOT section
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _sectionBadge('MASTER ASNAF & BOBOT'),
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                const Expanded(
+                                  child: Text(
+                                    'Asnaf & Bobot',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF1A1A1A),
+                                    ),
                                   ),
                                 ),
-                              ),
-                              ElevatedButton.icon(
-                                onPressed: _openAsnafDialog,
-                                icon: const Icon(Icons.add, size: 16),
-                                label: const Text('Tambah Asnaf'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: _green,
-                                  foregroundColor: Colors.white,
-                                  visualDensity: VisualDensity.compact,
+                                ElevatedButton.icon(
+                                  onPressed: _openAsnafDialog,
+                                  icon: const Icon(Icons.add, size: 16),
+                                  label: const Text('Tambah Asnaf'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: _green,
+                                    foregroundColor: Colors.white,
+                                    visualDensity: VisualDensity.compact,
+                                  ),
                                 ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          const Text(
-                            'Swipe kanan untuk Edit, swipe kiri untuk Hapus.',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Color(0xFF64748B),
+                              ],
                             ),
-                          ),
-                          const SizedBox(height: 6),
-                          if (_isLoadingAsnaf)
-                            const Center(
-                              child: Padding(
-                                padding: EdgeInsets.symmetric(vertical: 6),
-                                child: SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child:
-                                      CircularProgressIndicator(strokeWidth: 2),
-                                ),
-                              ),
-                            )
-                          else if (_asnafBobot.isEmpty)
+                            const SizedBox(height: 4),
                             const Text(
-                              'Belum ada data Asnaf & Bobot',
+                              'Swipe kanan untuk Edit, swipe kiri untuk Hapus.',
                               style: TextStyle(
-                                color: Color(0xFF94A3B8),
-                                fontSize: 12,
-                              ),
-                            )
-                          else
-                            Column(
-                              children: _asnafBobot.map((item) {
-                                return Padding(
-                                  padding: const EdgeInsets.only(bottom: 6),
-                                  child: Dismissible(
-                                    key: ValueKey('asnaf-${item.id}'),
-                                    background: _swipeBackground(
-                                      alignment: Alignment.centerLeft,
-                                      color: const Color(0xFF059669),
-                                      icon: Icons.edit_outlined,
-                                      label: 'Edit',
-                                    ),
-                                    secondaryBackground: _swipeBackground(
-                                      alignment: Alignment.centerRight,
-                                      color: const Color(0xFFDC2626),
-                                      icon: Icons.delete_outline,
-                                      label: 'Hapus',
-                                    ),
-                                    confirmDismiss: (direction) async {
-                                      if (direction ==
-                                          DismissDirection.startToEnd) {
-                                        await _openAsnafDialog(initial: item);
-                                        return false;
-                                      }
-                                      return _confirmDeleteAsnaf(item);
-                                    },
-                                    child: _AsnafBobotTile(item: item),
-                                  ),
-                                );
-                              }).toList(),
-                            ),
-                          if (_asnafError != null) ...[
-                            const SizedBox(height: 2),
-                            Text(
-                              _asnafError!,
-                              style: const TextStyle(
-                                color: Color(0xFFDC2626),
-                                fontSize: 12,
+                                fontSize: 11,
+                                color: Color(0xFF64748B),
                               ),
                             ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _sectionBadge('MODULE CONFIGURATION'),
-                          const SizedBox(height: 6),
-                          const Text(
-                            'Configuration ZAKATFITRAH',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF1A1A1A),
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          const Text(
-                            'Swipe kanan untuk Edit, swipe kiri untuk Hapus.',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Color(0xFF64748B),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: TextField(
-                                  controller: _searchController,
-                                  onChanged: (v) =>
-                                      setState(() => _searchQuery = v),
-                                  decoration: InputDecoration(
-                                    hintText: 'Cari module, code, value…',
-                                    isDense: true,
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 10,
-                                    ),
-                                    prefixIcon: const Icon(Icons.search),
-                                    filled: true,
-                                    fillColor: const Color(0xFFF4F7F6),
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      borderSide: BorderSide.none,
-                                    ),
+                            const SizedBox(height: 6),
+                            if (_isLoadingAsnaf)
+                              const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 6),
+                                  child: SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
                                   ),
                                 ),
+                              )
+                            else if (_asnafBobot.isEmpty)
+                              const Text(
+                                'Belum ada data Asnaf & Bobot',
+                                style: TextStyle(
+                                  color: Color(0xFF94A3B8),
+                                  fontSize: 12,
+                                ),
+                              )
+                            else
+                              Column(
+                                children: _asnafBobot.map((item) {
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 6),
+                                    child: Dismissible(
+                                      key: ValueKey('asnaf-${item.id}'),
+                                      background: _swipeBackground(
+                                        alignment: Alignment.centerLeft,
+                                        color: const Color(0xFF059669),
+                                        icon: Icons.edit_outlined,
+                                        label: 'Edit',
+                                      ),
+                                      secondaryBackground: _swipeBackground(
+                                        alignment: Alignment.centerRight,
+                                        color: const Color(0xFFDC2626),
+                                        icon: Icons.delete_outline,
+                                        label: 'Hapus',
+                                      ),
+                                      confirmDismiss: (direction) async {
+                                        if (direction ==
+                                            DismissDirection.startToEnd) {
+                                          await _openAsnafDialog(
+                                              initial: item);
+                                          return false;
+                                        }
+                                        return _confirmDeleteAsnaf(item);
+                                      },
+                                      child: _AsnafBobotTile(item: item),
+                                    ),
+                                  );
+                                }).toList(),
                               ),
-                              const SizedBox(width: 10),
-                              ElevatedButton.icon(
-                                onPressed: () => _openConfigDialog(),
-                                icon: const Icon(Icons.add, size: 18),
-                                label: const Text('Tambah'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: _green,
-                                  foregroundColor: Colors.white,
-                                  minimumSize: const Size(0, 48),
+                            if (_asnafError != null) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                _asnafError!,
+                                style: const TextStyle(
+                                  color: Color(0xFFDC2626),
+                                  fontSize: 12,
                                 ),
                               ),
                             ],
-                          ),
-                          if (provider.errorMessage != null) ...[
-                            const SizedBox(height: 8),
-                            Text(
-                              provider.errorMessage!,
-                              style: const TextStyle(
-                                color: Color(0xFFDC2626),
-                                fontSize: 12,
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      // DISTRIBUTION section
+                      const DistributionConfigSection(),
+                      const SizedBox(height: 8),
+                      // MODULE CONFIGURATION section
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _sectionBadge('MODULE CONFIGURATION'),
+                            const SizedBox(height: 6),
+                            const Text(
+                              'Configuration ZAKATFITRAH',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF1A1A1A),
                               ),
                             ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'Swipe kanan untuk Edit, swipe kiri untuk Hapus.',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF64748B),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    controller: _searchController,
+                                    onChanged: (v) =>
+                                        setState(() => _searchQuery = v),
+                                    decoration: InputDecoration(
+                                      hintText: 'Cari module, code, value…',
+                                      isDense: true,
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 10,
+                                      ),
+                                      prefixIcon: const Icon(Icons.search),
+                                      filled: true,
+                                      fillColor: const Color(0xFFF4F7F6),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                        borderSide: BorderSide.none,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                ElevatedButton.icon(
+                                  onPressed: () => _openConfigDialog(),
+                                  icon: const Icon(Icons.add, size: 18),
+                                  label: const Text('Tambah'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: _green,
+                                    foregroundColor: Colors.white,
+                                    minimumSize: const Size(0, 48),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (provider.errorMessage != null) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                provider.errorMessage!,
+                                style: const TextStyle(
+                                  color: Color(0xFFDC2626),
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 4),
+                    ],
+                  ),
                 ),
               ),
-              Expanded(
-                child: provider.isLoading
-                    ? ListView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        children: const [
-                          SizedBox(height: 140),
-                          Center(
-                            child: CircularProgressIndicator(color: _green),
-                          ),
-                        ],
-                      )
-                    : items.isEmpty
-                        ? ListView(
-                            physics: const AlwaysScrollableScrollPhysics(),
-                            children: const [
-                              SizedBox(height: 140),
-                              Center(
-                                child: Text(
-                                  'Belum ada data configuration',
-                                  style: TextStyle(
-                                    color: Color(0xFF94A3B8),
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          )
-                        : ListView.separated(
-                            physics: const AlwaysScrollableScrollPhysics(),
-                            padding: const EdgeInsets.fromLTRB(12, 8, 12, 84),
-                            itemBuilder: (context, index) {
-                              final item = items[index];
-                              return Dismissible(
-                                key: ValueKey('cfg-${item.oid}'),
-                                background: _swipeBackground(
-                                  alignment: Alignment.centerLeft,
-                                  color: const Color(0xFF059669),
-                                  icon: Icons.edit_outlined,
-                                  label: 'Edit',
-                                ),
-                                secondaryBackground: _swipeBackground(
-                                  alignment: Alignment.centerRight,
-                                  color: const Color(0xFFDC2626),
-                                  icon: Icons.delete_outline,
-                                  label: 'Hapus',
-                                ),
-                                confirmDismiss: (direction) async {
-                                  if (direction ==
-                                      DismissDirection.startToEnd) {
-                                    await _openConfigDialog(initial: item);
-                                    return false;
-                                  }
-                                  return _confirmDelete(item);
-                                },
-                                child: _ConfigurationTile(item: item),
-                              );
-                            },
-                            separatorBuilder: (_, __) =>
-                                const SizedBox(height: 6),
-                            itemCount: items.length,
-                          ),
-              ),
+              // ── Config list / loading / empty ─────────────────────────────
+              listSliver,
             ],
           ),
         );
