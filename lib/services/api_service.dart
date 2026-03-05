@@ -281,6 +281,23 @@ class ApiService {
     return await _dio.get('/api/zakat-fitrah/years');
   }
 
+  /// Create a new Zakat Fitrah year.
+  ///
+  /// Endpoint: `POST /api/zakat-fitrah/years`
+  Future<Response> createZakatYear(Map<String, dynamic> data) async {
+    return await _dio.post('/api/zakat-fitrah/years', data: data);
+  }
+
+  /// Update an existing Zakat Fitrah year.
+  ///
+  /// Endpoint: `PUT /api/zakat-fitrah/years/{id}`
+  Future<Response> updateZakatYear(
+    String id,
+    Map<String, dynamic> data,
+  ) async {
+    return await _dio.put('/api/zakat-fitrah/years/$id', data: data);
+  }
+
   /// Fetch muzakki with payment status for a specific Zakat year.
   ///
   /// Endpoint: `GET /api/zakat-fitrah/years/{yearId}/muzakki/status`
@@ -624,6 +641,27 @@ class ApiService {
   /// Endpoint: `DELETE /api/zakat-fitrah/distributions/{id}`
   Future<Response> deleteZakatDistribution(String id) async {
     return await _dio.delete('/api/zakat-fitrah/distributions/$id');
+  }
+
+  // ── Adjustment endpoints ─────────────────────────────────────────────────
+
+  /// Fetch list of zakat fitrah distribution adjustments.
+  ///
+  /// Endpoint: `GET /api/zakat-fitrah/adjustments`
+  Future<Response> getZakatAdjustments({String? yearId}) async {
+    return await _dio.get(
+      '/api/zakat-fitrah/adjustments',
+      queryParameters: {
+        if (yearId != null && yearId.isNotEmpty) 'year_id': yearId,
+      },
+    );
+  }
+
+  /// Create a zakat fitrah distribution adjustment (upsert by distribution).
+  ///
+  /// Endpoint: `POST /api/zakat-fitrah/adjustments`
+  Future<Response> createZakatAdjustment(Map<String, dynamic> data) async {
+    return await _dio.post('/api/zakat-fitrah/adjustments', data: data);
   }
 
   // ── Configuration endpoints ──────────────────────────────────────────────

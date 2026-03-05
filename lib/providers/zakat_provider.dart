@@ -91,6 +91,32 @@ class ZakatProvider extends ChangeNotifier {
     }
   }
 
+  /// Create a new Zakat Fitrah year and refresh the list.
+  Future<bool> createYear(Map<String, dynamic> payload) async {
+    try {
+      final api = ApiService();
+      await api.createZakatYear(payload);
+      await fetchYears();
+      return true;
+    } catch (e) {
+      debugPrint('ZakatProvider.createYear error: $e');
+      return false;
+    }
+  }
+
+  /// Update an existing Zakat Fitrah year and refresh the list.
+  Future<bool> updateYear(String id, Map<String, dynamic> payload) async {
+    try {
+      final api = ApiService();
+      await api.updateZakatYear(id, payload);
+      await fetchYears();
+      return true;
+    } catch (e) {
+      debugPrint('ZakatProvider.updateYear error: $e');
+      return false;
+    }
+  }
+
   /// Change the selected year and re-fetch data.
   Future<void> selectYear(ZakatYear year) async {
     if (_selectedYear?.id == year.id) return;

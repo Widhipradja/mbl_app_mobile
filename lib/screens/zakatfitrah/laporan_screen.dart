@@ -27,15 +27,17 @@ class _LaporanBodyState extends State<LaporanBody> {
   double _jatahAsnaf = 45;
   double _titipUang = 45000;
   List<_AmilChildConfig> _amilChildren = const [];
-  int _adjSb = 0;
-  int _adjAsnaf = 0;
-  List<int> _adjAmilChildren = const [];
+  String? _sbDistributionId;
+  List<String> _asnafDistributionIds = const [];
+  List<String> _asnafDistributionLabels = const [];
+  Map<String, double> _adjByDistributionId = {};
   final TextEditingController _notesController = TextEditingController();
   bool _isLoadingConfig = false;
   bool _isLoadingMustahiqRecap = false;
   String? _configError;
   String? _mustahiqRecapError;
   String _lastRecapYearId = '';
+  String _lastConfigYearId = '';
 
   List<_MustahiqRecapRow> _mustahiqRecapRows = const [];
 
@@ -50,47 +52,85 @@ class _LaporanBodyState extends State<LaporanBody> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadDistributionConfig();
+      _loadAdjustments();
     });
   }
 
-  Future<void> _loadDistributionConfig() async {
+  Future<void> _loadDistributionConfig([String? yearId]) async {
     setState(() {
       _isLoadingConfig = true;
       _configError = null;
     });
 
     try {
-      final response = await _api.getConfigurationsByModule('ZAKATFITRAH');
-      final map = _configMap(response.data);
+      final response = await _api.getZakatDistributions(
+        yearId: (yearId != null && yearId.isNotEmpty) ? yearId : null,
+      );
+      final roots = _extractList(response.data);
 
-      final sb = _parseConfigDouble(map['JATAH_SB'], fallback: 40);
-      final amil = _parseConfigDouble(map['JATAH_AMIL'], fallback: 15);
-      final asnaf = _parseConfigDouble(map['JATAH_ASNAF'], fallback: 45);
-      final titipUang = _parseConfigDouble(map['TITIP_UANG'], fallback: 45000);
+      double sb = 40;
+      double amil = 15;
+      double asnaf = 45;
+      final List<_AmilChildConfig> amilChildren = [];
 
-      final amilChildren = map.entries
-          .where((e) => e.key.startsWith('JATAH_AMIL_'))
-          .map((e) {
-            final label = e.key
-                .substring('JATAH_AMIL_'.length)
-                .split('_')
-                .where((part) => part.trim().isNotEmpty)
-                .join(' ');
-            return _AmilChildConfig(
-              label: label.isEmpty ? 'AMIL' : label,
-              percent: _parseConfigDouble(e.value, fallback: 0),
-            );
-          })
-          .where((e) => e.percent > 0)
-          .toList();
+      // ── Map tree nodes to report buckets ──────────────────────────────
+      // · Node with children  → Amil bucket; its children → amil sub-groups.
+      // · Name matches "sb" or "sabilillah" (case-insensitive) → SB bucket.
+      // · Everything else    → Asnaf bucket (summed).
+      double asnafAccumulator = 0;
+      bool asnafFound = false;
+
+      String? sbId;
+      final asnafIds = <String>[];
+      final asnafLabels = <String>[];
+
+      for (final raw in roots) {
+        final id = raw['id']?.toString() ?? '';
+        final name = (raw['name']?.toString() ?? '').toLowerCase();
+        final pct =
+            double.tryParse(raw['percentage']?.toString() ?? '') ?? 0.0;
+        final rawChildren = raw['children'];
+        final hasChildren =
+            rawChildren is List && (rawChildren).isNotEmpty;
+
+        if (hasChildren) {
+          // Amil
+          amil = pct;
+          for (final child in rawChildren as List) {
+            if (child is! Map<String, dynamic>) continue;
+            final childId = child['id']?.toString() ?? '';
+            final childName = (child['name']?.toString() ?? '').trim();
+            final childPct =
+                double.tryParse(child['percentage']?.toString() ?? '') ?? 0.0;
+            if (childName.isNotEmpty) {
+              amilChildren.add(
+                  _AmilChildConfig(id: childId, label: childName, percent: childPct));
+            }
+          }
+        } else if (name.contains('sb') || name.contains('sabilillah')) {
+          sb = pct;
+          sbId = id.isNotEmpty ? id : null;
+        } else {
+          asnafAccumulator += pct;
+          asnafFound = true;
+          if (id.isNotEmpty) {
+            asnafIds.add(id);
+            asnafLabels.add(raw['name']?.toString() ?? id);
+          }
+        }
+      }
+
+      if (asnafFound) asnaf = asnafAccumulator;
 
       if (!mounted) return;
       setState(() {
         _jatahSb = sb;
         _jatahAmil = amil;
         _jatahAsnaf = asnaf;
-        _titipUang = titipUang;
         _amilChildren = amilChildren;
+        _sbDistributionId = sbId;
+        _asnafDistributionIds = asnafIds;
+        _asnafDistributionLabels = asnafLabels;
       });
     } catch (_) {
       if (!mounted) return;
@@ -172,30 +212,6 @@ class _LaporanBodyState extends State<LaporanBody> {
     }
   }
 
-  Map<String, String> _configMap(dynamic raw) {
-    dynamic source = raw;
-    if (raw is Map<String, dynamic> && raw['data'] != null) {
-      source = raw['data'];
-    }
-    if (source is! List) return <String, String>{};
-
-    final map = <String, String>{};
-    for (final item in source) {
-      if (item is! Map<String, dynamic>) continue;
-      final code = (item['code'] as String? ?? '').trim();
-      if (code.isEmpty) continue;
-      map[code] = (item['value']?.toString() ?? '').trim();
-    }
-    return map;
-  }
-
-  double _parseConfigDouble(String? raw, {required double fallback}) {
-    if (raw == null || raw.isEmpty) return fallback;
-    final parsed = double.tryParse(raw.trim());
-    if (parsed == null || parsed.isNaN) return fallback;
-    return parsed;
-  }
-
   List<int> _splitAmilCount(int amilTotal, List<_AmilChildConfig> children) {
     if (children.isEmpty) return [amilTotal];
 
@@ -234,17 +250,6 @@ class _LaporanBodyState extends State<LaporanBody> {
     );
   }
 
-  void _syncAdjustmentChildren(int childLength) {
-    if (_adjAmilChildren.length == childLength) return;
-    final next = List<int>.filled(childLength, 0);
-    for (var index = 0; index < childLength; index++) {
-      if (index < _adjAmilChildren.length) {
-        next[index] = _adjAmilChildren[index];
-      }
-    }
-    _adjAmilChildren = next;
-  }
-
   int _toIntOrZero(String value) => int.tryParse(value.trim()) ?? 0;
 
   List<Map<String, dynamic>> _extractList(dynamic raw) {
@@ -276,18 +281,57 @@ class _LaporanBodyState extends State<LaporanBody> {
 
   String _normalizeAsnafType(String input) => input.trim().toLowerCase();
 
-  Future<void> _showAdjustmentDialog(
-      List<_AmilChildConfig> amilChildren) async {
-    final sbCtrl = TextEditingController(text: _adjSb.toString());
-    final asnafCtrl = TextEditingController(text: _adjAsnaf.toString());
-    final amilCtrls = List<TextEditingController>.generate(
-      amilChildren.length,
-      (index) => TextEditingController(
-          text: (_adjAmilChildren.length > index ? _adjAmilChildren[index] : 0)
-              .toString()),
-    );
+  /// Fetches saved adjustments from the API keyed by distribution_id.
+  Future<void> _loadAdjustments([String? yearId]) async {
+    setState(() => _isLoadingConfig = true);
+    try {
+      final response = await _api.getZakatAdjustments(
+        yearId: (yearId != null && yearId.isNotEmpty) ? yearId : null,
+      );
+      final rows = _extractList(response.data);
+      final map = <String, double>{};
+      for (final row in rows) {
+        final distId = row['distribution_id']?.toString() ?? '';
+        final amount =
+            double.tryParse(row['adjusted_amount']?.toString() ?? '') ?? 0.0;
+        if (distId.isNotEmpty) map[distId] = amount;
+      }
+      if (!mounted) return;
+      setState(() => _adjByDistributionId = map);
+    } catch (_) {
+      // Adjustments are optional — fail silently.
+    } finally {
+      if (mounted) setState(() => _isLoadingConfig = false);
+    }
+  }
 
-    final saved = await showDialog<bool>(
+  Future<void> _showAdjustmentDialog(
+      List<_AmilChildConfig> amilChildren, String yearId) async {
+    // Build a controller map: distributionId → TextEditingController
+    final ctrls = <String, TextEditingController>{};
+
+    if (_sbDistributionId != null) {
+      ctrls[_sbDistributionId!] = TextEditingController(
+        text: (_adjByDistributionId[_sbDistributionId] ?? 0).toStringAsFixed(0),
+      );
+    }
+    for (final child in amilChildren) {
+      if (child.id.isNotEmpty) {
+        ctrls[child.id] = TextEditingController(
+          text: (_adjByDistributionId[child.id] ?? 0).toStringAsFixed(0),
+        );
+      }
+    }
+    for (var i = 0; i < _asnafDistributionIds.length; i++) {
+      final id = _asnafDistributionIds[i];
+      ctrls[id] = TextEditingController(
+        text: (_adjByDistributionId[id] ?? 0).toStringAsFixed(0),
+      );
+    }
+
+    // Capture values into a plain Map when the user confirms, so we don't
+    // rely on controllers being alive after the dialog's exit animation starts.
+    final saved = await showDialog<Map<String, double>>(
       context: context,
       builder: (ctx) {
         return AlertDialog(
@@ -298,27 +342,47 @@ class _LaporanBodyState extends State<LaporanBody> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  TextField(
-                    controller: sbCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration:
-                        const InputDecoration(labelText: 'Adjustment SB'),
-                  ),
-                  ...List.generate(amilChildren.length, (index) {
-                    return TextField(
-                      controller: amilCtrls[index],
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        labelText:
-                            'Adjustment Amil ${amilChildren[index].label}',
+                  if (_sbDistributionId != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: TextField(
+                        controller: ctrls[_sbDistributionId],
+                        keyboardType: const TextInputType.numberWithOptions(
+                            signed: true),
+                        decoration:
+                            const InputDecoration(labelText: 'Adjustment SB'),
                       ),
-                    );
-                  }),
-                  TextField(
-                    controller: asnafCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration:
-                        const InputDecoration(labelText: 'Adjustment Asnaf'),
+                    ),
+                  ...amilChildren
+                      .where((c) => c.id.isNotEmpty)
+                      .map(
+                        (c) => Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: TextField(
+                            controller: ctrls[c.id],
+                            keyboardType:
+                                const TextInputType.numberWithOptions(
+                                    signed: true),
+                            decoration: InputDecoration(
+                              labelText: 'Adjustment Amil ${c.label}',
+                            ),
+                          ),
+                        ),
+                      ),
+                  ...List.generate(
+                    _asnafDistributionIds.length,
+                    (i) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: TextField(
+                        controller: ctrls[_asnafDistributionIds[i]],
+                        keyboardType: const TextInputType.numberWithOptions(
+                            signed: true),
+                        decoration: InputDecoration(
+                          labelText:
+                              'Adjustment ${_asnafDistributionLabels[i]}',
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -326,11 +390,19 @@ class _LaporanBodyState extends State<LaporanBody> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
+              onPressed: () => Navigator.pop(ctx, null),
               child: const Text('Batal'),
             ),
             TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
+              onPressed: () {
+                // Capture values inside the dialog before it starts closing,
+                // so the controllers can be safely disposed afterwards.
+                final values = {
+                  for (final e in ctrls.entries)
+                    e.key: double.tryParse(e.value.text.trim()) ?? 0.0,
+                };
+                Navigator.pop(ctx, values);
+              },
               child: const Text('Simpan'),
             ),
           ],
@@ -338,20 +410,31 @@ class _LaporanBodyState extends State<LaporanBody> {
       },
     );
 
-    if (saved == true && mounted) {
-      setState(() {
-        _adjSb = _toIntOrZero(sbCtrl.text);
-        _adjAsnaf = _toIntOrZero(asnafCtrl.text);
-        _adjAmilChildren = amilCtrls
-            .map((controller) => _toIntOrZero(controller.text))
-            .toList();
-      });
-    }
+    // Do NOT dispose controllers here. showDialog's Future resolves when
+    // Navigator.pop is called, but the dialog's exit animation is still
+    // running at that point — TextField widgets are still alive and linked
+    // to the controllers. Disposing early triggers _dependents.isEmpty.
+    // These are short-lived local variables with no native resources; they
+    // will be GC'd once the animation completes and the dialog is unmounted.
 
-    sbCtrl.dispose();
-    asnafCtrl.dispose();
-    for (final controller in amilCtrls) {
-      controller.dispose();
+    if (saved != null && mounted) {
+      // Update local state immediately for responsive UI
+      final updated = Map<String, double>.from(_adjByDistributionId)
+        ..addAll(saved);
+      setState(() => _adjByDistributionId = updated);
+
+      // Persist each slot to the API
+      for (final entry in saved.entries) {
+        try {
+          await _api.createZakatAdjustment({
+            if (yearId.isNotEmpty) 'year_id': yearId,
+            'distribution_id': entry.key,
+            'adjusted_amount': entry.value.toStringAsFixed(2),
+          });
+        } catch (_) {
+          // Continue persisting remaining slots even if one fails.
+        }
+      }
     }
   }
 
@@ -366,12 +449,10 @@ class _LaporanBodyState extends State<LaporanBody> {
     required int adjustmentTotal,
     required int totalAdjusted,
     required List<_AmilChildConfig> amilChildren,
+    required int adjSb,
+    required List<int> adjAmilChildren,
+    required int adjAsnaf,
   }) {
-    final amilAdjustments = List<int>.generate(
-      amilChildren.length,
-      (index) => index < _adjAmilChildren.length ? _adjAmilChildren[index] : 0,
-    );
-
     return {
       'year_id': yearId,
       'year_label': yearLabel,
@@ -407,28 +488,28 @@ class _LaporanBodyState extends State<LaporanBody> {
       },
       'adjustment': {
         'jumlah': adjustmentTotal,
-        'sb': _adjSb,
+        'sb': adjSb,
         'amil_children': List.generate(
           amilChildren.length,
           (index) => {
             'label': amilChildren[index].label,
-            'value': amilAdjustments[index],
+            'value': index < adjAmilChildren.length ? adjAmilChildren[index] : 0,
           },
         ),
-        'asnaf': _adjAsnaf,
+        'asnaf': adjAsnaf,
       },
       'result': {
         'jumlah': totalAdjusted,
-        'sb': sbBase + _adjSb,
+        'sb': sbBase + adjSb,
         'amil_children': List.generate(
           amilChildren.length,
           (index) => {
             'label': amilChildren[index].label,
             'value': (index < amilBase.length ? amilBase[index] : 0) +
-                amilAdjustments[index],
+                (index < adjAmilChildren.length ? adjAmilChildren[index] : 0),
           },
         ),
-        'asnaf': asnafBase + _adjAsnaf,
+        'asnaf': asnafBase + adjAsnaf,
         'total': totalAdjusted,
       },
       'created_at': DateTime.now().toIso8601String(),
@@ -496,6 +577,16 @@ class _LaporanBodyState extends State<LaporanBody> {
           });
         }
 
+        if (selectedYearId.isNotEmpty &&
+            selectedYearId != _lastConfigYearId) {
+          _lastConfigYearId = selectedYearId;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            _loadDistributionConfig(selectedYearId);
+            _loadAdjustments(selectedYearId);
+          });
+        }
+
         final totalMuzakki =
             summaryTotals?.totalMuzakki ?? provider.totalMuzakki;
         final totalJiwaOverall = summaryTotals?.totalSoulsOverall ??
@@ -518,9 +609,19 @@ class _LaporanBodyState extends State<LaporanBody> {
         final amilChildren = _amilChildren.isNotEmpty
             ? _amilChildren
             : [
-                _AmilChildConfig(label: 'AMIL', percent: _jatahAmil),
+                _AmilChildConfig(id: '', label: 'AMIL', percent: _jatahAmil),
               ];
-        _syncAdjustmentChildren(amilChildren.length);
+
+        // ── Derive adj values from the API-backed map ────────────────────
+        final adjSb =
+            (_adjByDistributionId[_sbDistributionId] ?? 0).round();
+        final adjAmilChildren = amilChildren
+            .map((c) => (_adjByDistributionId[c.id] ?? 0).round())
+            .toList();
+        final adjAsnaf = _asnafDistributionIds.fold<int>(
+          0,
+          (sum, id) => sum + (_adjByDistributionId[id] ?? 0).round(),
+        );
 
         final sbCount = (totalWajibZakat * sbPercent).round();
         final amilTotalCount = (totalWajibZakat * amilPercent).round();
@@ -537,15 +638,15 @@ class _LaporanBodyState extends State<LaporanBody> {
             amilChildAmounts.fold<double>(0, (sum, amount) => sum + amount);
         final totalPembagianAmount = sbAmount + amilTotalAmount + asnafAmount;
 
-        final adjustedSb = sbCount + _adjSb;
+        final adjustedSb = sbCount + adjSb;
         final adjustedAmilChildren = List<int>.generate(
           amilChildren.length,
-          (index) => amilChildCounts[index] + _adjAmilChildren[index],
+          (index) => amilChildCounts[index] + adjAmilChildren[index],
         );
-        final adjustedAsnaf = asnafCount + _adjAsnaf;
-        final adjustmentTotal = _adjSb +
-            _adjAmilChildren.fold<int>(0, (sum, v) => sum + v) +
-            _adjAsnaf;
+        final adjustedAsnaf = asnafCount + adjAsnaf;
+        final adjustmentTotal = adjSb +
+            adjAmilChildren.fold<int>(0, (sum, v) => sum + v) +
+            adjAsnaf;
         final adjustedTotal = adjustedSb +
             adjustedAmilChildren.fold<int>(0, (sum, v) => sum + v) +
             adjustedAsnaf;
@@ -562,12 +663,14 @@ class _LaporanBodyState extends State<LaporanBody> {
         distColumnWidths[3 + amilChildren.length] = const FixedColumnWidth(80);
         distColumnWidths[4 + amilChildren.length] = const FixedColumnWidth(110);
         Future<void> refreshLaporan() async {
+          final yr = selectedYearId.isNotEmpty ? selectedYearId : null;
           await Future.wait<void>([
             provider.fetchMuzakki(),
             provider.fetchLaporanSummary(),
             if (selectedYearId.isNotEmpty) _loadMustahiqRecap(selectedYearId),
+            _loadDistributionConfig(yr),
+            _loadAdjustments(yr),
           ]);
-          await _loadDistributionConfig();
         }
 
         return RefreshIndicator(
@@ -612,7 +715,7 @@ class _LaporanBodyState extends State<LaporanBody> {
                                   color: Color(0xFF066046)),
                     ),
                     TextButton.icon(
-                      onPressed: () => _showAdjustmentDialog(amilChildren),
+                      onPressed: () => _showAdjustmentDialog(amilChildren, selectedYearId),
                       icon: const Icon(Icons.tune_rounded, size: 18),
                       label: const Text('Adjustment'),
                       style: TextButton.styleFrom(foregroundColor: _green),
@@ -675,9 +778,9 @@ class _LaporanBodyState extends State<LaporanBody> {
                                 _distDataRow(
                                   label: 'Adjustment',
                                   jumlah: adjustmentTotal,
-                                  sb: _adjSb,
-                                  amilChildren: _adjAmilChildren,
-                                  asnaf: _adjAsnaf,
+                                  sb: adjSb,
+                                  amilChildren: adjAmilChildren,
+                                  asnaf: adjAsnaf,
                                   total: adjustmentTotal,
                                 ),
                                 _distCurrencyRow(
@@ -731,6 +834,9 @@ class _LaporanBodyState extends State<LaporanBody> {
                               adjustmentTotal: adjustmentTotal,
                               totalAdjusted: adjustedTotal,
                               amilChildren: amilChildren,
+                              adjSb: adjSb,
+                              adjAmilChildren: adjAmilChildren,
+                              adjAsnaf: adjAsnaf,
                             );
 
                             final payloadText =
@@ -1108,8 +1214,13 @@ class _LaporanBodyState extends State<LaporanBody> {
 }
 
 class _AmilChildConfig {
-  const _AmilChildConfig({required this.label, required this.percent});
+  const _AmilChildConfig({
+    required this.id,
+    required this.label,
+    required this.percent,
+  });
 
+  final String id;
   final String label;
   final double percent;
 }

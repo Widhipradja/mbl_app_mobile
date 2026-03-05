@@ -12,10 +12,10 @@ class DistributionConfigSection extends StatefulWidget {
 
   @override
   State<DistributionConfigSection> createState() =>
-      _DistributionConfigSectionState();
+      DistributionConfigSectionState();
 }
 
-class _DistributionConfigSectionState
+class DistributionConfigSectionState
     extends State<DistributionConfigSection> {
   static const _green = Color(0xFF066046);
 
@@ -68,6 +68,9 @@ class _DistributionConfigSectionState
   }
 
   // ── Data loading ──────────────────────────────────────────────────────────
+
+  /// Called externally (e.g. parent pull-to-refresh) to force reload.
+  Future<void> reload() => _load();
 
   Future<void> _load() async {
     final yearId = _currentYearId;
@@ -212,7 +215,7 @@ class _DistributionConfigSectionState
                       'name': name,
                       'percentage': pct,
                       'notes': notesCtrl.text.trim(),
-                      if (!isEdit && parentId != null) 'parent_id': parentId,
+                      if (parentId != null) 'parent_id': parentId,
                     };
 
                     try {

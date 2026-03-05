@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/app_configuration.dart';
+import '../../models/zakat_year.dart';
 import '../../providers/zakat_provider.dart';
 import '../../providers/configuration_provider.dart';
 import '../../services/api_service.dart';
+import '../../services/storage_service.dart';
 import 'distribution_config_screen.dart';
 
 class ConfigurationScreen extends StatefulWidget {
@@ -18,6 +20,7 @@ class _ConfigurationScreenState extends State<ConfigurationScreen> {
   static const _green = Color(0xFF066046);
 
   final ApiService _api = ApiService();
+  final _distributionKey = GlobalKey<DistributionConfigSectionState>();
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   bool _isLoadingAsnaf = false;
@@ -53,6 +56,248 @@ class _ConfigurationScreenState extends State<ConfigurationScreen> {
     final active = provider.years.where((y) => y.isActive).toList();
     final fallback = active.isNotEmpty ? active.first : provider.years.first;
     return fallback.id;
+  }
+
+  Future<void> _openYearDialog({ZakatYear? initial}) async {
+    final zakatProvider = context.read<ZakatProvider>();
+    final isEdit = initial != null;
+
+    final hijriYearCtrl = TextEditingController(
+      text: initial != null ? initial.hijriYear.toString() : '1447',
+    );
+    final labelCtrl = TextEditingController(
+      text: initial?.label ?? 'Ramadhan 1447H',
+    );
+    final riceRateCtrl = TextEditingController(
+      text: initial != null
+          ? initial.riceRatePerSo
+              .toStringAsFixed(initial.riceRatePerSo % 1 == 0 ? 0 : 2)
+          : '45000',
+    );
+
+    // Parse initial dates if editing
+    DateTime? ramadhanStart = initial?.ramadhanStart.isNotEmpty == true
+        ? DateTime.tryParse(initial!.ramadhanStart)
+        : null;
+    DateTime? ramadhanEnd = initial?.ramadhanEnd.isNotEmpty == true
+        ? DateTime.tryParse(initial!.ramadhanEnd)
+        : null;
+    bool isActive = initial?.isActive ?? true;
+
+    // Fetch group lookup before opening dialog
+    List<Map<String, String>> groupOptions = [];
+    try {
+      final resp = await _api.getLookups('GROUP');
+      final raw = resp.data;
+      final list = raw is List
+          ? raw
+          : (raw is Map<String, dynamic>
+              ? (raw['data'] as List<dynamic>? ?? [])
+              : []);
+      groupOptions = list
+          .whereType<Map<String, dynamic>>()
+          .map((e) => {
+                'value': e['value']?.toString() ?? '',
+                'order': e['order']?.toString() ?? '99',
+              })
+          .where((e) => e['value']!.isNotEmpty)
+          .toList()
+        ..sort(
+            (a, b) => int.parse(a['order']!).compareTo(int.parse(b['order']!)));
+    } catch (_) {
+      // fallback: empty list, user can still proceed
+    }
+
+    final defaultGroup =
+        initial?.groupName ?? StorageService.getUser()?.groupName ?? '';
+    String? selectedGroupName =
+        groupOptions.any((g) => g['value'] == defaultGroup)
+            ? defaultGroup
+            : null;
+
+    String _fmt(DateTime? d) => d != null
+        ? '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}'
+        : '';
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) {
+          // ignore: prefer_function_declarations_over_variables
+          final setActive = (bool v) => setLocal(() => isActive = v);
+          Widget _datePicker({
+            required String label,
+            required DateTime? value,
+            required void Function(DateTime) onPicked,
+          }) {
+            return GestureDetector(
+              onTap: () async {
+                final picked = await showDatePicker(
+                  context: ctx,
+                  initialDate: value ?? DateTime(2025, 3, 1),
+                  firstDate: DateTime(2020),
+                  lastDate: DateTime(2035),
+                  builder: (ctx, child) => Theme(
+                    data: Theme.of(ctx).copyWith(
+                      colorScheme: const ColorScheme.light(
+                        primary: _green,
+                        onPrimary: Colors.white,
+                      ),
+                    ),
+                    child: child!,
+                  ),
+                );
+                if (picked != null) setLocal(() => onPicked(picked));
+              },
+              child: Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                decoration: BoxDecoration(
+                  border: Border.all(color: const Color(0xFFBDBDBD)),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        value != null ? _fmt(value) : 'Pilih tanggal',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: value != null
+                              ? const Color(0xFF1A1A1A)
+                              : const Color(0xFF9E9E9E),
+                        ),
+                      ),
+                    ),
+                    const Icon(Icons.calendar_today, size: 18, color: _green),
+                  ],
+                ),
+              ),
+            );
+          }
+
+          return AlertDialog(
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            title:
+                Text(isEdit ? 'Edit Tahun Ramadhan' : 'Tambah Tahun Ramadhan'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _InputField(label: 'Hijri Year', controller: hijriYearCtrl),
+                  const SizedBox(height: 8),
+                  _InputField(label: 'Label', controller: labelCtrl),
+                  const SizedBox(height: 8),
+                  const Text('Ramadhan Start',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                  const SizedBox(height: 4),
+                  _datePicker(
+                    label: 'Ramadhan Start',
+                    value: ramadhanStart,
+                    onPicked: (d) => ramadhanStart = d,
+                  ),
+                  const SizedBox(height: 8),
+                  const Text('Ramadhan End',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                  const SizedBox(height: 4),
+                  _datePicker(
+                    label: 'Ramadhan End',
+                    value: ramadhanEnd,
+                    onPicked: (d) => ramadhanEnd = d,
+                  ),
+                  const SizedBox(height: 8),
+                  _InputField(
+                      label: 'Rice Rate per So (IDR)',
+                      controller: riceRateCtrl),
+                  const SizedBox(height: 8),
+                  // Group Name dropdown
+                  DropdownButtonFormField<String>(
+                    value: selectedGroupName,
+                    decoration: InputDecoration(
+                      labelText: 'Group Name',
+                      isDense: true,
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
+                    hint: const Text('Pilih group'),
+                    isExpanded: true,
+                    items: groupOptions
+                        .map((g) => DropdownMenuItem<String>(
+                              value: g['value'],
+                              child: Text(g['value']!),
+                            ))
+                        .toList(),
+                    onChanged: (v) => setLocal(() => selectedGroupName = v),
+                  ),
+                  const SizedBox(height: 4),
+                  // Is Active toggle
+                  SwitchListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Aktif', style: TextStyle(fontSize: 13)),
+                    value: isActive,
+                    activeColor: _green,
+                    onChanged: setActive,
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Batal'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  final hijriYear = int.tryParse(hijriYearCtrl.text.trim());
+                  if (hijriYear == null || labelCtrl.text.trim().isEmpty)
+                    return;
+
+                  final payload = <String, dynamic>{
+                    'hijri_year': hijriYear,
+                    'label': labelCtrl.text.trim(),
+                    'ramadhan_start':
+                        ramadhanStart != null ? _fmt(ramadhanStart) : null,
+                    'ramadhan_end':
+                        ramadhanEnd != null ? _fmt(ramadhanEnd) : null,
+                    'rice_rate_per_so': riceRateCtrl.text.trim(),
+                    'group_name': selectedGroupName ?? '',
+                    'is_active': isActive,
+                  };
+
+                  final ok = isEdit
+                      ? await zakatProvider.updateYear(initial.id, payload)
+                      : await zakatProvider.createYear(payload);
+
+                  if (ctx.mounted) Navigator.pop(ctx, ok);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _green,
+                  foregroundColor: Colors.white,
+                ),
+                child: Text(isEdit ? 'Simpan' : 'Tambah'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    if (saved == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isEdit
+                ? 'Tahun Ramadhan berhasil diubah'
+                : 'Tahun Ramadhan berhasil ditambah',
+          ),
+          backgroundColor: _green,
+        ),
+      );
+    }
   }
 
   Future<void> _loadAsnafBobot() async {
@@ -580,8 +825,14 @@ class _ConfigurationScreenState extends State<ConfigurationScreen> {
 
         return RefreshIndicator(
           color: _green,
-          onRefresh: () => provider.fetchConfigurations(
-              module: ConfigurationProvider.moduleZakatFitrah),
+          onRefresh: () async {
+            await Future.wait([
+              provider.fetchConfigurations(
+                  module: ConfigurationProvider.moduleZakatFitrah),
+              _loadAsnafBobot(),
+              _distributionKey.currentState?.reload() ?? Future.value(),
+            ]);
+          },
           child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
@@ -592,7 +843,121 @@ class _ConfigurationScreenState extends State<ConfigurationScreen> {
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
                   child: Column(
                     children: [
-                      // ASNAF & BOBOT section
+                      // TAHUN RAMADHAN section
+                      Consumer<ZakatProvider>(
+                        builder: (context, zakatProvider, _) {
+                          final years = zakatProvider.years;
+                          return Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(12),
+                              border:
+                                  Border.all(color: const Color(0xFFE2E8F0)),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _sectionBadge('TAHUN RAMADHAN'),
+                                const SizedBox(height: 6),
+                                Row(
+                                  children: [
+                                    const Expanded(
+                                      child: Text(
+                                        'Konfigurasi Tahun Zakat Fitrah',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFF1A1A1A),
+                                        ),
+                                      ),
+                                    ),
+                                    ElevatedButton.icon(
+                                      onPressed: _openYearDialog,
+                                      icon: const Icon(Icons.add, size: 16),
+                                      label: const Text('Tambah Tahun'),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: _green,
+                                        foregroundColor: Colors.white,
+                                        visualDensity: VisualDensity.compact,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                const Text(
+                                  'Swipe kanan untuk Edit tahun.',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Color(0xFF64748B),
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                if (zakatProvider.isLoadingYears)
+                                  const Center(
+                                    child: Padding(
+                                      padding:
+                                          EdgeInsets.symmetric(vertical: 6),
+                                      child: SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                            strokeWidth: 2),
+                                      ),
+                                    ),
+                                  )
+                                else if (years.isEmpty)
+                                  const Text(
+                                    'Belum ada data tahun zakat',
+                                    style: TextStyle(
+                                      color: Color(0xFF94A3B8),
+                                      fontSize: 12,
+                                    ),
+                                  )
+                                else
+                                  Column(
+                                    children: years.map((year) {
+                                      return Padding(
+                                        padding:
+                                            const EdgeInsets.only(bottom: 6),
+                                        child: Dismissible(
+                                          key: ValueKey('year-${year.id}'),
+                                          direction:
+                                              DismissDirection.startToEnd,
+                                          background: _swipeBackground(
+                                            alignment: Alignment.centerLeft,
+                                            color: const Color(0xFF059669),
+                                            icon: Icons.edit_outlined,
+                                            label: 'Edit',
+                                          ),
+                                          confirmDismiss: (direction) async {
+                                            await _openYearDialog(
+                                                initial: year);
+                                            return false;
+                                          },
+                                          child: _YearTile(year: year),
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                if (zakatProvider.yearsError != null) ...[
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    zakatProvider.yearsError!,
+                                    style: const TextStyle(
+                                      color: Color(0xFFDC2626),
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 8),
+
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.all(10),
@@ -681,8 +1046,7 @@ class _ConfigurationScreenState extends State<ConfigurationScreen> {
                                       confirmDismiss: (direction) async {
                                         if (direction ==
                                             DismissDirection.startToEnd) {
-                                          await _openAsnafDialog(
-                                              initial: item);
+                                          await _openAsnafDialog(initial: item);
                                           return false;
                                         }
                                         return _confirmDeleteAsnaf(item);
@@ -707,7 +1071,7 @@ class _ConfigurationScreenState extends State<ConfigurationScreen> {
                       ),
                       const SizedBox(height: 8),
                       // DISTRIBUTION section
-                      const DistributionConfigSection(),
+                      DistributionConfigSection(key: _distributionKey),
                       const SizedBox(height: 8),
                       // MODULE CONFIGURATION section
                       Container(
@@ -949,6 +1313,85 @@ class _AsnafBobotTile extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _YearTile extends StatelessWidget {
+  const _YearTile({required this.year});
+
+  final ZakatYear year;
+
+  @override
+  Widget build(BuildContext context) {
+    final activeColor =
+        year.isActive ? const Color(0xFF16A34A) : const Color(0xFFDC2626);
+    final riceRate = year.riceRatePerSo.toStringAsFixed(0);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: ListTile(
+        dense: true,
+        visualDensity: const VisualDensity(vertical: -2),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+        title: Text(
+          year.label,
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+        ),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Hijri Year: ${year.hijriYear}',
+                style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+              ),
+              if (year.ramadhanStart.isNotEmpty || year.ramadhanEnd.isNotEmpty)
+                Text(
+                  '${year.ramadhanStart.isNotEmpty ? year.ramadhanStart : '?'}'
+                  ' → '
+                  '${year.ramadhanEnd.isNotEmpty ? year.ramadhanEnd : '?'}',
+                  style:
+                      const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                ),
+              Text(
+                'Rice Rate: Rp$riceRate / so',
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: Color(0xFF0F172A),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              if (year.groupName.isNotEmpty)
+                Text(
+                  'Group: ${year.groupName}',
+                  style:
+                      const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                ),
+            ],
+          ),
+        ),
+        trailing: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+          decoration: BoxDecoration(
+            color: activeColor.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            year.isActive ? 'Active' : 'Inactive',
+            style: TextStyle(
+              color: activeColor,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -7,6 +7,9 @@ class ZakatYear {
   /// Rice equivalent rate in IDR per Sha' (1 Sha' ≈ 2.5 kg)
   final double riceRatePerSo;
   final bool isActive;
+  final String ramadhanStart;
+  final String ramadhanEnd;
+  final String groupName;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -16,6 +19,9 @@ class ZakatYear {
     required this.label,
     required this.riceRatePerSo,
     required this.isActive,
+    this.ramadhanStart = '',
+    this.ramadhanEnd = '',
+    this.groupName = '',
     required this.createdAt,
     required this.updatedAt,
   });
@@ -27,6 +33,9 @@ class ZakatYear {
         riceRatePerSo:
             double.tryParse(json['rice_rate_per_so']?.toString() ?? '0') ?? 0,
         isActive: json['is_active'] as bool? ?? false,
+        ramadhanStart: json['ramadhan_start'] as String? ?? '',
+        ramadhanEnd: json['ramadhan_end'] as String? ?? '',
+        groupName: json['group_name'] as String? ?? '',
         createdAt: json['created_at'] != null
             ? DateTime.tryParse(json['created_at'] as String) ?? DateTime.now()
             : DateTime.now(),
@@ -41,6 +50,9 @@ class ZakatYear {
         'label': label,
         'rice_rate_per_so': riceRatePerSo.toString(),
         'is_active': isActive,
+        'ramadhan_start': ramadhanStart,
+        'ramadhan_end': ramadhanEnd,
+        'group_name': groupName,
         'created_at': createdAt.toIso8601String(),
         'updated_at': updatedAt.toIso8601String(),
       };

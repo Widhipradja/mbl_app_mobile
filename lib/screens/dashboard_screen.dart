@@ -25,27 +25,39 @@ class DashboardScreen extends StatelessWidget {
         userRoles.isNotEmpty ? userRoles.join(', ') : 'No role assigned';
 
     // Check role permissions
+    // Administrator & KI: access all
+    // KU: Budget, Attendance, Zakat Fitrah
+    // Penerobos/PNB: Attendance, Member
+    // Teacher: KBM only
+    // Amil: Zakat Fitrah only
     final canAccessBudget = _hasRequiredRole(userRoles, [
       'Administrator',
-      'KU',
       'KI',
+      'KU',
     ]);
     final canAccessAttendance = _hasRequiredRole(userRoles, [
       'Administrator',
+      'KI',
+      'KU',
       'Penerobos',
       'PNB',
-      'KI',
     ]);
     final canAccessMembers = _hasRequiredRole(userRoles, [
       'Administrator',
+      'KI',
       'Penerobos',
       'PNB',
-      'KI',
     ]);
     final canAccessKbm = _hasRequiredRole(userRoles, [
       'Administrator',
-      'Teacher',
       'KI',
+      'Teacher',
+    ]);
+    final canAccessZakatFitrah = _hasRequiredRole(userRoles, [
+      'Administrator',
+      'KI',
+      'KU',
+      'Amil',
     ]);
 
     return Scaffold(
@@ -223,70 +235,67 @@ class DashboardScreen extends StatelessWidget {
                     childAspectRatio: 0.85,
                     physics: const BouncingScrollPhysics(),
                     children: [
-                      _buildModuleCard(
-                        context: context,
-                        title: 'Budget Manager',
-                        description: canAccessBudget
-                            ? 'Track your income and expenses'
-                            : 'Requires Administrator or KU role',
-                        icon: Icons.account_balance_wallet,
-                        gradientColors: [
-                          const Color(0xFF0F3460),
-                          const Color(0xFF16213E),
-                        ],
-                        route: canAccessBudget ? '/budget' : null,
-                      ),
-                      _buildModuleCard(
-                        context: context,
-                        title: 'Attendance',
-                        description: canAccessAttendance
-                            ? 'Track attendance for events'
-                            : 'Requires Administrator, Penerobos or PNB role',
-                        icon: Icons.event_available,
-                        gradientColors: [
-                          const Color(0xFF533483),
-                          const Color(0xFF3D2352),
-                        ],
-                        route: canAccessAttendance ? '/attendance' : null,
-                      ),
-                      _buildModuleCard(
-                        context: context,
-                        title: 'Member',
-                        description: canAccessMembers
-                            ? 'Manage members'
-                            : 'Requires Administrator, Penerobos or PNB role',
-                        icon: Icons.people,
-                        gradientColors: [
-                          const Color(0xFF2E7D32),
-                          const Color(0xFF1B5E20),
-                        ],
-                        route: canAccessMembers ? '/members' : null,
-                      ),
-                      _buildModuleCard(
-                        context: context,
-                        title: 'KBM',
-                        description: canAccessKbm
-                            ? 'Manage teaching sessions'
-                            : 'Requires Administrator or Teacher role',
-                        icon: Icons.school,
-                        gradientColors: [
-                          const Color(0xFF6A1B9A),
-                          const Color(0xFF4A148C),
-                        ],
-                        route: canAccessKbm ? '/kbm' : null,
-                      ),
-                      _buildModuleCard(
-                        context: context,
-                        title: 'Zakat Fitrah',
-                        description:
-                            'Kelola data muzakki dan zakat fitrah 1447H',
-                        icon: Icons.volunteer_activism,
-                        gradientColors: [
-                          const Color(0xFF066046),
-                          const Color(0xFF044D36),
-                        ],
-                        route: '/zakat-fitrah',
-                      ),
+                      if (canAccessBudget)
+                        _buildModuleCard(
+                          context: context,
+                          title: 'Budget Manager',
+                          description: 'Track your income and expenses',
+                          icon: Icons.account_balance_wallet,
+                          gradientColors: [
+                            const Color(0xFF0F3460),
+                            const Color(0xFF16213E),
+                          ],
+                          route: '/budget',
+                        ),
+                      if (canAccessAttendance)
+                        _buildModuleCard(
+                          context: context,
+                          title: 'Attendance',
+                          description: 'Track attendance for events',
+                          icon: Icons.event_available,
+                          gradientColors: [
+                            const Color(0xFF533483),
+                            const Color(0xFF3D2352),
+                          ],
+                          route: '/attendance',
+                        ),
+                      if (canAccessMembers)
+                        _buildModuleCard(
+                          context: context,
+                          title: 'Member',
+                          description: 'Manage members',
+                          icon: Icons.people,
+                          gradientColors: [
+                            const Color(0xFF2E7D32),
+                            const Color(0xFF1B5E20),
+                          ],
+                          route: '/members',
+                        ),
+                      if (canAccessKbm)
+                        _buildModuleCard(
+                          context: context,
+                          title: 'KBM',
+                          description: 'Manage teaching sessions',
+                          icon: Icons.school,
+                          gradientColors: [
+                            const Color(0xFF6A1B9A),
+                            const Color(0xFF4A148C),
+                          ],
+                          route: '/kbm',
+                        ),
+                      if (canAccessZakatFitrah)
+                        _buildModuleCard(
+                          context: context,
+                          title: 'Zakat Fitrah',
+                          description:
+                              'Kelola data muzakki dan zakat fitrah 1447H',
+                          icon: Icons.volunteer_activism,
+                          gradientColors: [
+                            const Color(0xFF066046),
+                            const Color(0xFF044D36),
+                          ],
+                          route: '/zakat-fitrah',
+                        ),
                     ],
                   ),
                 ),
