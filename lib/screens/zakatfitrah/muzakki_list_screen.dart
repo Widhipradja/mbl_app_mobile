@@ -1,8 +1,12 @@
+import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:excel/excel.dart' as ex;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
@@ -507,79 +511,97 @@ class _MuzakkiListScreenState extends State<MuzakkiListScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Search
-                    TextField(
-                      controller: _searchController,
-                      onChanged: (v) => setState(() => _searchQuery = v),
-                      decoration: InputDecoration(
-                        hintText: 'Cari nama, keluarga, grup…',
-                        hintStyle: const TextStyle(
-                            color: Color(0xFFCBD5E1), fontSize: 14),
-                        prefixIcon:
-                            const Icon(Icons.search, color: Color(0xFFCBD5E1)),
-                        suffixIcon: _searchQuery.isNotEmpty
-                            ? IconButton(
-                                icon: const Icon(Icons.clear,
-                                    color: Color(0xFFCBD5E1)),
-                                onPressed: () {
-                                  _searchController.clear();
-                                  setState(() => _searchQuery = '');
-                                },
-                              )
-                            : null,
-                        filled: true,
-                        fillColor: const Color(0xFFF4F7F6),
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 12),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
+                    // Search + overflow menu
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        Tooltip(
-                          message: 'Download template Excel',
-                          child: OutlinedButton(
-                            onPressed: _downloadExcelTemplate,
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: _green,
-                              side: const BorderSide(color: Color(0xFF066046)),
-                              minimumSize: const Size(40, 40),
-                              padding: EdgeInsets.zero,
+                        Expanded(
+                          child: TextField(
+                            controller: _searchController,
+                            onChanged: (v) => setState(() => _searchQuery = v),
+                            decoration: InputDecoration(
+                              hintText: 'Cari nama, keluarga, grup…',
+                              hintStyle: const TextStyle(
+                                  color: Color(0xFFCBD5E1), fontSize: 14),
+                              prefixIcon: const Icon(Icons.search,
+                                  color: Color(0xFFCBD5E1)),
+                              suffixIcon: _searchQuery.isNotEmpty
+                                  ? IconButton(
+                                      icon: const Icon(Icons.clear,
+                                          color: Color(0xFFCBD5E1)),
+                                      onPressed: () {
+                                        _searchController.clear();
+                                        setState(() => _searchQuery = '');
+                                      },
+                                    )
+                                  : null,
+                              filled: true,
+                              fillColor: const Color(0xFFF4F7F6),
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 12),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide.none,
+                              ),
                             ),
-                            child: const Icon(Icons.download_rounded, size: 18),
                           ),
                         ),
                         const SizedBox(width: 8),
-                        Tooltip(
-                          message: _isImportingExcel
-                              ? 'Sedang import Excel...'
-                              : 'Upload Excel',
-                          child: ElevatedButton(
-                            onPressed:
-                                _isImportingExcel ? null : _uploadExcelMuzakki,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: _green,
-                              foregroundColor: Colors.white,
-                              minimumSize: const Size(40, 40),
-                              padding: EdgeInsets.zero,
+                        PopupMenuButton<String>(
+                          onSelected: (value) {
+                            if (value == 'download') _downloadExcelTemplate();
+                            if (value == 'upload' && !_isImportingExcel) {
+                              _uploadExcelMuzakki();
+                            }
+                          },
+                          icon: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF4F7F6),
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                            child: _isImportingExcel
-                                ? const SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : const Icon(Icons.upload_file_rounded,
-                                    size: 18),
+                            child: const Icon(Icons.more_vert_rounded,
+                                color: Color(0xFF64748B), size: 20),
                           ),
+                          itemBuilder: (_) => [
+                            const PopupMenuItem(
+                              value: 'download',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.download_rounded,
+                                      size: 18, color: Color(0xFF066046)),
+                                  SizedBox(width: 10),
+                                  Text('Download Template Excel',
+                                      style: TextStyle(fontSize: 13)),
+                                ],
+                              ),
+                            ),
+                            PopupMenuItem(
+                              value: 'upload',
+                              enabled: !_isImportingExcel,
+                              child: Row(
+                                children: [
+                                  _isImportingExcel
+                                      ? const SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Color(0xFF066046),
+                                          ),
+                                        )
+                                      : const Icon(Icons.upload_file_rounded,
+                                          size: 18, color: Color(0xFF066046)),
+                                  const SizedBox(width: 10),
+                                  Text(
+                                    _isImportingExcel
+                                        ? 'Sedang import...'
+                                        : 'Upload Excel',
+                                    style: const TextStyle(fontSize: 13),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -1222,8 +1244,8 @@ class _MemberRow extends StatelessWidget {
   const _MemberRow({required this.muzakki});
   final Muzakki muzakki;
 
-  /// Builds a formatted family receipt text by fetching the zakat resume API.
-  Future<String> _buildFamilyReceiptText(BuildContext context) async {
+  /// Builds a styled thermal-receipt PNG image and returns the temp file path.
+  Future<String> _buildFamilyReceiptImage(BuildContext context) async {
     final m = muzakki;
     final provider = context.read<ZakatProvider>();
     final yearId = provider.selectedYear?.id ?? '';
@@ -1246,7 +1268,6 @@ class _MemberRow extends StatelessWidget {
       'Desember'
     ];
     final tanggal = '${now.day} ${months[now.month]} ${now.year}';
-    const sep = '══════════════════════════';
 
     // ── Fetch family resume ───────────────────────────────────────────
     String headName = m.fullName;
@@ -1268,8 +1289,37 @@ class _MemberRow extends StatelessWidget {
         final members = data['members'] as List<dynamic>? ?? [];
         for (final raw in members) {
           final member = raw as Map<String, dynamic>;
+          debugPrint('[receipt] member keys: ${member.keys.toList()}  name=${member['name']}  full_name=${member['full_name']}  first_name=${member['first_name']}');
           if (member['is_paid'] == true) {
-            paidMembers.add(member);
+            // Name: try common flat-field names first, then fall back to
+            // Muzakki.fromJson which combines first_name + last_name.
+            final rawName = (member['name'] as String?)?.trim() ??
+                (member['full_name'] as String?)?.trim() ??
+                (member['member_name'] as String?)?.trim() ??
+                '';
+            final mz = Muzakki.fromJson(member);
+            final resolvedName =
+                rawName.isNotEmpty ? rawName : mz.fullName;
+
+            // Payment figures: the family-resume endpoint returns these as
+            // flat fields directly on the member object (not nested inside
+            // transaction.payment_breakdown), so read them from raw.
+            final rawType = member['payment_type'] as String? ?? '';
+            final isRice = rawType == 'rice';
+            final rawQty =
+                (member['quantity'] as num?)?.toDouble() ?? mz.amountSo;
+            final rawAmt = () {
+              final a = member['amount'];
+              if (a is num) return a.toDouble();
+              return double.tryParse(a?.toString() ?? '') ?? mz.amountRp;
+            }();
+
+            paidMembers.add({
+              'name': resolvedName,
+              'payment_type': isRice ? 'rice' : 'money',
+              'quantity': rawQty,
+              'amount': rawAmt,
+            });
           }
         }
       } catch (e) {
@@ -1315,19 +1365,67 @@ class _MemberRow extends StatelessWidget {
 
     final jiwa = paidMembers.length;
 
-    return '''
-$sep
-🌙 BUKTI Zakat Fitrah $yearLabel
-$sep
-Diterima dari: $headName
-Jumlah jiwa  : $jiwa jiwa
+    // ── Render receipt widget → PNG ───────────────────────────────────
+    final repaintKey = GlobalKey();
+    final receiptWidget = RepaintBoundary(
+      key: repaintKey,
+      child: _ReceiptCard(
+        yearLabel: yearLabel,
+        headName: headName,
+        jiwa: jiwa,
+        sejumlah: sejumlah,
+        amilName: amilName,
+        tanggal: tanggal,
+        paidMembers: paidMembers,
+      ),
+    );
 
-$sejumlah
+    // Mount off-screen using OverlayEntry, then capture
+    late OverlayEntry entry;
+    final overlayCompleter = Completer<Uint8List>();
 
-Diterima oleh: $amilName
-Tanggal      : $tanggal
-$sep
-Alhamdulillah Jazakumullāhu khoiro. 🤲''';
+    entry = OverlayEntry(
+      builder: (_) => Positioned(
+        left: -5000,
+        top: -5000,
+        width: 360,
+        child: Material(color: Colors.transparent, child: receiptWidget),
+      ),
+    );
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Wait one extra frame so the widget is laid out
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+      try {
+        final boundary = repaintKey.currentContext?.findRenderObject()
+            as RenderRepaintBoundary?;
+        if (boundary == null) {
+          overlayCompleter.completeError('No boundary');
+          return;
+        }
+        final img = await boundary.toImage(pixelRatio: 3.0);
+        final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
+        overlayCompleter.complete(byteData!.buffer.asUint8List());
+      } catch (e) {
+        overlayCompleter.completeError(e);
+      } finally {
+        entry.remove();
+      }
+    });
+
+    if (context.mounted) {
+      Overlay.of(context).insert(entry);
+    } else {
+      entry.remove();
+      return '';
+    }
+
+    final bytes = await overlayCompleter.future;
+    final dir = await getTemporaryDirectory();
+    final file = File(
+        '${dir.path}/zakat_receipt_${DateTime.now().millisecondsSinceEpoch}.png');
+    await file.writeAsBytes(bytes);
+    return file.path;
   }
 
   Future<void> _confirmDelete(BuildContext context) async {
@@ -1541,8 +1639,45 @@ Alhamdulillah Jazakumullāhu khoiro. 🤲''';
         context.go('/zakat-fitrah/transaction', extra: m);
         break;
       case 'receipt':
-        final text = await _buildFamilyReceiptText(context);
-        await Share.share(text, subject: 'Bukti Zakat Fitrah');
+        if (!context.mounted) break;
+        // Show loading while capturing
+        showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => const Center(
+            child: Card(
+              child: Padding(
+                padding: EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(color: Color(0xFF066046)),
+                    SizedBox(height: 12),
+                    Text('Membuat struk...', style: TextStyle(fontSize: 13)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+        try {
+          final filePath = await _buildFamilyReceiptImage(context);
+          if (context.mounted) Navigator.of(context, rootNavigator: true).pop();
+          if (filePath.isEmpty) break;
+          if (!context.mounted) break;
+          await Share.shareXFiles(
+            [XFile(filePath, mimeType: 'image/png')],
+            subject: 'Bukti Zakat Fitrah',
+            text: 'Bukti Zakat Fitrah',
+          );
+        } catch (e) {
+          if (context.mounted) {
+            Navigator.of(context, rootNavigator: true).pop();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Gagal membuat struk gambar.')),
+            );
+          }
+        }
         break;
       case 'delete':
         await _confirmDelete(context);
@@ -1861,6 +1996,228 @@ class _Badge extends StatelessWidget {
       ),
     );
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Receipt card widget — rendered off-screen then captured as PNG
+// ─────────────────────────────────────────────────────────────────────────────
+class _ReceiptCard extends StatelessWidget {
+  const _ReceiptCard({
+    required this.yearLabel,
+    required this.headName,
+    required this.jiwa,
+    required this.sejumlah,
+    required this.amilName,
+    required this.tanggal,
+    required this.paidMembers,
+  });
+
+  final String yearLabel;
+  final String headName;
+  final int jiwa;
+  final String sejumlah;
+  final String amilName;
+  final String tanggal;
+  final List<Map<String, dynamic>> paidMembers;
+
+  static const _green = Color(0xFF066046);
+  static const _lightGreen = Color(0xFFE8F5F0);
+  static const _textDark = Color(0xFF1A1A1A);
+  static const _textMuted = Color(0xFF64748B);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Colors.white,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ── Green header ──────────────────────────────────────────────
+          Container(
+            color: _green,
+            padding:
+                const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
+            child: Column(
+              children: [
+                const Text('☪',
+                    style: TextStyle(fontSize: 30, color: Colors.white)),
+                const SizedBox(height: 6),
+                const Text(
+                  'BUKTI ZAKAT FITRAH',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  yearLabel,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.white70,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // ── Body ─────────────────────────────────────────────────────
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _separator(),
+                _row('Diterima dari', headName),
+                _row('Jumlah jiwa', '$jiwa jiwa'),
+                _row('Sejumlah', sejumlah),
+                _row('Diterima oleh', amilName),
+                _row('Tanggal', tanggal),
+                _separator(),
+
+                // ── Member list ─────────────────────────────────────
+                if (paidMembers.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Rincian Anggota:',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: _green,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  ...paidMembers.asMap().entries.map((e) {
+                    final idx = e.key + 1;
+                    final mem = e.value;
+                    final name = mem['name'] as String? ?? '—';
+                    final type = mem['payment_type'] as String? ?? '';
+                    String detail;
+                    if (type == 'rice') {
+                      final qty = mem['quantity'];
+                      detail = '${qty ?? '—'} So beras';
+                    } else {
+                      final amt = mem['amount'];
+                      final v = amt is num ? amt.toInt() : 0;
+                      final formatted = v.toString().replaceAllMapped(
+                          RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
+                          (m) => '${m[1]!}.');
+                      detail = 'Rp. $formatted';
+                    }
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 20,
+                            child: Text(
+                              '$idx.',
+                              style: const TextStyle(
+                                  fontSize: 11, color: _textMuted),
+                            ),
+                          ),
+                          Expanded(
+                            child: Text(
+                              name,
+                              style: const TextStyle(
+                                  fontSize: 11, color: _textDark),
+                            ),
+                          ),
+                          Text(
+                            detail,
+                            style: const TextStyle(
+                                fontSize: 11, color: _textDark),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                  _separator(),
+                ],
+
+                // ── Closing dua ────────────────────────────────────
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: _lightGreen,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    'تَقَبَّلَ اللهُ مِنَّا وَمِنْكُمْ\n'
+                    'Semoga Allah menerima amal ibadah kita\n'
+                    'dan menjadikannya berkah. Aamiin.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: _green,
+                      height: 1.7,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Dashed separator line
+  Widget _separator() => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: LayoutBuilder(
+          builder: (_, constraints) {
+            final dashCount = (constraints.maxWidth / 8).floor();
+            return Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: List.generate(
+                dashCount,
+                (_) => Container(
+                  width: 5,
+                  height: 1,
+                  color: const Color(0xFFCBD5E1),
+                ),
+              ),
+            );
+          },
+        ),
+      );
+
+  /// Two-column label / value row
+  Widget _row(String label, String value) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 110,
+              child: Text(
+                label,
+                style: const TextStyle(fontSize: 12, color: _textMuted),
+              ),
+            ),
+            const Text(': ',
+                style: TextStyle(fontSize: 12, color: _textMuted)),
+            Expanded(
+              child: Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: _textDark,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
 }
 
 class _BulkImportResult {
