@@ -175,10 +175,11 @@ class _ZakatBerandaBodyState extends State<ZakatBerandaBody> {
         final externalSoulsGroup = externalRiceSouls + externalMoneySouls;
 
         final internalGroupRows = <Map<String, dynamic>>[];
-        if (summary != null && summary.internalByGroup.isNotEmpty) {
-          for (final group in summary.internalByGroup) {
+        if (summary != null && summary.internalByAfiliasi.isNotEmpty) {
+          for (final group in summary.internalByAfiliasi) {
             internalGroupRows.add({
-              'name': group.groupName,
+              'name':
+                  group.afiliasi.isNotEmpty ? group.afiliasi : 'Tanpa Group',
               'souls': group.totalSouls,
               'riceSouls': group.riceSouls,
               'moneySouls': group.moneySouls,
@@ -266,343 +267,358 @@ class _ZakatBerandaBodyState extends State<ZakatBerandaBody> {
           ),
         );
 
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ── Summary Cards ──
-              Row(
-                children: [
-                  Expanded(
-                    child: _SummaryCard(
-                      title: 'Total Muzakki',
-                      value: totalMuzakkiOverall.toString(),
-                      unit: 'Orang',
-                      icon: Icons.people_outline,
-                      secondaryValue: '$totalSoulsOverall Jiwa',
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _SummaryCard(
-                      title: 'Total Beras',
-                      value: totalSo.toStringAsFixed(2),
-                      unit: 'So',
-                      icon: Icons.rice_bowl_outlined,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              _SummaryCard(
-                title: 'Total Uang',
-                value: _formatRupiah(totalRp),
-                unit: '',
-                icon: Icons.payments_outlined,
-                fullWidth: true,
-              ),
-              const SizedBox(height: 24),
-
-              // ── Ringkasan Laporan (merge dari tab Laporan) ──
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Ringkasan Pembayaran',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1A1A1A),
-                    ),
-                  ),
-                  if (provider.isLoadingReportSummary)
-                    const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation(_green),
-                      ),
-                    )
-                  else
-                    IconButton(
-                      onPressed: () async {
-                        await Future.wait([
-                          provider.fetchLaporanSummary(),
-                          provider.fetchMustahiqAsnafSummary(),
-                        ]);
-                      },
-                      tooltip: 'Refresh ringkasan',
-                      icon: const Icon(Icons.refresh_rounded,
-                          color: Color(0xFF066046)),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: _SummaryCard(
-                      title: 'Internal',
-                      value: totalInternal.toString(),
-                      unit: 'Orang',
-                      icon: Icons.groups_rounded,
-                      secondaryValue: '$totalSoulsOverall Jiwa',
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _SummaryCard(
-                      title: 'External',
-                      value: totalExternal.toString(),
-                      unit: 'Orang',
-                      icon: Icons.group_add_outlined,
-                      secondaryValue: '$totalExternal Jiwa',
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                ),
-                child: Table(
-                  columnWidths: const {
-                    0: FlexColumnWidth(1.8),
-                    1: FlexColumnWidth(1.2),
-                  },
+        return RefreshIndicator(
+          color: _green,
+          onRefresh: () async {
+            await Future.wait([
+              provider.fetchMuzakki(),
+              provider.fetchLaporanSummary(),
+              provider.fetchRecentTransactions(),
+              provider.fetchMustahiqAsnafSummary(),
+            ]);
+          },
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── Summary Cards ──
+                Row(
                   children: [
-                    _tableRow('Total Jiwa', '$totalSoulsOverall jiwa'),
-                    _tableRow('Beras', '${totalSo.toStringAsFixed(2)} So'),
-                    _tableRow('Titip Uang', '$moneySouls jiwa'),
-                    _tableRow('Total Uang', _formatRupiah(totalRp)),
+                    Expanded(
+                      child: _SummaryCard(
+                        title: 'Total Muzakki',
+                        value: totalMuzakkiOverall.toString(),
+                        unit: 'Orang',
+                        icon: Icons.people_outline,
+                        secondaryValue: '$totalSoulsOverall Jiwa',
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _SummaryCard(
+                        title: 'Total Beras',
+                        value: totalSo.toStringAsFixed(2),
+                        unit: 'So',
+                        icon: Icons.rice_bowl_outlined,
+                      ),
+                    ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                const SizedBox(height: 12),
+                _SummaryCard(
+                  title: 'Total Uang',
+                  value: _formatRupiah(totalRp),
+                  unit: '',
+                  icon: Icons.payments_outlined,
+                  fullWidth: true,
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                const SizedBox(height: 24),
+
+                // ── Ringkasan Laporan (merge dari tab Laporan) ──
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text(
-                      'Rincian Asnaf',
+                      'Ringkasan Pembayaran',
                       style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
                         color: Color(0xFF1A1A1A),
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    if (provider.isLoadingMustahiqAsnafSummary)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 10),
-                        child: Center(
-                          child: SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation(_green),
-                            ),
-                          ),
-                        ),
-                      )
-                    else if (provider.mustahiqAsnafSummaryError != null)
-                      Text(
-                        provider.mustahiqAsnafSummaryError!,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFFB45309),
-                        ),
-                      )
-                    else if (asnafRows.isEmpty)
-                      const Text(
-                        'Belum ada data rincian asnaf.',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF94A3B8),
+                    if (provider.isLoadingReportSummary)
+                      const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation(_green),
                         ),
                       )
                     else
-                      Table(
-                        columnWidths: const {
-                          0: FlexColumnWidth(1.4),
-                          1: FlexColumnWidth(1),
-                          2: FlexColumnWidth(1),
+                      IconButton(
+                        onPressed: () async {
+                          await Future.wait([
+                            provider.fetchLaporanSummary(),
+                            provider.fetchMustahiqAsnafSummary(),
+                          ]);
                         },
+                        tooltip: 'Refresh ringkasan',
+                        icon: const Icon(Icons.refresh_rounded,
+                            color: Color(0xFF066046)),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _SummaryCard(
+                        title: 'Internal',
+                        value: totalInternal.toString(),
+                        unit: 'Orang',
+                        icon: Icons.groups_rounded,
+                        secondaryValue: '$totalSoulsOverall Jiwa',
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _SummaryCard(
+                        title: 'External',
+                        value: totalExternal.toString(),
+                        unit: 'Orang',
+                        icon: Icons.group_add_outlined,
+                        secondaryValue: '$totalExternal Jiwa',
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Table(
+                    columnWidths: const {
+                      0: FlexColumnWidth(1.8),
+                      1: FlexColumnWidth(1.2),
+                    },
+                    children: [
+                      _tableRow('Titip Beras',
+                          '${internalRiceSouls + externalRiceSouls} jiwa'),
+                      _tableRow(
+                          'Total Beras', '${totalSo.toStringAsFixed(2)} So'),
+                      _tableRow('Titip Uang', '$moneySouls jiwa'),
+                      _tableRow('Total Uang', _formatRupiah(totalRp)),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Rincian Asnaf',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF1A1A1A),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      if (provider.isLoadingMustahiqAsnafSummary)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 10),
+                          child: Center(
+                            child: SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation(_green),
+                              ),
+                            ),
+                          ),
+                        )
+                      else if (provider.mustahiqAsnafSummaryError != null)
+                        Text(
+                          provider.mustahiqAsnafSummaryError!,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFFB45309),
+                          ),
+                        )
+                      else if (asnafRows.isEmpty)
+                        const Text(
+                          'Belum ada data rincian asnaf.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF94A3B8),
+                          ),
+                        )
+                      else
+                        Table(
+                          columnWidths: const {
+                            0: FlexColumnWidth(1.4),
+                            1: FlexColumnWidth(1),
+                            2: FlexColumnWidth(1),
+                          },
+                          children: [
+                            _asnafTableHeaderRow(),
+                            ...asnafRows.map(
+                              (item) => _asnafTableDataRow(
+                                asnaf: _formatAsnafType(item.asnafType),
+                                souls: '${item.totalSouls}',
+                                count: '${item.count}',
+                              ),
+                            ),
+                          ],
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          _asnafTableHeaderRow(),
-                          ...asnafRows.map(
-                            (item) => _asnafTableDataRow(
-                              asnaf: _formatAsnafType(item.asnafType),
-                              souls: '${item.totalSouls}',
-                              count: '${item.count}',
+                          const Text(
+                            'Rincian per Group',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF1A1A1A),
+                            ),
+                          ),
+                          TextButton.icon(
+                            onPressed: () => _exportGroupToWhatsApp(
+                              context,
+                              totalSoulsOverall: totalSoulsOverall,
+                              totalSo: totalSo,
+                              moneySouls: moneySouls,
+                              totalRp: totalRp,
+                              internalGroupRows: internalGroupRows,
+                              internalSoulsGroup: internalSoulsGroup,
+                              internalRiceSo: internalRiceSo,
+                              internalMoneyAmount: internalMoneyAmount,
+                              externalSoulsGroup: externalSoulsGroup,
+                              externalRiceSo: externalRiceSo,
+                              externalRiceSouls: externalRiceSouls,
+                              externalMoneySouls: externalMoneySouls,
+                              externalMoneyAmountTotal:
+                                  externalMoneyAmountTotal,
+                            ),
+                            icon: const Icon(Icons.ios_share_rounded, size: 16),
+                            label: const Text('Export'),
+                            style: TextButton.styleFrom(
+                              foregroundColor: _green,
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
                             ),
                           ),
                         ],
                       ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Rincian per Group',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF1A1A1A),
-                          ),
-                        ),
-                        TextButton.icon(
-                          onPressed: () => _exportGroupToWhatsApp(
-                            context,
-                            totalSoulsOverall: totalSoulsOverall,
-                            totalSo: totalSo,
-                            moneySouls: moneySouls,
-                            totalRp: totalRp,
-                            internalGroupRows: internalGroupRows,
-                            internalSoulsGroup: internalSoulsGroup,
-                            internalRiceSo: internalRiceSo,
-                            internalMoneyAmount: internalMoneyAmount,
-                            externalSoulsGroup: externalSoulsGroup,
-                            externalRiceSo: externalRiceSo,
-                            externalRiceSouls: externalRiceSouls,
-                            externalMoneySouls: externalMoneySouls,
-                            externalMoneyAmountTotal: externalMoneyAmountTotal,
-                          ),
-                          icon: const Icon(Icons.ios_share_rounded, size: 16),
-                          label: const Text('Export'),
-                          style: TextButton.styleFrom(
-                            foregroundColor: _green,
-                            visualDensity: VisualDensity.compact,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Table(
-                      columnWidths: const {
-                        0: FlexColumnWidth(1.4),
-                        1: FlexColumnWidth(1.3),
-                        2: FlexColumnWidth(1.3),
-                      },
-                      children: perGroupRows,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // // ── Add Muzakki Button ──
-              // SizedBox(
-              //   width: double.infinity,
-              //   height: 52,
-              //   child: ElevatedButton.icon(
-              //     onPressed: () => context.go('/zakat-fitrah/add'),
-              //     icon: const Icon(Icons.person_add_alt_1_outlined, size: 20),
-              //     label: const Text(
-              //       'Tambah Muzakki',
-              //       style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-              //     ),
-              //     style: ElevatedButton.styleFrom(
-              //       backgroundColor: _green,
-              //       foregroundColor: Colors.white,
-              //       shape: RoundedRectangleBorder(
-              //         borderRadius: BorderRadius.circular(12),
-              //       ),
-              //       elevation: 3,
-              //       shadowColor: _green.withOpacity(0.35),
-              //     ),
-              //   ),
-              // ),
-              const SizedBox(height: 28),
-
-              // ── Transaksi Terbaru ──
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Transaksi Terbaru',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1A1A1A),
-                    ),
+                      const SizedBox(height: 8),
+                      Table(
+                        columnWidths: const {
+                          0: FlexColumnWidth(1.4),
+                          1: FlexColumnWidth(1.3),
+                          2: FlexColumnWidth(1.3),
+                        },
+                        children: perGroupRows,
+                      ),
+                    ],
                   ),
-                  if (provider.isLoadingRecent)
-                    const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation(_green),
-                      ),
-                    )
-                  else if (provider.recentTransactions.isNotEmpty)
-                    Text(
-                      '${provider.recentTransactions.length} terakhir',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: _green,
-                        fontWeight: FontWeight.w500,
+                ),
+                const SizedBox(height: 24),
+
+                // // ── Add Muzakki Button ──
+                // SizedBox(
+                //   width: double.infinity,
+                //   height: 52,
+                //   child: ElevatedButton.icon(
+                //     onPressed: () => context.go('/zakat-fitrah/add'),
+                //     icon: const Icon(Icons.person_add_alt_1_outlined, size: 20),
+                //     label: const Text(
+                //       'Tambah Muzakki',
+                //       style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                //     ),
+                //     style: ElevatedButton.styleFrom(
+                //       backgroundColor: _green,
+                //       foregroundColor: Colors.white,
+                //       shape: RoundedRectangleBorder(
+                //         borderRadius: BorderRadius.circular(12),
+                //       ),
+                //       elevation: 3,
+                //       shadowColor: _green.withOpacity(0.35),
+                //     ),
+                //   ),
+                // ),
+                const SizedBox(height: 28),
+
+                // ── Transaksi Terbaru ──
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Transaksi Terbaru',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1A1A1A),
                       ),
                     ),
-                ],
-              ),
-              const SizedBox(height: 12),
-
-              if (provider.recentError != null &&
-                  provider.recentTransactions.isEmpty)
-                _buildTransactionError(provider)
-              else if (provider.recentTransactions.isEmpty &&
-                  !provider.isLoadingRecent)
-                _buildEmptyTransactions()
-              else
-                ListView.separated(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: provider.recentTransactions.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (context, index) {
-                    return _TransactionTile(
-                        trx: provider.recentTransactions[index]);
-                  },
+                    if (provider.isLoadingRecent)
+                      const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation(_green),
+                        ),
+                      )
+                    else if (provider.recentTransactions.isNotEmpty)
+                      Text(
+                        '${provider.recentTransactions.length} terakhir',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: _green,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                  ],
                 ),
-              const SizedBox(height: 24),
-            ],
-          ),
-        );
+                const SizedBox(height: 12),
+
+                if (provider.recentError != null &&
+                    provider.recentTransactions.isEmpty)
+                  _buildTransactionError(provider)
+                else if (provider.recentTransactions.isEmpty &&
+                    !provider.isLoadingRecent)
+                  _buildEmptyTransactions()
+                else
+                  ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: provider.recentTransactions.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (context, index) {
+                      return _TransactionTile(
+                          trx: provider.recentTransactions[index]);
+                    },
+                  ),
+                const SizedBox(height: 24),
+              ],
+            ),
+          ), // SingleChildScrollView
+        ); // RefreshIndicator
       },
     );
   }

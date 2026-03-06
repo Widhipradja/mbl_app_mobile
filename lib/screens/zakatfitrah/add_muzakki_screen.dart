@@ -5,6 +5,16 @@ import '../../providers/zakat_provider.dart';
 import '../../services/api_service.dart';
 import '../../models/muzakki.dart';
 
+// ── External group config model ──────────────────────────────────────────────
+class _ExternalGroup {
+  final String code;
+  final String label;
+  final String value;
+
+  _ExternalGroup(
+      {required this.code, required this.label, required this.value});
+}
+
 class AddMuzakkiScreen extends StatefulWidget {
   const AddMuzakkiScreen(
       {super.key, this.initialFamilyId = '', this.initialMuzakki});
@@ -36,6 +46,17 @@ class _AddMuzakkiScreenState extends State<AddMuzakkiScreen> {
   String _relationship = 'Suami';
   bool _isHeadOfFamily = false;
   bool _isInternal = true;
+
+  // External group
+  List<_ExternalGroup> _externalGroups = [];
+  bool _loadingExternal = false;
+  _ExternalGroup? _selectedExternalGroup;
+
+  // Afiliasi
+  bool _isAfiliasi = false;
+  List<_ExternalGroup> _afiliasiGroups = [];
+  bool _loadingAfiliasi = false;
+  _ExternalGroup? _selectedAfiliasi;
 
   bool _isLoading = false;
 
@@ -74,6 +95,13 @@ class _AddMuzakkiScreenState extends State<AddMuzakkiScreen> {
           m.relationship.isNotEmpty ? m.relationship : _relationship;
       _isHeadOfFamily = m.isHeadOfFamily;
       _isInternal = m.isInternal;
+      // If external, load group list and try to pre-select
+      if (!m.isInternal) _fetchExternalGroups(preSelect: m.groupName);
+      // Afiliasi pre-select
+      if (m.afiliasi.isNotEmpty) {
+        _isAfiliasi = true;
+        _fetchAfiliasiGroups(preSelect: m.afiliasi);
+      }
     } else if (widget.initialFamilyId.isNotEmpty) {
       _familyIdController.text = widget.initialFamilyId;
       _isHeadOfFamily = false;
@@ -95,6 +123,12 @@ class _AddMuzakkiScreenState extends State<AddMuzakkiScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+
+    // Jika external, wajib pilih group
+    if (!_isInternal && _selectedExternalGroup == null) {
+      _showError('Pilih kelompok muzakki eksternal');
+      return;
+    }
 
     final provider = context.read<ZakatProvider>();
     final yearId = provider.selectedYear?.id ?? '';
@@ -120,7 +154,11 @@ class _AddMuzakkiScreenState extends State<AddMuzakkiScreen> {
           'family_id': _familyIdController.text.trim(),
           'address': _addressController.text.trim(),
           'phone': _phoneController.text.trim(),
-          'group_name': widget.initialMuzakki?.groupName ?? '',
+          'group_name': _isInternal
+              ? (widget.initialMuzakki?.groupName ?? '')
+              : (_selectedExternalGroup?.value ??
+                  _groupNameController.text.trim()),
+          'afiliasi': _isAfiliasi ? (_selectedAfiliasi?.value ?? '') : '',
         });
       } else {
         await api.createMuzakki(
@@ -134,7 +172,10 @@ class _AddMuzakkiScreenState extends State<AddMuzakkiScreen> {
           familyId: _familyIdController.text.trim(),
           address: _addressController.text.trim(),
           phone: _phoneController.text.trim(),
-          groupName: _isJoiningFamily ? '' : _groupNameController.text.trim(),
+          groupName: _isInternal
+              ? (_isJoiningFamily ? '' : _groupNameController.text.trim())
+              : (_selectedExternalGroup?.value ?? ''),
+          afiliasi: _isAfiliasi ? (_selectedAfiliasi?.value ?? '') : '',
           yearId: yearId,
         );
       }
@@ -183,6 +224,95 @@ class _AddMuzakkiScreenState extends State<AddMuzakkiScreen> {
       context.pop();
     } else {
       context.go('/zakat-fitrah');
+    }
+  }
+
+  // ── Fetch external groups from config ─────────────────────────────────────
+  Future<void> _fetchExternalGroups({String preSelect = ''}) async {
+    if (!mounted) return;
+    setState(() => _loadingExternal = true);
+    try {
+      final api = ApiService();
+      final resp = await api.getConfigurationsByModule('ZAKATFITRAH');
+      final raw = resp.data;
+      final map = raw is Map<String, dynamic> ? raw : <String, dynamic>{};
+      final list = (map['data'] is List
+              ? map['data'] as List
+              : raw is List
+                  ? raw as List
+                  : <dynamic>[])
+          .cast<Map<String, dynamic>>();
+
+      final groups = list
+          .where((c) => (c['code']?.toString() ?? '').startsWith('EXTERNAL_'))
+          .map((c) => _ExternalGroup(
+                code: c['code']?.toString() ?? '',
+                label: c['label']?.toString() ?? c['code']?.toString() ?? '',
+                value: c['value']?.toString() ?? '',
+              ))
+          .toList();
+
+      if (mounted) {
+        setState(() {
+          _externalGroups = groups;
+          _loadingExternal = false;
+          if (preSelect.isNotEmpty) {
+            _selectedExternalGroup = groups.firstWhere(
+              (g) => g.value == preSelect || g.code == preSelect,
+              orElse: () => groups.isNotEmpty
+                  ? groups.first
+                  : _ExternalGroup(
+                      code: '', label: preSelect, value: preSelect),
+            );
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('_fetchExternalGroups error: $e');
+      if (mounted) setState(() => _loadingExternal = false);
+    }
+  }
+
+  Future<void> _fetchAfiliasiGroups({String preSelect = ''}) async {
+    if (!mounted) return;
+    setState(() => _loadingAfiliasi = true);
+    try {
+      final api = ApiService();
+      final resp = await api.getConfigurationsByModule('ZAKATFITRAH');
+      final raw = resp.data;
+      final map = raw is Map<String, dynamic> ? raw : <String, dynamic>{};
+      final list = (map['data'] is List
+              ? map['data'] as List
+              : raw is List
+                  ? raw as List
+                  : <dynamic>[])
+          .cast<Map<String, dynamic>>();
+      final groups = list
+          .where((c) => (c['code']?.toString() ?? '').startsWith('AFILIATE_'))
+          .map((c) => _ExternalGroup(
+                code: c['code']?.toString() ?? '',
+                label: c['label']?.toString() ?? c['code']?.toString() ?? '',
+                value: c['value']?.toString() ?? '',
+              ))
+          .toList();
+      if (mounted) {
+        setState(() {
+          _afiliasiGroups = groups;
+          _loadingAfiliasi = false;
+          if (preSelect.isNotEmpty) {
+            _selectedAfiliasi = groups.firstWhere(
+              (g) => g.value == preSelect || g.code == preSelect,
+              orElse: () => groups.isNotEmpty
+                  ? groups.first
+                  : _ExternalGroup(
+                      code: '', label: preSelect, value: preSelect),
+            );
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('_fetchAfiliasiGroups error: $e');
+      if (mounted) setState(() => _loadingAfiliasi = false);
     }
   }
 
@@ -402,7 +532,13 @@ class _AddMuzakkiScreenState extends State<AddMuzakkiScreen> {
                 ),
                 child: SwitchListTile(
                   value: _isInternal,
-                  onChanged: (v) => setState(() => _isInternal = v),
+                  onChanged: (v) {
+                    setState(() {
+                      _isInternal = v;
+                      _selectedExternalGroup = null;
+                    });
+                    if (!v) _fetchExternalGroups();
+                  },
                   activeColor: _green,
                   title: const Text(
                     'Anggota Internal Komunitas',
@@ -429,6 +565,243 @@ class _AddMuzakkiScreenState extends State<AddMuzakkiScreen> {
                   ),
                 ),
               ),
+              // ── External group picker ─────────────────────────────────
+              if (!_isInternal) ...[
+                const SizedBox(height: 10),
+                if (_loadingExternal)
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: _green),
+                      ),
+                    ),
+                  )
+                else if (_externalGroups.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF7ED),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFFED7AA)),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.info_outline,
+                            size: 15, color: Color(0xFFD97706)),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Tidak ada data kelompok eksternal. Tambahkan konfigurasi EXTERNAL_* di menu Konfigurasi.',
+                            style: TextStyle(
+                                fontSize: 12, color: Color(0xFFD97706)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else ...[
+                  _label('Kelompok Muzakki Eksternal *'),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _externalGroups.map((g) {
+                      final isSelected = _selectedExternalGroup?.code == g.code;
+                      return GestureDetector(
+                        onTap: () => setState(() => _selectedExternalGroup = g),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 160),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? const Color(0xFF7E22CE)
+                                : Colors.white,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: isSelected
+                                  ? const Color(0xFF7E22CE)
+                                  : const Color(0xFFE2E8F0),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                g.code.replaceFirst('EXTERNAL_', ''),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : const Color(0xFF7E22CE),
+                                ),
+                              ),
+                              if (g.value.isNotEmpty)
+                                Text(
+                                  g.value,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: isSelected
+                                        ? Colors.white70
+                                        : const Color(0xFF94A3B8),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ],
+              const SizedBox(height: 14),
+
+              // ── Afiliasi toggle ───────────────────────────────────────
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _isAfiliasi
+                        ? const Color(0xFF9333EA)
+                        : const Color(0xFFE2E8F0),
+                    width: _isAfiliasi ? 1.5 : 1,
+                  ),
+                ),
+                child: SwitchListTile(
+                  value: _isAfiliasi,
+                  onChanged: (v) {
+                    setState(() {
+                      _isAfiliasi = v;
+                      if (!v) _selectedAfiliasi = null;
+                    });
+                    if (v) _fetchAfiliasiGroups();
+                  },
+                  activeColor: const Color(0xFF9333EA),
+                  title: const Text(
+                    'Afiliasi',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1A1A1A),
+                    ),
+                  ),
+                  subtitle: Text(
+                    _isAfiliasi
+                        ? 'Terhubung dengan organisasi afiliasi'
+                        : 'Tidak ada afiliasi organisasi',
+                    style:
+                        const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                  ),
+                  secondary: Icon(
+                    Icons.handshake_outlined,
+                    color: _isAfiliasi
+                        ? const Color(0xFF9333EA)
+                        : const Color(0xFFCBD5E1),
+                  ),
+                ),
+              ),
+              // ── Afiliasi picker ───────────────────────────────────────
+              if (_isAfiliasi) ...[
+                const SizedBox(height: 10),
+                if (_loadingAfiliasi)
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Color(0xFF9333EA)),
+                      ),
+                    ),
+                  )
+                else if (_afiliasiGroups.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFAF5FF),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFE9D5FF)),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.info_outline,
+                            size: 15, color: Color(0xFF9333EA)),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Tidak ada data afiliasi. Tambahkan konfigurasi AFILIATE_* di menu Konfigurasi.',
+                            style: TextStyle(
+                                fontSize: 12, color: Color(0xFF9333EA)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else ...[
+                  _label('Pilih Afiliasi *'),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _afiliasiGroups.map((g) {
+                      final isSelected = _selectedAfiliasi?.code == g.code;
+                      return GestureDetector(
+                        onTap: () => setState(() => _selectedAfiliasi = g),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 160),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? const Color(0xFF9333EA)
+                                : Colors.white,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: isSelected
+                                  ? const Color(0xFF9333EA)
+                                  : const Color(0xFFE2E8F0),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                g.code.replaceFirst('AFILIATE_', ''),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : const Color(0xFF9333EA),
+                                ),
+                              ),
+                              if (g.value.isNotEmpty)
+                                Text(
+                                  g.value,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: isSelected
+                                        ? Colors.white70
+                                        : const Color(0xFF94A3B8),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ],
               const SizedBox(height: 14),
 
               // Head of family toggle

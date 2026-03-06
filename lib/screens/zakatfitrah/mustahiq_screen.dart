@@ -311,79 +311,17 @@ class _MustahiqScreenState extends State<MustahiqScreen> {
       return;
     }
 
-    final nameCtrl = TextEditingController();
-    final soulsCtrl = TextEditingController(text: '1');
-    var asnafType = _selectedAsnafType ?? _asnafBobot.first.asnafType;
+    final initialAsnafType = _selectedAsnafType ?? _asnafBobot.first.asnafType;
 
     final payload = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocal) => AlertDialog(
-          title: const Text('Tambah Mustahiq'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameCtrl,
-                decoration: const InputDecoration(labelText: 'Nama Mustahiq'),
-              ),
-              const SizedBox(height: 10),
-              DropdownButtonFormField<String>(
-                value: asnafType,
-                isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Asnaf Type'),
-                items: _asnafBobot
-                    .map(
-                      (row) => DropdownMenuItem<String>(
-                        value: row.asnafType,
-                        child: Text(
-                          '${row.label} (bobot ${row.bobot.toStringAsFixed(row.bobot.truncateToDouble() == row.bobot ? 0 : 2)})',
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (value) {
-                  if (value == null) return;
-                  setLocal(() {
-                    asnafType = value;
-                  });
-                },
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: soulsCtrl,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Jiwa'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Batal'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                final name = nameCtrl.text.trim();
-                final souls = int.tryParse(soulsCtrl.text.trim()) ?? 0;
-                if (name.isEmpty || souls <= 0) return;
-                Navigator.pop(ctx, {
-                  'name': name,
-                  'souls': souls,
-                  'asnaf_type': asnafType,
-                });
-              },
-              style: _primaryAddButtonStyle(),
-              child: const Text('Simpan'),
-            ),
-          ],
-        ),
+      builder: (ctx) => _AddMustahiqDialog(
+        asnafBobot: _asnafBobot,
+        initialAsnafType: initialAsnafType,
+        primaryButtonStyle: _primaryAddButtonStyle(),
       ),
     );
 
-    nameCtrl.dispose();
-    soulsCtrl.dispose();
     if (payload == null) return;
 
     await _addMustahiq(
@@ -403,6 +341,31 @@ class _MustahiqScreenState extends State<MustahiqScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.name,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF1A1A1A),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    item.asnafLabel,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
             ListTile(
               leading: const Icon(Icons.edit_outlined, color: _green),
               title: const Text('Edit Mustahiq'),
@@ -461,78 +424,15 @@ class _MustahiqScreenState extends State<MustahiqScreen> {
       return;
     }
 
-    final nameCtrl = TextEditingController(text: item.name);
-    final soulsCtrl = TextEditingController(text: item.souls.toString());
-    var asnafType = item.asnafType;
-
     final updated = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocal) {
-          return AlertDialog(
-            title: const Text('Edit Mustahiq'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameCtrl,
-                  decoration: const InputDecoration(labelText: 'Nama'),
-                ),
-                const SizedBox(height: 10),
-                DropdownButtonFormField<String>(
-                  value: asnafType,
-                  isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Asnaf Type'),
-                  items: _asnafBobot
-                      .map(
-                        (row) => DropdownMenuItem<String>(
-                          value: row.asnafType,
-                          child: Text(row.label),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (value) {
-                    if (value == null) return;
-                    setLocal(() {
-                      asnafType = value;
-                    });
-                  },
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: soulsCtrl,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Souls'),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Batal'),
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  final name = nameCtrl.text.trim();
-                  final souls = int.tryParse(soulsCtrl.text.trim()) ?? 0;
-                  if (name.isEmpty || souls <= 0) return;
-                  Navigator.pop(ctx, {
-                    'name': name,
-                    'asnaf_type': asnafType,
-                    'souls': souls,
-                  });
-                },
-                style: _primaryAddButtonStyle(),
-                child: const Text('Simpan'),
-              ),
-            ],
-          );
-        },
+      builder: (ctx) => _EditMustahiqDialog(
+        item: item,
+        asnafBobot: _asnafBobot,
+        primaryButtonStyle: _primaryAddButtonStyle(),
       ),
     );
 
-    nameCtrl.dispose();
-    soulsCtrl.dispose();
     if (updated == null) return;
 
     setState(() {
@@ -597,7 +497,7 @@ class _MustahiqScreenState extends State<MustahiqScreen> {
         ],
       ),
     );
-    controller.dispose();
+    Future.microtask(() => controller.dispose());
 
     if (nextBobot == null) return;
 
@@ -1029,8 +929,8 @@ class _MustahiqScreenState extends State<MustahiqScreen> {
               scrollDirection: Axis.horizontal,
               child: DataTable(
                 headingRowHeight: 36,
-                dataRowMinHeight: 40,
-                dataRowMaxHeight: 46,
+                dataRowMinHeight: 44,
+                dataRowMaxHeight: 52,
                 columns: const [
                   DataColumn(label: Text('Nama')),
                   DataColumn(label: Text('Asnaf')),
@@ -1042,7 +942,7 @@ class _MustahiqScreenState extends State<MustahiqScreen> {
                       onLongPress: () => _showMustahiqActions(item),
                       cells: [
                         DataCell(Text(item.name)),
-                        DataCell(Text(item.asnafType)),
+                        DataCell(Text(item.asnafLabel)),
                         DataCell(Text('${item.souls}')),
                       ],
                     ),
@@ -1265,4 +1165,212 @@ class _MustahiqItem {
   final double bobot;
 
   double get calculatedSo => bobot * souls;
+
+  String get asnafLabel => asnafType
+      .split('_')
+      .where((p) => p.isNotEmpty)
+      .map((p) => '${p[0].toUpperCase()}${p.substring(1)}')
+      .join(' ');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Dialog: Tambah Mustahiq
+// Controllers are owned by the widget state and disposed via Flutter lifecycle.
+// ─────────────────────────────────────────────────────────────────────────────
+class _AddMustahiqDialog extends StatefulWidget {
+  const _AddMustahiqDialog({
+    required this.asnafBobot,
+    required this.initialAsnafType,
+    required this.primaryButtonStyle,
+  });
+
+  final List<_AsnafBobot> asnafBobot;
+  final String initialAsnafType;
+  final ButtonStyle primaryButtonStyle;
+
+  @override
+  State<_AddMustahiqDialog> createState() => _AddMustahiqDialogState();
+}
+
+class _AddMustahiqDialogState extends State<_AddMustahiqDialog> {
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _soulsCtrl;
+  late String _asnafType;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameCtrl = TextEditingController();
+    _soulsCtrl = TextEditingController(text: '1');
+    _asnafType = widget.initialAsnafType;
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _soulsCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Tambah Mustahiq'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _nameCtrl,
+            decoration: const InputDecoration(labelText: 'Nama Mustahiq'),
+          ),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+            value: _asnafType,
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'Asnaf Type'),
+            items: widget.asnafBobot
+                .map(
+                  (row) => DropdownMenuItem<String>(
+                    value: row.asnafType,
+                    child: Text(
+                      '${row.label} (bobot ${row.bobot.toStringAsFixed(row.bobot.truncateToDouble() == row.bobot ? 0 : 2)})',
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                )
+                .toList(),
+            onChanged: (value) {
+              if (value == null) return;
+              setState(() => _asnafType = value);
+            },
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _soulsCtrl,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Jiwa'),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Batal'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            final name = _nameCtrl.text.trim();
+            final souls = int.tryParse(_soulsCtrl.text.trim()) ?? 0;
+            if (name.isEmpty || souls <= 0) return;
+            Navigator.pop(context, {
+              'name': name,
+              'souls': souls,
+              'asnaf_type': _asnafType,
+            });
+          },
+          style: widget.primaryButtonStyle,
+          child: const Text('Simpan'),
+        ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Dialog: Edit Mustahiq
+// ─────────────────────────────────────────────────────────────────────────────
+class _EditMustahiqDialog extends StatefulWidget {
+  const _EditMustahiqDialog({
+    required this.item,
+    required this.asnafBobot,
+    required this.primaryButtonStyle,
+  });
+
+  final _MustahiqItem item;
+  final List<_AsnafBobot> asnafBobot;
+  final ButtonStyle primaryButtonStyle;
+
+  @override
+  State<_EditMustahiqDialog> createState() => _EditMustahiqDialogState();
+}
+
+class _EditMustahiqDialogState extends State<_EditMustahiqDialog> {
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _soulsCtrl;
+  late String _asnafType;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameCtrl = TextEditingController(text: widget.item.name);
+    _soulsCtrl = TextEditingController(text: widget.item.souls.toString());
+    _asnafType = widget.item.asnafType;
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _soulsCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Edit Mustahiq'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _nameCtrl,
+            decoration: const InputDecoration(labelText: 'Nama'),
+          ),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+            value: _asnafType,
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'Asnaf Type'),
+            items: widget.asnafBobot
+                .map(
+                  (row) => DropdownMenuItem<String>(
+                    value: row.asnafType,
+                    child: Text(row.label),
+                  ),
+                )
+                .toList(),
+            onChanged: (value) {
+              if (value == null) return;
+              setState(() => _asnafType = value);
+            },
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _soulsCtrl,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Souls'),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Batal'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            final name = _nameCtrl.text.trim();
+            final souls = int.tryParse(_soulsCtrl.text.trim()) ?? 0;
+            if (name.isEmpty || souls <= 0) return;
+            Navigator.pop(context, {
+              'name': name,
+              'asnaf_type': _asnafType,
+              'souls': souls,
+            });
+          },
+          style: widget.primaryButtonStyle,
+          child: const Text('Simpan'),
+        ),
+      ],
+    );
+  }
 }

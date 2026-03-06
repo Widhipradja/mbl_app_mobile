@@ -27,6 +27,7 @@ class Muzakki {
   final String address;
   final String phone;
   final String groupName;
+  final String afiliasi;
   final DateTime createdAt;
   final bool isInternal;
 
@@ -35,6 +36,10 @@ class Muzakki {
 
   /// Receiver amil name from transaction data.
   final String amilName;
+
+  /// True when the muzakki's zakat has been formally handed over (akad) to amil.
+  /// Driven by the `is_akad_done` flag on the muzakki record.
+  final bool isAkadDone;
 
   // ── Optional zakat fields (future API) ───────────────────────────────────
   final PaymentType? paymentType;
@@ -57,10 +62,12 @@ class Muzakki {
     this.address = '',
     this.phone = '',
     this.groupName = '',
+    this.afiliasi = '',
     DateTime? createdAt,
     this.isInternal = true,
     this.isPaid = false,
     this.amilName = '',
+    this.isAkadDone = false,
     this.paymentType,
     this.amountSo = 0,
     this.amountRp = 0,
@@ -79,17 +86,9 @@ class Muzakki {
 
   bool get isMale => sex == 'M';
 
-  /// True when payment has been handed over to amil.
-  ///
-  /// Rule:
-  /// - Unpaid -> false
-  /// - External muzakki (non-terdaftar sistem) -> true when paid
-  /// - Internal muzakki -> require non-empty amil name
-  bool get isSerahTerimaAmil {
-    if (!isPaid) return false;
-    if (!isInternal) return true;
-    return amilName.trim().isNotEmpty;
-  }
+  /// True when the muzakki's zakat has been formally handed over (akad) to amil.
+  /// Driven by the `is_akad_done` flag on the muzakki record.
+  bool get isSerahTerimaAmil => isAkadDone;
 
   /// Sort order within a family: head first, then Suami=0, Istri=1, Anak=2, Other=3
   int get relationshipOrder {
@@ -123,11 +122,13 @@ class Muzakki {
         address: json['address'] as String? ?? '',
         phone: json['phone'] as String? ?? '',
         groupName: json['group_name'] as String? ?? '',
+        afiliasi: json['afiliasi'] as String? ?? '',
         createdAt: json['created_at'] != null
             ? DateTime.tryParse(json['created_at'] as String) ?? DateTime.now()
             : DateTime.now(),
         isInternal: json['is_internal'] as bool? ?? true,
         isPaid: json['is_paid'] as bool? ?? false,
+        isAkadDone: json['is_akad_done'] as bool? ?? false,
         amilName: () {
           final tx = json['transaction'] as Map<String, dynamic>?;
           return tx?['amil_name'] as String? ??
@@ -149,8 +150,34 @@ class Muzakki {
           }
           return null;
         }(),
-        amountSo: (json['amount_so'] as num?)?.toDouble() ?? 0,
-        amountRp: (json['amount_rp'] as num?)?.toDouble() ?? 0,
+        amountSo: () {
+          final tx = json['transaction'] as Map<String, dynamic>?;
+          final breakdown =
+              tx?['payment_breakdown'] as List<dynamic>? ?? const [];
+          for (final entry in breakdown) {
+            final e = entry as Map<String, dynamic>;
+            if (e['type'] == 'rice') {
+              final q = e['quantity'];
+              return (q as num?)?.toDouble() ?? 0.0;
+            }
+          }
+          return (json['amount_so'] as num?)?.toDouble() ?? 0.0;
+        }(),
+        amountRp: () {
+          final tx = json['transaction'] as Map<String, dynamic>?;
+          final breakdown =
+              tx?['payment_breakdown'] as List<dynamic>? ?? const [];
+          for (final entry in breakdown) {
+            final e = entry as Map<String, dynamic>;
+            if (e['type'] == 'money') {
+              final a = e['amount'];
+              if (a is num) return a.toDouble();
+              if (a is String) return double.tryParse(a) ?? 0.0;
+              return 0.0;
+            }
+          }
+          return (json['amount_rp'] as num?)?.toDouble() ?? 0.0;
+        }(),
         numberOfPeople: json['jiwa_count'] as int? ?? 1,
       );
 
@@ -168,9 +195,11 @@ class Muzakki {
         'address': address,
         'phone': phone,
         'group_name': groupName,
+        'afiliasi': afiliasi,
         'created_at': createdAt.toIso8601String(),
         'is_internal': isInternal,
         'is_paid': isPaid,
+        'is_akad_done': isAkadDone,
         'amil_name': amilName,
         if (paymentType != null) 'zakat_type': paymentType!.name,
         'amount_so': amountSo,

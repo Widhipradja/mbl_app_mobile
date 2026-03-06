@@ -87,11 +87,9 @@ class _LaporanBodyState extends State<LaporanBody> {
       for (final raw in roots) {
         final id = raw['id']?.toString() ?? '';
         final name = (raw['name']?.toString() ?? '').toLowerCase();
-        final pct =
-            double.tryParse(raw['percentage']?.toString() ?? '') ?? 0.0;
+        final pct = double.tryParse(raw['percentage']?.toString() ?? '') ?? 0.0;
         final rawChildren = raw['children'];
-        final hasChildren =
-            rawChildren is List && (rawChildren).isNotEmpty;
+        final hasChildren = rawChildren is List && (rawChildren).isNotEmpty;
 
         if (hasChildren) {
           // Amil
@@ -103,8 +101,8 @@ class _LaporanBodyState extends State<LaporanBody> {
             final childPct =
                 double.tryParse(child['percentage']?.toString() ?? '') ?? 0.0;
             if (childName.isNotEmpty) {
-              amilChildren.add(
-                  _AmilChildConfig(id: childId, label: childName, percent: childPct));
+              amilChildren.add(_AmilChildConfig(
+                  id: childId, label: childName, percent: childPct));
             }
           }
         } else if (name.contains('sb') || name.contains('sabilillah')) {
@@ -252,6 +250,12 @@ class _LaporanBodyState extends State<LaporanBody> {
 
   int _toIntOrZero(String value) => int.tryParse(value.trim()) ?? 0;
 
+  /// e.g. 45000 → "Rp 45.000"
+  String _fmtRp(double amount) {
+    final fmt = NumberFormat('#,##0', 'id_ID');
+    return 'Rp ${fmt.format(amount.round())}';
+  }
+
   List<Map<String, dynamic>> _extractList(dynamic raw) {
     dynamic source = raw;
     if (raw is Map<String, dynamic> && raw['data'] != null) {
@@ -306,7 +310,12 @@ class _LaporanBodyState extends State<LaporanBody> {
   }
 
   Future<void> _showAdjustmentDialog(
-      List<_AmilChildConfig> amilChildren, String yearId) async {
+    List<_AmilChildConfig> amilChildren,
+    String yearId, {
+    required int baseSb,
+    required List<int> baseAmilChildren,
+    required int baseAsnaf,
+  }) async {
     // Build a controller map: distributionId → TextEditingController
     final ctrls = <String, TextEditingController>{};
 
@@ -347,39 +356,61 @@ class _LaporanBodyState extends State<LaporanBody> {
                       padding: const EdgeInsets.only(bottom: 10),
                       child: TextField(
                         controller: ctrls[_sbDistributionId],
-                        keyboardType: const TextInputType.numberWithOptions(
-                            signed: true),
-                        decoration:
-                            const InputDecoration(labelText: 'Adjustment SB'),
+                        keyboardType:
+                            const TextInputType.numberWithOptions(signed: true),
+                        decoration: InputDecoration(
+                          labelText: 'Adjustment SB',
+                          helperText:
+                              'Base: $baseSb jiwa → ${_fmtRp(baseSb * _titipUang)}',
+                          helperStyle: const TextStyle(
+                              fontSize: 11, color: Color(0xFF64748B)),
+                        ),
                       ),
                     ),
                   ...amilChildren
                       .where((c) => c.id.isNotEmpty)
+                      .toList()
+                      .asMap()
+                      .entries
                       .map(
-                        (c) => Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: TextField(
-                            controller: ctrls[c.id],
-                            keyboardType:
-                                const TextInputType.numberWithOptions(
-                                    signed: true),
-                            decoration: InputDecoration(
-                              labelText: 'Adjustment Amil ${c.label}',
-                            ),
+                    (entry) {
+                      final idx = entry.key;
+                      final c = entry.value;
+                      final base = idx < baseAmilChildren.length
+                          ? baseAmilChildren[idx]
+                          : 0;
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: TextField(
+                          controller: ctrls[c.id],
+                          keyboardType: const TextInputType.numberWithOptions(
+                              signed: true),
+                          decoration: InputDecoration(
+                            labelText: 'Adjustment Amil ${c.label}',
+                            helperText:
+                                'Base: $base jiwa → ${_fmtRp(base * _titipUang)}',
+                            helperStyle: const TextStyle(
+                                fontSize: 11, color: Color(0xFF64748B)),
                           ),
                         ),
-                      ),
+                      );
+                    },
+                  ),
                   ...List.generate(
                     _asnafDistributionIds.length,
                     (i) => Padding(
                       padding: const EdgeInsets.only(bottom: 10),
                       child: TextField(
                         controller: ctrls[_asnafDistributionIds[i]],
-                        keyboardType: const TextInputType.numberWithOptions(
-                            signed: true),
+                        keyboardType:
+                            const TextInputType.numberWithOptions(signed: true),
                         decoration: InputDecoration(
                           labelText:
                               'Adjustment ${_asnafDistributionLabels[i]}',
+                          helperText:
+                              'Base: $baseAsnaf jiwa → ${_fmtRp(baseAsnaf * _titipUang)}',
+                          helperStyle: const TextStyle(
+                              fontSize: 11, color: Color(0xFF64748B)),
                         ),
                       ),
                     ),
@@ -493,7 +524,8 @@ class _LaporanBodyState extends State<LaporanBody> {
           amilChildren.length,
           (index) => {
             'label': amilChildren[index].label,
-            'value': index < adjAmilChildren.length ? adjAmilChildren[index] : 0,
+            'value':
+                index < adjAmilChildren.length ? adjAmilChildren[index] : 0,
           },
         ),
         'asnaf': adjAsnaf,
@@ -577,8 +609,7 @@ class _LaporanBodyState extends State<LaporanBody> {
           });
         }
 
-        if (selectedYearId.isNotEmpty &&
-            selectedYearId != _lastConfigYearId) {
+        if (selectedYearId.isNotEmpty && selectedYearId != _lastConfigYearId) {
           _lastConfigYearId = selectedYearId;
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted) return;
@@ -613,8 +644,7 @@ class _LaporanBodyState extends State<LaporanBody> {
               ];
 
         // ── Derive adj values from the API-backed map ────────────────────
-        final adjSb =
-            (_adjByDistributionId[_sbDistributionId] ?? 0).round();
+        final adjSb = (_adjByDistributionId[_sbDistributionId] ?? 0).round();
         final adjAmilChildren = amilChildren
             .map((c) => (_adjByDistributionId[c.id] ?? 0).round())
             .toList();
@@ -715,7 +745,13 @@ class _LaporanBodyState extends State<LaporanBody> {
                                   color: Color(0xFF066046)),
                     ),
                     TextButton.icon(
-                      onPressed: () => _showAdjustmentDialog(amilChildren, selectedYearId),
+                      onPressed: () => _showAdjustmentDialog(
+                        amilChildren,
+                        selectedYearId,
+                        baseSb: sbCount,
+                        baseAmilChildren: amilChildCounts,
+                        baseAsnaf: asnafCount,
+                      ),
                       icon: const Icon(Icons.tune_rounded, size: 18),
                       label: const Text('Adjustment'),
                       style: TextButton.styleFrom(foregroundColor: _green),
@@ -894,6 +930,72 @@ class _LaporanBodyState extends State<LaporanBody> {
                 const SizedBox(height: 12),
                 _buildMustahiqRecapCard(),
 
+                // ── Total Jatah So Mustahiq ────────────────────────────────
+                const SizedBox(height: 10),
+                Builder(builder: (context) {
+                  final jatahAsnafSo = adjustedAsnaf.toDouble();
+                  final totalKebutuhanSo = _mustahiqRecapRows.fold(
+                    0.0,
+                    (sum, r) => sum + r.totalJatahSo,
+                  );
+                  final selisih = jatahAsnafSo - totalKebutuhanSo;
+                  final isSurplus = selisih >= 0;
+                  final selisihColor = isSurplus
+                      ? const Color(0xFF16A34A)
+                      : const Color(0xFFDC2626);
+                  final selisihLabel = isSurplus ? 'Surplus' : 'Defisit';
+
+                  String fmtSo(double v) =>
+                      '${v % 1 == 0 ? v.toInt() : v.toStringAsFixed(2)} so';
+
+                  return Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Total Jatah So Mustahiq (Asnaf)',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF1A1A1A),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            _soSummaryItem(
+                              label: 'Jatah Asnaf',
+                              value: fmtSo(jatahAsnafSo),
+                              sub: '$adjustedAsnaf jiwa × 1 so',
+                              color: _green,
+                            ),
+                            _soSummaryItem(
+                              label: 'Kebutuhan Mustahiq',
+                              value: fmtSo(totalKebutuhanSo),
+                              sub: '${_mustahiqRecapRows.length} mustahiq',
+                              color: const Color(0xFF1D4ED8),
+                            ),
+                            _soSummaryItem(
+                              label: selisihLabel,
+                              value: fmtSo(selisih.abs()),
+                              sub: isSurplus ? 'So tersisa' : 'Kurang so',
+                              color: selisihColor,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+
                 const SizedBox(height: 10),
                 Text(
                   'Konversi 1 So: ${_formatRupiahFull(_titipUang)} · Total Bayar: ${_formatRupiahFull(totalRp)} · Total So: ${totalSo.toStringAsFixed(2)}',
@@ -920,6 +1022,183 @@ class _LaporanBodyState extends State<LaporanBody> {
                     ),
                   ),
                 ],
+
+                const SizedBox(height: 20),
+
+                // ── Afiliasi Breakdown (from API) ─────────────────────────
+                if (apiSummary != null)
+                  Builder(builder: (ctx) {
+                    final rows = apiSummary.internalByAfiliasi;
+                    final ext = apiSummary.externalBreakdown;
+
+                    const val = TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1A1A1A));
+                    const totalStyle =
+                        TextStyle(fontSize: 12, fontWeight: FontWeight.w700);
+
+                    TableRow apiRow(
+                      String label,
+                      int muzakkiCount,
+                      int rice,
+                      int money, {
+                      bool isTotal = false,
+                      bool isExternal = false,
+                    }) {
+                      final ts = isTotal ? totalStyle : val;
+                      final labelColor = isExternal
+                          ? const Color(0xFF7E22CE)
+                          : isTotal
+                              ? const Color(0xFF1A1A1A)
+                              : const Color(0xFF9333EA);
+                      return TableRow(
+                        decoration: BoxDecoration(
+                            color: isTotal
+                                ? const Color(0xFFF0FDF4)
+                                : isExternal
+                                    ? const Color(0xFFF5F3FF)
+                                    : Colors.transparent),
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 6, horizontal: 6),
+                            child: Text(label,
+                                style: isTotal
+                                    ? totalStyle
+                                    : TextStyle(
+                                        fontSize: 12, color: labelColor)),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 6),
+                            child: Text('$muzakkiCount',
+                                textAlign: TextAlign.center, style: ts),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 6),
+                            child: Text('$rice',
+                                textAlign: TextAlign.center, style: ts),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 6),
+                            child: Text('$money',
+                                textAlign: TextAlign.center, style: ts),
+                          ),
+                        ],
+                      );
+                    }
+
+                    // Totals for footer row
+                    final totalMuzakki =
+                        rows.fold<int>(0, (s, r) => s + r.totalMuzakki) +
+                            (ext != null ? ext.riceSouls + ext.moneySouls : 0);
+                    final totalRice =
+                        rows.fold<int>(0, (s, r) => s + r.riceSouls) +
+                            (ext?.riceSouls ?? 0);
+                    final totalMoney =
+                        rows.fold<int>(0, (s, r) => s + r.moneySouls) +
+                            (ext?.moneySouls ?? 0);
+
+                    return Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Rincian per Group',
+                            style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF1A1A1A)),
+                          ),
+                          const SizedBox(height: 10),
+                          Table(
+                            columnWidths: const {
+                              0: FlexColumnWidth(2),
+                              1: FlexColumnWidth(1),
+                              2: FlexColumnWidth(1),
+                              3: FlexColumnWidth(1),
+                            },
+                            border: TableBorder.all(
+                                color: const Color(0xFFE2E8F0), width: 0.8),
+                            children: [
+                              // Header
+                              const TableRow(
+                                decoration:
+                                    BoxDecoration(color: Color(0xFFF8FAFC)),
+                                children: [
+                                  Padding(
+                                    padding: EdgeInsets.symmetric(
+                                        vertical: 6, horizontal: 6),
+                                    child: Text('Group',
+                                        style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFF64748B))),
+                                  ),
+                                  Padding(
+                                    padding: EdgeInsets.symmetric(vertical: 6),
+                                    child: Text('Muzakki',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFF64748B))),
+                                  ),
+                                  Padding(
+                                    padding: EdgeInsets.symmetric(vertical: 6),
+                                    child: Text('Beras (jiwa)',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFF64748B))),
+                                  ),
+                                  Padding(
+                                    padding: EdgeInsets.symmetric(vertical: 6),
+                                    child: Text('Uang (jiwa)',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFF64748B))),
+                                  ),
+                                ],
+                              ),
+                              // internal_by_afiliasi rows
+                              ...rows.map((r) => apiRow(
+                                    r.afiliasi.isNotEmpty
+                                        ? r.afiliasi
+                                        : 'Tanpa Afiliasi',
+                                    r.totalMuzakki,
+                                    r.riceSouls,
+                                    r.moneySouls,
+                                  )),
+                              // external_breakdown as last data row
+                              if (ext != null)
+                                apiRow(
+                                  'Eksternal',
+                                  ext.riceSouls + ext.moneySouls,
+                                  ext.riceSouls,
+                                  ext.moneySouls,
+                                  isExternal: true,
+                                ),
+                              // Grand total
+                              apiRow(
+                                  'Total', totalMuzakki, totalRice, totalMoney,
+                                  isTotal: true),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
 
                 const SizedBox(height: 28),
 
@@ -1100,6 +1379,57 @@ class _LaporanBodyState extends State<LaporanBody> {
 
   static double _parseAmount(String value) {
     return double.tryParse(value) ?? 0;
+  }
+
+  Widget _soSummaryItem({
+    required String label,
+    required String value,
+    required String sub,
+    required Color color,
+  }) {
+    return Expanded(
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 3),
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF334155),
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 1),
+            Text(
+              sub,
+              style: const TextStyle(
+                fontSize: 10,
+                color: Color(0xFF94A3B8),
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildMustahiqRecapCard() {

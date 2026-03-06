@@ -148,6 +148,38 @@ class InternalByGroupSummary {
   }
 }
 
+class InternalByAfiliasiSummary {
+  final String afiliasi;
+  final int totalMuzakki;
+  final int riceSouls;
+  final int moneySouls;
+  final int totalSouls;
+  final double totalAmount;
+
+  const InternalByAfiliasiSummary({
+    required this.afiliasi,
+    required this.totalMuzakki,
+    required this.riceSouls,
+    required this.moneySouls,
+    required this.totalSouls,
+    required this.totalAmount,
+  });
+
+  factory InternalByAfiliasiSummary.fromJson(Map<String, dynamic> json) {
+    final rice = _toInt(json['rice_souls']);
+    final money = _toInt(json['money_souls']);
+    final total = _toInt(json['total_souls']);
+    return InternalByAfiliasiSummary(
+      afiliasi: (json['afiliasi'] as String?)?.trim() ?? '',
+      totalMuzakki: _toInt(json['total_muzakki']),
+      riceSouls: rice,
+      moneySouls: money,
+      totalSouls: total > 0 ? total : rice + money,
+      totalAmount: _toDouble(json['total_amount']),
+    );
+  }
+}
+
 class ZakatReportSummary {
   final String yearId;
   final int year;
@@ -157,6 +189,7 @@ class ZakatReportSummary {
   final ExternalBreakdownSummary? internalBreakdown;
   final ExternalBreakdownSummary? externalBreakdown;
   final List<InternalByGroupSummary> internalByGroup;
+  final List<InternalByAfiliasiSummary> internalByAfiliasi;
   final DateTime? updatedAt;
 
   const ZakatReportSummary({
@@ -168,6 +201,7 @@ class ZakatReportSummary {
     this.internalBreakdown,
     this.externalBreakdown,
     this.internalByGroup = const [],
+    this.internalByAfiliasi = const [],
     this.updatedAt,
   });
 
@@ -195,6 +229,10 @@ class ZakatReportSummary {
       internalByGroup: (json['internal_by_group'] as List<dynamic>? ?? [])
           .whereType<Map<String, dynamic>>()
           .map(InternalByGroupSummary.fromJson)
+          .toList(),
+      internalByAfiliasi: (json['internal_by_afiliasi'] as List<dynamic>? ?? [])
+          .whereType<Map<String, dynamic>>()
+          .map(InternalByAfiliasiSummary.fromJson)
           .toList(),
       updatedAt: json['updated_at'] != null
           ? DateTime.tryParse(json['updated_at'] as String)

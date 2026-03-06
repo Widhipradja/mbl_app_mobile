@@ -7,29 +7,25 @@ import '../../providers/zakat_provider.dart';
 import '../../services/api_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Amil model (from /api/lookups/type/AMIL)
+// Amil model (from /api/zakat-fitrah/amil)
 // ─────────────────────────────────────────────────────────────────────────────
 class _Amil {
   final String id;
   final String name;
-  final String role;
+  final String groupName;
 
-  const _Amil({required this.id, required this.name, this.role = ''});
+  const _Amil({required this.id, required this.name, this.groupName = ''});
 
   factory _Amil.fromJson(Map<String, dynamic> j) => _Amil(
         id: j['id'] as String? ?? '',
-        // Lookups API uses "value" or "label"; fall back to name fields
-        name: j['value'] as String? ??
-            j['label'] as String? ??
-            j['name'] as String? ??
-            j['full_name'] as String? ??
-            j['first_name'] as String? ??
-            '',
-        role: j['type'] as String? ?? j['role'] as String? ?? '',
+        name: j['name'] as String? ?? '',
+        groupName: j['group_name'] as String? ?? '',
       );
 }
 
 enum _ZakatType { beras, uang, campuran }
+
+enum _SerahTerimaMode { none, titip, akad }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Screen
@@ -60,10 +56,15 @@ class _ZakatTransactionScreenState extends State<ZakatTransactionScreen> {
   _Amil? _selectedAmil;
   final _catatanCtrl = TextEditingController();
 
+  // ── Serah Terima state ────────────────────────────────────────────────────
+  _SerahTerimaMode _serahTerimaMode = _SerahTerimaMode.none;
+
   // ── Amil list ─────────────────────────────────────────────────────────────
   List<_Amil> _amilList = [];
   bool _loadingAmil = true;
   double _titipUangRate = 45000;
+  String _ikrarZakat = '';
+  bool _loadingIkrar = true;
 
   bool _isSubmitting = false;
 
@@ -145,6 +146,7 @@ class _ZakatTransactionScreenState extends State<ZakatTransactionScreen> {
     }
     _fetchTitipUangRate();
     _fetchAmil();
+    _fetchIkrarZakat();
   }
 
   @override
@@ -158,14 +160,19 @@ class _ZakatTransactionScreenState extends State<ZakatTransactionScreen> {
     setState(() => _loadingAmil = true);
     try {
       final api = ApiService();
-      final resp = await api.getZakatAmil();
+      final yearId = context.read<ZakatProvider>().selectedYear?.id ?? '';
+      final resp = await api.getZakatAmilList(
+        yearId: yearId.isNotEmpty ? yearId : null,
+      );
       final raw = resp.data;
       final list = raw is List
           ? raw
           : (raw as Map<String, dynamic>)['data'] as List<dynamic>? ?? [];
       setState(() {
-        _amilList =
-            list.map((j) => _Amil.fromJson(j as Map<String, dynamic>)).toList();
+        _amilList = list
+            .map((j) => _Amil.fromJson(j as Map<String, dynamic>))
+            .where((a) => a.id.isNotEmpty && a.name.isNotEmpty)
+            .toList();
       });
     } catch (e) {
       debugPrint('ZakatTransactionScreen._fetchAmil error: $e');
@@ -193,6 +200,31 @@ class _ZakatTransactionScreenState extends State<ZakatTransactionScreen> {
       }
     } catch (e) {
       debugPrint('ZakatTransactionScreen._fetchTitipUangRate error: $e');
+    }
+  }
+
+  Future<void> _fetchIkrarZakat() async {
+    try {
+      final api = ApiService();
+      final resp = await api.getZakatConfigurationByModuleAndCode(
+        'ZAKATFITRAH',
+        'IKRAR_ZAKAT',
+      );
+      final raw = resp.data;
+      final map = raw is Map<String, dynamic> ? raw : <String, dynamic>{};
+      final payload = map['data'] is Map<String, dynamic>
+          ? map['data'] as Map<String, dynamic>
+          : map;
+      final value = payload['value']?.toString() ?? '';
+      if (mounted) {
+        setState(() {
+          _ikrarZakat = value;
+          _loadingIkrar = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('ZakatTransactionScreen._fetchIkrarZakat error: $e');
+      if (mounted) setState(() => _loadingIkrar = false);
     }
   }
 
@@ -327,6 +359,15 @@ class _ZakatTransactionScreenState extends State<ZakatTransactionScreen> {
         externalBreakdown: externalBreakdown,
         paymentBreakdown: paymentBreakdown,
         totalSouls: _totalSouls,
+        serahTerima:
+            _selectedAmil != null && _serahTerimaMode != _SerahTerimaMode.none
+                ? {
+                    'mode': _serahTerimaMode == _SerahTerimaMode.akad
+                        ? 'akad'
+                        : 'titip',
+                    'amil_name': _selectedAmil!.name,
+                  }
+                : null,
       );
 
       await provider.fetchMuzakki();
@@ -499,7 +540,13 @@ class _ZakatTransactionScreenState extends State<ZakatTransactionScreen> {
             _buildAmilSelector(),
             const SizedBox(height: 20),
 
-            // ── Section 5: Catatan ────────────────────────────────────────
+            // ── Section 5: Serah Terima ───────────────────────────────────
+            _sectionLabel('SERAH TERIMA (OPSIONAL)'),
+            const SizedBox(height: 8),
+            _buildSerahTerimaSection(),
+            const SizedBox(height: 20),
+
+            // ── Section 6: Catatan ────────────────────────────────────────
             _sectionLabel('CATATAN (OPSIONAL)'),
             const SizedBox(height: 8),
             TextFormField(
@@ -527,6 +574,65 @@ class _ZakatTransactionScreenState extends State<ZakatTransactionScreen> {
                 ),
               ),
             ),
+            const SizedBox(height: 12),
+
+            // ── Ikrar Zakat ────────────────────────────────────────────────
+            if (_loadingIkrar)
+              Container(
+                height: 48,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF0FDF4),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFBBF7D0)),
+                ),
+                alignment: Alignment.center,
+                child: const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child:
+                      CircularProgressIndicator(strokeWidth: 2, color: _green),
+                ),
+              )
+            else if (_ikrarZakat.isNotEmpty)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF0FDF4),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFBBF7D0)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.format_quote_rounded,
+                            size: 16, color: _green),
+                        const SizedBox(width: 6),
+                        const Text(
+                          'Ikrar Zakat',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: _green,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _ikrarZakat,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: Color(0xFF166534),
+                        height: 1.5,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             const SizedBox(height: 32),
 
             // ── Bayar Button ──────────────────────────────────────────────
@@ -1010,6 +1116,76 @@ class _ZakatTransactionScreenState extends State<ZakatTransactionScreen> {
     );
   }
 
+  // ── Serah Terima section ─────────────────────────────────────────────────
+  Widget _buildSerahTerimaSection() {
+    final hasAmil = _selectedAmil != null;
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Option 1: Titip Zakat ────────────────────────────────────────
+          _SerahTerimaOption(
+            icon: Icons.handshake_outlined,
+            title: 'Titip Zakat',
+            subtitle: hasAmil && _serahTerimaMode == _SerahTerimaMode.titip
+                ? 'Dititipkan ke ${_selectedAmil!.name}, belum ucap akad'
+                : 'Zakat dititipkan ke amil, belum mengucapkan akad',
+            isSelected: _serahTerimaMode == _SerahTerimaMode.titip,
+            iconBg: const Color(0xFFFFF7ED),
+            iconColor: const Color(0xFFD97706),
+            onTap: () => setState(() {
+              _serahTerimaMode = _serahTerimaMode == _SerahTerimaMode.titip
+                  ? _SerahTerimaMode.none
+                  : _SerahTerimaMode.titip;
+            }),
+          ),
+          const Divider(height: 1, color: Color(0xFFF1F5F9)),
+
+          // ── Option 2: Langsung Akad ke Amil ─────────────────────────────
+          _SerahTerimaOption(
+            icon: Icons.verified_outlined,
+            title: 'Langsung Akad ke Amil',
+            subtitle: hasAmil && _serahTerimaMode == _SerahTerimaMode.akad
+                ? 'Akad zakat fitrah ke ${_selectedAmil!.name} ✓'
+                : 'Serahkan zakat sambil ucap akad titip zakat fitrah',
+            isSelected: _serahTerimaMode == _SerahTerimaMode.akad,
+            iconBg: const Color(0xFFE8F5F0),
+            iconColor: _green,
+            onTap: () => setState(() {
+              _serahTerimaMode = _serahTerimaMode == _SerahTerimaMode.akad
+                  ? _SerahTerimaMode.none
+                  : _SerahTerimaMode.akad;
+            }),
+          ),
+
+          // ── Warning: amil belum dipilih ──────────────────────────────────
+          if (_serahTerimaMode != _SerahTerimaMode.none && !hasAmil)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline,
+                      size: 14, color: Color(0xFFD97706)),
+                  const SizedBox(width: 6),
+                  const Expanded(
+                    child: Text(
+                      'Pilih nama amil di section "Pilih Amil" di atas agar tercatat.',
+                      style: TextStyle(fontSize: 11, color: Color(0xFFD97706)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   // ── Amil selector ────────────────────────────────────────────────────────
   Widget _buildAmilSelector() {
     if (_loadingAmil) {
@@ -1143,7 +1319,7 @@ class _ZakatTransactionScreenState extends State<ZakatTransactionScreen> {
                     ),
                     title: Text(a.name,
                         style: const TextStyle(fontWeight: FontWeight.w600)),
-                    subtitle: a.role.isNotEmpty ? Text(a.role) : null,
+                    subtitle: a.groupName.isNotEmpty ? Text(a.groupName) : null,
                     trailing: isSelected
                         ? const Icon(Icons.check_circle, color: _green)
                         : null,
@@ -1244,6 +1420,109 @@ class _ZakatTypeCard extends StatelessWidget {
                 child:
                     Icon(Icons.check_circle_rounded, size: 20, color: _green),
               ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Serah Terima Option Row
+// ─────────────────────────────────────────────────────────────────────────────
+class _SerahTerimaOption extends StatelessWidget {
+  const _SerahTerimaOption({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.isSelected,
+    required this.iconBg,
+    required this.iconColor,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool isSelected;
+  final Color iconBg;
+  final Color iconColor;
+  final VoidCallback onTap;
+
+  static const _green = Color(0xFF066046);
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFFE8F5F0) : Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            // Icon badge
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: isSelected ? iconBg : const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                icon,
+                size: 20,
+                color: isSelected ? iconColor : const Color(0xFF94A3B8),
+              ),
+            ),
+            const SizedBox(width: 12),
+            // Text
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: isSelected
+                          ? const Color(0xFF1A1A1A)
+                          : const Color(0xFF334155),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: Color(0xFF94A3B8),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Radio indicator
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              width: 20,
+              height: 20,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isSelected ? _green : Colors.white,
+                border: Border.all(
+                  color: isSelected ? _green : const Color(0xFFCBD5E1),
+                  width: 2,
+                ),
+              ),
+              child: isSelected
+                  ? const Icon(Icons.circle, size: 8, color: Colors.white)
+                  : null,
+            ),
           ],
         ),
       ),

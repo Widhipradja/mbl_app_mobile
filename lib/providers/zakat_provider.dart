@@ -327,4 +327,33 @@ class ZakatProvider extends ChangeNotifier {
       debugPrint('ZakatProvider.setFamilyHead error: $e');
     }
   }
+
+  /// Reset all cached zakat data. Call this on logout or when switching users
+  /// so stale data from a previous group_name is not shown to the new user.
+  void reset() {
+    _years = [];
+    _selectedYear = null;
+    isLoadingYears = false;
+    yearsError = null;
+
+    _muzakkiList.clear();
+    _externalByFamily.clear();
+    isLoading = false;
+    errorMessage = null;
+    totalMuzakkiServer = 0;
+
+    _recentTransactions.clear();
+    isLoadingRecent = false;
+    recentError = null;
+
+    _reportSummary = null;
+    isLoadingReportSummary = false;
+    reportSummaryError = null;
+
+    _mustahiqAsnafSummary.clear();
+    isLoadingMustahiqAsnafSummary = false;
+    mustahiqAsnafSummaryError = null;
+
+    notifyListeners();
+  }
 }

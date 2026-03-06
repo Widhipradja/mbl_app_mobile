@@ -46,9 +46,9 @@ class ApiService {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
-          // debugPrint('🔵 REQUEST: ${options.method} ${options.path}');
-          // debugPrint('📤 DATA: ${options.data}');
-          // debugPrint('🔵 LOGIN URL: ${AppConstants.apiBaseUrl}${options.path}');
+          debugPrint('🔵 REQUEST: ${options.method} ${options.uri}');
+          debugPrint('📤 DATA: ${options.data}');
+          debugPrint('📋 HEADERS: ${options.headers}');
 
           // Add auth token
           final token = StorageService.getToken();
@@ -91,8 +91,9 @@ class ApiService {
           return handler.next(error);
         },
         onResponse: (response, handler) {
-          // debugPrint('🟢 RESPONSE: ${response.statusCode}');
-          // debugPrint('🟢 DATA: ${response.data}');
+          debugPrint(
+              '🟢 RESPONSE: ${response.statusCode} ${response.requestOptions.uri}');
+          debugPrint('🟢 DATA: ${response.data}');
           return handler.next(response);
         },
       ),
@@ -328,6 +329,7 @@ class ApiService {
     String address = '',
     String phone = '',
     String groupName = '',
+    String afiliasi = '',
   }) async {
     return await _dio.post(
       '/api/zakat-fitrah/muzakki',
@@ -344,6 +346,7 @@ class ApiService {
         'phone': phone,
         'group_name': groupName,
         'year_id': yearId,
+        if (afiliasi.isNotEmpty) 'afiliasi': afiliasi,
       },
     );
   }
@@ -419,7 +422,7 @@ class ApiService {
     String code,
   ) async {
     return await _dio
-        .get('/api/zakat-fitrah/configuration/module/$module/code/$code');
+        .get('/api/zakat-fitrah/configurations/module/$module/code/$code');
   }
 
   /// Create a new zakat payment transaction.
@@ -453,6 +456,9 @@ class ApiService {
   /// Create bulk zakat transactions for multiple muzakki (family).
   ///
   /// Endpoint: `POST /api/zakat-fitrah/transactions/bulk`
+  ///
+  /// [serahTerima] optional: `{ 'mode': 'titip'|'akad', 'amil_name': '...' }`
+  /// When provided, the backend handles serah terima atomically.
   Future<Response> createZakatTransactionBulk({
     required String yearId,
     required int year,
@@ -462,6 +468,7 @@ class ApiService {
     required Map<String, dynamic> externalBreakdown,
     required List<Map<String, dynamic>> paymentBreakdown,
     required int totalSouls,
+    Map<String, dynamic>? serahTerima,
   }) async {
     return await _dio.post(
       '/api/zakat-fitrah/transactions/bulk',
@@ -474,6 +481,7 @@ class ApiService {
         'external_breakdown': externalBreakdown,
         'payment_breakdown': paymentBreakdown,
         'total_souls': totalSouls,
+        if (serahTerima != null) 'serah_terima': serahTerima,
       },
     );
   }
@@ -532,6 +540,52 @@ class ApiService {
   /// Endpoint: `DELETE /api/zakat-fitrah/mustahiq/{id}`
   Future<Response> deleteZakatMustahiq(String id) async {
     return await _dio.delete('/api/zakat-fitrah/mustahiq/$id');
+  }
+
+  /// Mark or toggle akad (serah terima ke amil) for a single muzakki.
+  ///
+  /// Endpoint: `PATCH /api/zakat-fitrah/muzakki/{id}/akad`
+  Future<Response> patchZakatMuzakkiAkad(
+    String id, {
+    required bool status,
+    String? representative,
+  }) async {
+    final body = <String, dynamic>{
+      'status': status,
+      if (representative != null && representative.trim().isNotEmpty)
+        'representative': representative.trim(),
+    };
+    debugPrint('🤝 AKAD REQUEST → PATCH /api/zakat-fitrah/muzakki/$id/akad');
+    debugPrint('🤝 AKAD BODY: $body');
+    final resp = await _dio.patch(
+      '/api/zakat-fitrah/muzakki/$id/akad',
+      data: body,
+    );
+    debugPrint('🤝 AKAD RESPONSE ${resp.statusCode}: ${resp.data}');
+    return resp;
+  }
+
+  /// Mark akad (serah terima ke amil) for all paid members of a family.
+  ///
+  /// Endpoint: `PATCH /api/zakat-fitrah/muzakki/family/{family_id}/akad`
+  Future<Response> patchZakatMuzakkiFamilyAkad(
+    String familyId, {
+    required bool status,
+    required String amilName,
+  }) async {
+    final body = <String, dynamic>{
+      'status': status,
+      'amil_name': amilName,
+    };
+    debugPrint(
+        '🤝 FAMILY AKAD REQUEST → PATCH /api/zakat-fitrah/muzakki/family/$familyId/akad');
+    debugPrint('🤝 FAMILY AKAD BODY: $body');
+    final resp = await _dio.patch(
+      '/api/zakat-fitrah/muzakki/family/$familyId/akad',
+      data: body,
+    );
+    debugPrint('🤝 FAMILY AKAD RESPONSE ${resp.statusCode}: ${resp.data}');
+    return resp;
   }
 
   /// Fetch mustahiq summary grouped by asnaf.
@@ -664,14 +718,75 @@ class ApiService {
     return await _dio.post('/api/zakat-fitrah/adjustments', data: data);
   }
 
+  // ── Amil endpoints ───────────────────────────────────────────────────────
+
+  /// Fetch all amil records.
+  ///
+  /// Endpoint: `GET /api/zakat-fitrah/amil`
+  Future<Response> getZakatAmilList({String? yearId}) async {
+    return await _dio.get(
+      '/api/zakat-fitrah/amil',
+      data: {
+        if (yearId != null && yearId.isNotEmpty) 'year_id': yearId,
+      },
+    );
+  }
+
+  /// Fetch family zakat resume (paid/unpaid members summary).
+  ///
+  /// Endpoint: `GET /api/zakat-fitrah/families/:familyId/zakat-resume`
+  Future<Response> getFamilyZakatResume(String familyId,
+      {required String yearId}) async {
+    return await _dio.get(
+      '/api/zakat-fitrah/families/$familyId/zakat-resume',
+      queryParameters: {'year_id': yearId},
+    );
+  }
+
+  /// Fetch active amil records.
+  ///
+  /// Endpoint: `GET /api/zakat-fitrah/amil/active`
+  Future<Response> getZakatAmilActive({String? yearId}) async {
+    return await _dio.get(
+      '/api/zakat-fitrah/amil/active',
+      queryParameters: {
+        if (yearId != null && yearId.isNotEmpty) 'year_id': yearId,
+      },
+    );
+  }
+
+  /// Create a new amil record.
+  ///
+  /// Endpoint: `POST /api/zakat-fitrah/amil`
+  Future<Response> createZakatAmil(Map<String, dynamic> data) async {
+    return await _dio.post('/api/zakat-fitrah/amil', data: data);
+  }
+
+  /// Update an amil record by id.
+  ///
+  /// Endpoint: `PUT /api/zakat-fitrah/amil/{id}`
+  Future<Response> updateZakatAmil(
+    String id,
+    Map<String, dynamic> data,
+  ) async {
+    return await _dio.put('/api/zakat-fitrah/amil/$id', data: data);
+  }
+
+  /// Delete an amil record by id.
+  ///
+  /// Endpoint: `DELETE /api/zakat-fitrah/amil/{id}`
+  Future<Response> deleteZakatAmil(String id) async {
+    return await _dio.delete('/api/zakat-fitrah/amil/$id');
+  }
+
   // ── Configuration endpoints ──────────────────────────────────────────────
 
   Future<Response> getConfigurations() async {
-    return await _dio.get('/api/admin/configurations');
+    return await _dio.get('/api/zakat-fitrah/configurations');
   }
 
   Future<Response> getConfigurationsByModule(String module) async {
-    return await _dio.get('/api/admin/configurations/module/$module');
+    return await _dio.get('/api/zakat-fitrah/configurations/module/$module');
   }
 
   Future<Response> getConfigurationByModuleAndCode(
@@ -679,29 +794,29 @@ class ApiService {
     String code,
   ) async {
     return await _dio
-        .get('/api/admin/configurations/module/$module/code/$code');
+        .get('/api/zakat-fitrah/configurations/module/$module/code/$code');
   }
 
   Future<Response> getConfigurationByOid(String oid) async {
-    return await _dio.get('/api/admin/configurations/$oid');
+    return await _dio.get('/api/zakat-fitrah/configurations/$oid');
   }
 
   Future<Response> getConfigurationValueByCode(String code) async {
-    return await _dio.get('/api/admin/configurations/code/$code/value');
+    return await _dio.get('/api/zakat-fitrah/configurations/code/$code/value');
   }
 
   Future<Response> createConfiguration(Map<String, dynamic> data) async {
-    return await _dio.post('/api/admin/configurations', data: data);
+    return await _dio.post('/api/zakat-fitrah/configurations', data: data);
   }
 
   Future<Response> updateConfiguration(
     String oid,
     Map<String, dynamic> data,
   ) async {
-    return await _dio.put('/api/admin/configurations/$oid', data: data);
+    return await _dio.put('/api/zakat-fitrah/configurations/$oid', data: data);
   }
 
   Future<Response> deleteConfiguration(String oid) async {
-    return await _dio.delete('/api/admin/configurations/$oid');
+    return await _dio.delete('/api/zakat-fitrah/configurations/$oid');
   }
 }

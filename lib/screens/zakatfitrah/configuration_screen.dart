@@ -28,6 +28,11 @@ class _ConfigurationScreenState extends State<ConfigurationScreen> {
   String _lastObservedYearId = '';
   List<_AsnafBobotItem> _asnafBobot = const [];
 
+  // Amil state
+  bool _isLoadingAmil = false;
+  String? _amilError;
+  List<_AmilItem> _amilList = const [];
+
   @override
   void initState() {
     super.initState();
@@ -347,6 +352,125 @@ class _ConfigurationScreenState extends State<ConfigurationScreen> {
           _isLoadingAsnaf = false;
         });
       }
+    }
+  }
+
+  Future<void> _loadAmil() async {
+    final yearId = _pickYearIdFromProvider(context.read<ZakatProvider>());
+    setState(() {
+      _isLoadingAmil = true;
+      _amilError = null;
+    });
+    try {
+      final response = await _api.getZakatAmilList(
+        yearId: (yearId != null && yearId.isNotEmpty) ? yearId : null,
+      );
+      final rows = _extractList(response.data)
+          .map(
+            (raw) => _AmilItem(
+              id: raw['id']?.toString() ?? '',
+              yearId: raw['year_id']?.toString() ?? '',
+              name: raw['name']?.toString() ?? '',
+              groupName: raw['group_name']?.toString() ?? '',
+              notes: raw['notes']?.toString() ?? '',
+              isActive: raw['is_active'] == true,
+            ),
+          )
+          .where((item) => item.id.isNotEmpty)
+          .toList()
+        ..sort((a, b) => a.name.compareTo(b.name));
+      if (!mounted) return;
+      setState(() => _amilList = rows);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _amilError = 'Gagal memuat data Amil.');
+    } finally {
+      if (mounted) setState(() => _isLoadingAmil = false);
+    }
+  }
+
+  Future<void> _openAmilDialog({_AmilItem? initial}) async {
+    final yearId = _pickYearIdFromProvider(context.read<ZakatProvider>());
+    if (yearId == null || yearId.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tahun zakat belum dipilih.')),
+      );
+      return;
+    }
+
+    final isEdit = initial != null;
+    final payload = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (ctx) => _AmilDialog(
+        initial: initial,
+        yearId: yearId,
+        primaryButtonStyle: ElevatedButton.styleFrom(
+          backgroundColor: _green,
+          foregroundColor: Colors.white,
+        ),
+      ),
+    );
+
+    if (payload == null) return;
+
+    try {
+      if (isEdit) {
+        await _api.updateZakatAmil(initial.id, payload);
+      } else {
+        await _api.createZakatAmil(payload);
+      }
+      await _loadAmil();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content:
+              Text(isEdit ? 'Amil berhasil diubah' : 'Amil berhasil ditambah'),
+          backgroundColor: _green,
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Gagal menyimpan Amil.')),
+      );
+    }
+  }
+
+  Future<bool> _confirmDeleteAmil(_AmilItem item) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Hapus Amil'),
+        content: Text('Hapus amil "${item.name}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return false;
+    try {
+      await _api.deleteZakatAmil(item.id);
+      await _loadAmil();
+      if (!mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Amil berhasil dihapus')),
+      );
+      return true;
+    } catch (_) {
+      if (!mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Gagal menghapus Amil.')),
+      );
+      return false;
     }
   }
 
@@ -745,6 +869,7 @@ class _ConfigurationScreenState extends State<ConfigurationScreen> {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted) return;
             _loadAsnafBobot();
+            _loadAmil();
           });
         }
 
@@ -830,6 +955,7 @@ class _ConfigurationScreenState extends State<ConfigurationScreen> {
               provider.fetchConfigurations(
                   module: ConfigurationProvider.moduleZakatFitrah),
               _loadAsnafBobot(),
+              _loadAmil(),
               _distributionKey.currentState?.reload() ?? Future.value(),
             ]);
           },
@@ -921,22 +1047,10 @@ class _ConfigurationScreenState extends State<ConfigurationScreen> {
                                       return Padding(
                                         padding:
                                             const EdgeInsets.only(bottom: 6),
-                                        child: Dismissible(
-                                          key: ValueKey('year-${year.id}'),
-                                          direction:
-                                              DismissDirection.startToEnd,
-                                          background: _swipeBackground(
-                                            alignment: Alignment.centerLeft,
-                                            color: const Color(0xFF059669),
-                                            icon: Icons.edit_outlined,
-                                            label: 'Edit',
-                                          ),
-                                          confirmDismiss: (direction) async {
-                                            await _openYearDialog(
-                                                initial: year);
-                                            return false;
-                                          },
-                                          child: _YearTile(year: year),
+                                        child: _YearTile(
+                                          year: year,
+                                          onEdit: () =>
+                                              _openYearDialog(initial: year),
                                         ),
                                       );
                                     }).toList(),
@@ -1029,29 +1143,11 @@ class _ConfigurationScreenState extends State<ConfigurationScreen> {
                                 children: _asnafBobot.map((item) {
                                   return Padding(
                                     padding: const EdgeInsets.only(bottom: 6),
-                                    child: Dismissible(
-                                      key: ValueKey('asnaf-${item.id}'),
-                                      background: _swipeBackground(
-                                        alignment: Alignment.centerLeft,
-                                        color: const Color(0xFF059669),
-                                        icon: Icons.edit_outlined,
-                                        label: 'Edit',
-                                      ),
-                                      secondaryBackground: _swipeBackground(
-                                        alignment: Alignment.centerRight,
-                                        color: const Color(0xFFDC2626),
-                                        icon: Icons.delete_outline,
-                                        label: 'Hapus',
-                                      ),
-                                      confirmDismiss: (direction) async {
-                                        if (direction ==
-                                            DismissDirection.startToEnd) {
-                                          await _openAsnafDialog(initial: item);
-                                          return false;
-                                        }
-                                        return _confirmDeleteAsnaf(item);
-                                      },
-                                      child: _AsnafBobotTile(item: item),
+                                    child: _AsnafBobotTile(
+                                      item: item,
+                                      onEdit: () =>
+                                          _openAsnafDialog(initial: item),
+                                      onDelete: () => _confirmDeleteAsnaf(item),
                                     ),
                                   );
                                 }).toList(),
@@ -1060,6 +1156,101 @@ class _ConfigurationScreenState extends State<ConfigurationScreen> {
                               const SizedBox(height: 2),
                               Text(
                                 _asnafError!,
+                                style: const TextStyle(
+                                  color: Color(0xFFDC2626),
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      // MASTER AMIL section
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _sectionBadge('MASTER AMIL'),
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                const Expanded(
+                                  child: Text(
+                                    'Daftar Amil',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF1A1A1A),
+                                    ),
+                                  ),
+                                ),
+                                ElevatedButton.icon(
+                                  onPressed: _openAmilDialog,
+                                  icon: const Icon(Icons.add, size: 16),
+                                  label: const Text('Tambah Amil'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: _green,
+                                    foregroundColor: Colors.white,
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'Swipe kanan untuk Edit, swipe kiri untuk Hapus.',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF64748B),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            if (_isLoadingAmil)
+                              const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 6),
+                                  child: SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
+                                  ),
+                                ),
+                              )
+                            else if (_amilList.isEmpty)
+                              const Text(
+                                'Belum ada data Amil',
+                                style: TextStyle(
+                                  color: Color(0xFF94A3B8),
+                                  fontSize: 12,
+                                ),
+                              )
+                            else
+                              Column(
+                                children: _amilList.map((item) {
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 6),
+                                    child: _AmilTile(
+                                      item: item,
+                                      onEdit: () =>
+                                          _openAmilDialog(initial: item),
+                                      onDelete: () => _confirmDeleteAmil(item),
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            if (_amilError != null) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                _amilError!,
                                 style: const TextStyle(
                                   color: Color(0xFFDC2626),
                                   fontSize: 12,
@@ -1254,9 +1445,15 @@ class _ConfigurationTile extends StatelessWidget {
 }
 
 class _AsnafBobotTile extends StatelessWidget {
-  const _AsnafBobotTile({required this.item});
+  const _AsnafBobotTile({
+    required this.item,
+    required this.onEdit,
+    required this.onDelete,
+  });
 
   final _AsnafBobotItem item;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -1312,6 +1509,32 @@ class _AsnafBobotTile extends StatelessWidget {
               ),
             ),
           ),
+          const SizedBox(width: 4),
+          // ── Action buttons
+          Tooltip(
+            message: 'Edit',
+            child: InkWell(
+              onTap: onEdit,
+              borderRadius: BorderRadius.circular(6),
+              child: const Padding(
+                padding: EdgeInsets.all(5),
+                child: Icon(Icons.edit_outlined,
+                    size: 16, color: Color(0xFF0EA5E9)),
+              ),
+            ),
+          ),
+          Tooltip(
+            message: 'Hapus',
+            child: InkWell(
+              onTap: onDelete,
+              borderRadius: BorderRadius.circular(6),
+              child: const Padding(
+                padding: EdgeInsets.all(5),
+                child: Icon(Icons.delete_outline,
+                    size: 16, color: Color(0xFFDC2626)),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -1319,9 +1542,13 @@ class _AsnafBobotTile extends StatelessWidget {
 }
 
 class _YearTile extends StatelessWidget {
-  const _YearTile({required this.year});
+  const _YearTile({
+    required this.year,
+    required this.onEdit,
+  });
 
   final ZakatYear year;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -1335,63 +1562,87 @@ class _YearTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
-      child: ListTile(
-        dense: true,
-        visualDensity: const VisualDensity(vertical: -2),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-        title: Text(
-          year.label,
-          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-        ),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 2),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Hijri Year: ${year.hijriYear}',
-                style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+      child: Row(
+        children: [
+          Expanded(
+            child: ListTile(
+              dense: true,
+              visualDensity: const VisualDensity(vertical: -2),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+              title: Text(
+                year.label,
+                style:
+                    const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
               ),
-              if (year.ramadhanStart.isNotEmpty || year.ramadhanEnd.isNotEmpty)
-                Text(
-                  '${year.ramadhanStart.isNotEmpty ? year.ramadhanStart : '?'}'
-                  ' → '
-                  '${year.ramadhanEnd.isNotEmpty ? year.ramadhanEnd : '?'}',
-                  style:
-                      const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                ),
-              Text(
-                'Rice Rate: Rp$riceRate / so',
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: Color(0xFF0F172A),
-                  fontWeight: FontWeight.w600,
+              subtitle: Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Hijri Year: ${year.hijriYear}',
+                      style: const TextStyle(
+                          fontSize: 11, color: Color(0xFF64748B)),
+                    ),
+                    if (year.ramadhanStart.isNotEmpty ||
+                        year.ramadhanEnd.isNotEmpty)
+                      Text(
+                        '${year.ramadhanStart.isNotEmpty ? year.ramadhanStart : '?'}'
+                        ' → '
+                        '${year.ramadhanEnd.isNotEmpty ? year.ramadhanEnd : '?'}',
+                        style: const TextStyle(
+                            fontSize: 11, color: Color(0xFF64748B)),
+                      ),
+                    Text(
+                      'Rice Rate: Rp$riceRate / so',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF0F172A),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if (year.groupName.isNotEmpty)
+                      Text(
+                        'Group: ${year.groupName}',
+                        style: const TextStyle(
+                            fontSize: 11, color: Color(0xFF94A3B8)),
+                      ),
+                  ],
                 ),
               ),
-              if (year.groupName.isNotEmpty)
-                Text(
-                  'Group: ${year.groupName}',
-                  style:
-                      const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+              trailing: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                decoration: BoxDecoration(
+                  color: activeColor.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-            ],
-          ),
-        ),
-        trailing: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-          decoration: BoxDecoration(
-            color: activeColor.withOpacity(0.12),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Text(
-            year.isActive ? 'Active' : 'Inactive',
-            style: TextStyle(
-              color: activeColor,
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
+                child: Text(
+                  year.isActive ? 'Active' : 'Inactive',
+                  style: TextStyle(
+                    color: activeColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
             ),
           ),
-        ),
+          // ── Edit button
+          Tooltip(
+            message: 'Edit',
+            child: InkWell(
+              onTap: onEdit,
+              borderRadius: BorderRadius.circular(6),
+              child: const Padding(
+                padding: EdgeInsets.all(8),
+                child: Icon(Icons.edit_outlined,
+                    size: 16, color: Color(0xFF0EA5E9)),
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+        ],
       ),
     );
   }
@@ -1437,5 +1688,243 @@ class _AsnafBobotItem {
         .where((part) => part.trim().isNotEmpty)
         .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
         .join(' ');
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Amil model
+// ─────────────────────────────────────────────────────────────────────────────
+class _AmilItem {
+  const _AmilItem({
+    required this.id,
+    required this.yearId,
+    required this.name,
+    required this.groupName,
+    required this.notes,
+    required this.isActive,
+  });
+
+  final String id;
+  final String yearId;
+  final String name;
+  final String groupName;
+  final String notes;
+  final bool isActive;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Amil Tile
+// ─────────────────────────────────────────────────────────────────────────────
+class _AmilTile extends StatelessWidget {
+  const _AmilTile({
+    required this.item,
+    required this.onEdit,
+    required this.onDelete,
+  });
+  final _AmilItem item;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: item.isActive
+                  ? const Color(0xFFE8F5F0)
+                  : const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Icon(
+              Icons.person_rounded,
+              size: 20,
+              color: item.isActive
+                  ? const Color(0xFF066046)
+                  : const Color(0xFF94A3B8),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        item.name,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1A1A1A),
+                        ),
+                      ),
+                    ),
+                    if (!item.isActive)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF3C7),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Text(
+                          'Nonaktif',
+                          style:
+                              TextStyle(fontSize: 10, color: Color(0xFF92400E)),
+                        ),
+                      ),
+                  ],
+                ),
+                if (item.groupName.isNotEmpty)
+                  Text(
+                    item.groupName,
+                    style:
+                        const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                  ),
+                if (item.notes.isNotEmpty)
+                  Text(
+                    item.notes,
+                    style:
+                        const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                  ),
+              ],
+            ),
+          ),
+          // ── Action buttons ──────────────────────────────────────────────
+          Tooltip(
+            message: 'Edit',
+            child: InkWell(
+              onTap: onEdit,
+              borderRadius: BorderRadius.circular(6),
+              child: const Padding(
+                padding: EdgeInsets.all(6),
+                child: Icon(Icons.edit_outlined,
+                    size: 16, color: Color(0xFF0EA5E9)),
+              ),
+            ),
+          ),
+          Tooltip(
+            message: 'Hapus',
+            child: InkWell(
+              onTap: onDelete,
+              borderRadius: BorderRadius.circular(6),
+              child: const Padding(
+                padding: EdgeInsets.all(6),
+                child: Icon(Icons.delete_outline,
+                    size: 16, color: Color(0xFFDC2626)),
+              ),
+            ),
+          ),
+          const SizedBox(width: 2),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Amil Dialog (StatefulWidget — owns controllers, disposes them via lifecycle)
+// ─────────────────────────────────────────────────────────────────────────────
+class _AmilDialog extends StatefulWidget {
+  const _AmilDialog({
+    required this.yearId,
+    required this.primaryButtonStyle,
+    this.initial,
+  });
+
+  final _AmilItem? initial;
+  final String yearId;
+  final ButtonStyle primaryButtonStyle;
+
+  @override
+  State<_AmilDialog> createState() => _AmilDialogState();
+}
+
+class _AmilDialogState extends State<_AmilDialog> {
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _notesCtrl;
+  late bool _isActive;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameCtrl = TextEditingController(text: widget.initial?.name ?? '');
+    _notesCtrl = TextEditingController(text: widget.initial?.notes ?? '');
+    _isActive = widget.initial?.isActive ?? true;
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _notesCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEdit = widget.initial != null;
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      title: Text(isEdit ? 'Edit Amil' : 'Tambah Amil'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _nameCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Nama',
+                hintText: 'Nama amil',
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _notesCtrl,
+              decoration: const InputDecoration(labelText: 'Notes'),
+            ),
+            const SizedBox(height: 4),
+            SwitchListTile.adaptive(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Aktif', style: TextStyle(fontSize: 13)),
+              value: _isActive,
+              activeColor: const Color(0xFF066046),
+              onChanged: (v) => setState(() => _isActive = v),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Batal'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            final name = _nameCtrl.text.trim();
+            if (name.isEmpty) return;
+            Navigator.pop(context, {
+              'year_id': widget.yearId,
+              'name': name,
+              'notes': _notesCtrl.text.trim(),
+              'is_active': _isActive,
+            });
+          },
+          style: widget.primaryButtonStyle,
+          child: Text(isEdit ? 'Simpan' : 'Tambah'),
+        ),
+      ],
+    );
   }
 }
