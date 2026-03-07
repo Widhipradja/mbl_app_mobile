@@ -57,7 +57,12 @@ class _ZakatShellScreenState extends State<ZakatShellScreen> {
       builder: (context, provider, _) {
         final yearLabel = provider.selectedYear?.label ?? 'Zakat Fitrah';
 
-        return Scaffold(
+        return PopScope(
+          canPop: false,
+          onPopInvokedWithResult: (didPop, _) {
+            if (!didPop) context.go('/dashboard');
+          },
+          child: Scaffold(
           backgroundColor: const Color(0xFFF4F7F6),
           appBar: AppBar(
             backgroundColor: Colors.white,
@@ -163,6 +168,7 @@ class _ZakatShellScreenState extends State<ZakatShellScreen> {
                 label: 'Config',
               ),
             ],
+          ),
           ),
         );
       },

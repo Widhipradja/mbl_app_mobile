@@ -318,15 +318,20 @@ class _AddMuzakkiScreenState extends State<AddMuzakkiScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF4F7F6),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Color(0xFF1A1A1A)),
-          onPressed: _closeAfterSubmit,
-        ),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _closeAfterSubmit();
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF4F7F6),
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Color(0xFF1A1A1A)),
+            onPressed: _closeAfterSubmit,
+          ),
         title: Text(
           _isJoiningFamily ? 'Tambah Anggota Keluarga' : 'Tambah Muzakki',
           style: const TextStyle(
@@ -958,6 +963,7 @@ class _AddMuzakkiScreenState extends State<AddMuzakkiScreen> {
           ),
         ),
       ),
+    ),
     );
   }
 

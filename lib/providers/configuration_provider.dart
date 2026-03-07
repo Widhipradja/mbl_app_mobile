@@ -112,4 +112,14 @@ class ConfigurationProvider extends ChangeNotifier {
       return false;
     }
   }
+
+  /// Reset all cached configuration data. Call this on logout or when
+  /// switching users so stale data is not shown to the new user.
+  void reset() {
+    _configurations.clear();
+    isLoading = false;
+    isSaving = false;
+    errorMessage = null;
+    notifyListeners();
+  }
 }

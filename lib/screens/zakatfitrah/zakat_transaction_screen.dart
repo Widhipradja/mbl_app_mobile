@@ -399,15 +399,20 @@ class _ZakatTransactionScreenState extends State<ZakatTransactionScreen> {
   Widget build(BuildContext context) {
     final members = _familyMembers;
 
-    return Scaffold(
-      backgroundColor: _bg,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Color(0xFF1A1A1A)),
-          onPressed: () => context.go('/zakat-fitrah'),
-        ),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) context.go('/zakat-fitrah');
+      },
+      child: Scaffold(
+        backgroundColor: _bg,
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Color(0xFF1A1A1A)),
+            onPressed: () => context.go('/zakat-fitrah'),
+          ),
         title: const Text(
           'Transaksi Zakat',
           style: TextStyle(
@@ -677,6 +682,7 @@ class _ZakatTransactionScreenState extends State<ZakatTransactionScreen> {
           ],
         ),
       ),
+    ),
     );
   }
 

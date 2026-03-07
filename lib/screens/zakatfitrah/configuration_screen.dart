@@ -1853,6 +1853,7 @@ class _AmilDialog extends StatefulWidget {
 
 class _AmilDialogState extends State<_AmilDialog> {
   late final TextEditingController _nameCtrl;
+  // late final TextEditingController _groupNameCtrl;
   late final TextEditingController _notesCtrl;
   late bool _isActive;
 
@@ -1860,6 +1861,7 @@ class _AmilDialogState extends State<_AmilDialog> {
   void initState() {
     super.initState();
     _nameCtrl = TextEditingController(text: widget.initial?.name ?? '');
+    // _groupNameCtrl = TextEditingController(text: widget.initial?.groupName ?? '');
     _notesCtrl = TextEditingController(text: widget.initial?.notes ?? '');
     _isActive = widget.initial?.isActive ?? true;
   }
@@ -1867,6 +1869,7 @@ class _AmilDialogState extends State<_AmilDialog> {
   @override
   void dispose() {
     _nameCtrl.dispose();
+    // _groupNameCtrl.dispose();
     _notesCtrl.dispose();
     super.dispose();
   }
@@ -1888,6 +1891,14 @@ class _AmilDialogState extends State<_AmilDialog> {
                 hintText: 'Nama amil',
               ),
             ),
+            // const SizedBox(height: 10),
+            // TextField(
+            //   controller: _groupNameCtrl,
+            //   decoration: const InputDecoration(
+            //     labelText: 'Group Name',
+            //     hintText: 'Nama group',
+            //   ),
+            // ),
             const SizedBox(height: 10),
             TextField(
               controller: _notesCtrl,
@@ -1917,8 +1928,9 @@ class _AmilDialogState extends State<_AmilDialog> {
             Navigator.pop(context, {
               'year_id': widget.yearId,
               'name': name,
-              'notes': _notesCtrl.text.trim(),
+              // 'group_name': _groupNameCtrl.text.trim(),
               'is_active': _isActive,
+              'notes': _notesCtrl.text.trim(),
             });
           },
           style: widget.primaryButtonStyle,

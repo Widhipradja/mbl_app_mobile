@@ -358,12 +358,16 @@ class ApiService {
   Future<Response> createMuzakkiBulk({
     String? yearId,
     required List<Map<String, dynamic>> muzakkis,
+    String createdBy = '',
+    String updatedBy = '',
   }) async {
     return await _dio.post(
       '/api/zakat-fitrah/muzakki/bulk',
       data: {
         if (yearId != null && yearId.isNotEmpty) 'year_id': yearId,
         'muzakkis': muzakkis,
+        if (createdBy.isNotEmpty) 'created_by': createdBy,
+        if (updatedBy.isNotEmpty) 'updated_by': updatedBy,
       },
     );
   }
@@ -777,6 +781,16 @@ class ApiService {
   /// Endpoint: `DELETE /api/zakat-fitrah/amil/{id}`
   Future<Response> deleteZakatAmil(String id) async {
     return await _dio.delete('/api/zakat-fitrah/amil/$id');
+  }
+
+  /// Fetch amil KPI for a given year.
+  ///
+  /// Endpoint: `GET /api/zakat-fitrah/amil/kpi?year_id={yearId}`
+  Future<Response> getZakatAmilKpi({required String yearId}) async {
+    return await _dio.get(
+      '/api/zakat-fitrah/amil/kpi',
+      queryParameters: {'year_id': yearId},
+    );
   }
 
   // ── Configuration endpoints ──────────────────────────────────────────────

@@ -77,6 +77,11 @@ class _MyAppState extends State<MyApp> {
     if (ApiService.tokenExpiredNotifier.value) {
       // Reset the notifier
       ApiService.tokenExpiredNotifier.value = false;
+      // Clear cached provider data so next login starts fresh
+      try {
+        context.read<ZakatProvider>().reset();
+        context.read<ConfigurationProvider>().reset();
+      } catch (_) {}
       // Navigate to login
       AppRouter.router.go('/login');
     }

@@ -1093,15 +1093,20 @@ class ZakatDashboardScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _bgColor,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Color(0xFF1A1A1A)),
-          onPressed: () => context.go('/dashboard'),
-        ),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) context.go('/dashboard');
+      },
+      child: Scaffold(
+        backgroundColor: _bgColor,
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Color(0xFF1A1A1A)),
+            onPressed: () => context.go('/dashboard'),
+          ),
         title: const Text(
           'Zakat Fitrah 1447H',
           style: TextStyle(
@@ -1231,6 +1236,7 @@ class ZakatDashboardScreen extends StatelessWidget {
           );
         },
       ),
+    ),
     );
   }
 

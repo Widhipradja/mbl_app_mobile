@@ -41,6 +41,11 @@ class _LaporanBodyState extends State<LaporanBody> {
 
   List<_MustahiqRecapRow> _mustahiqRecapRows = const [];
 
+  // Amil KPI state
+  bool _isLoadingAmilKpi = false;
+  String? _amilKpiError;
+  _AmilKpiData? _amilKpiData;
+
   @override
   void dispose() {
     _notesController.dispose();
@@ -284,6 +289,57 @@ class _LaporanBodyState extends State<LaporanBody> {
   }
 
   String _normalizeAsnafType(String input) => input.trim().toLowerCase();
+
+  Future<void> _loadAmilKpi(String yearId) async {
+    if (yearId.isEmpty) return;
+    setState(() {
+      _isLoadingAmilKpi = true;
+      _amilKpiError = null;
+    });
+    try {
+      final response = await _api.getZakatAmilKpi(yearId: yearId);
+      final raw = response.data;
+      final data = raw is Map<String, dynamic> ? raw['data'] : null;
+      if (data == null || data is! Map<String, dynamic>) {
+        if (!mounted) return;
+        setState(() => _amilKpiData = null);
+        return;
+      }
+      final amilsRaw = data['amils'];
+      final amils = (amilsRaw is List)
+          ? amilsRaw
+              .whereType<Map<String, dynamic>>()
+              .map((a) => _AmilKpiEntry(
+                    amilName: a['amil_name']?.toString() ?? '',
+                    recordedCount:
+                        int.tryParse(a['recorded_count']?.toString() ?? '') ?? 0,
+                    serahTerimaCount:
+                        int.tryParse(a['serah_terima_count']?.toString() ?? '') ?? 0,
+                    totalSouls:
+                        int.tryParse(a['total_souls']?.toString() ?? '') ?? 0,
+                    totalRiceQty:
+                        double.tryParse(a['total_rice_qty']?.toString() ?? '') ?? 0,
+                    totalMoney:
+                        double.tryParse(a['total_money']?.toString() ?? '') ?? 0,
+                  ))
+              .toList()
+          : <_AmilKpiEntry>[];
+
+      if (!mounted) return;
+      setState(() {
+        _amilKpiData = _AmilKpiData(
+          yearLabel: data['year_label']?.toString() ?? '',
+          groupName: data['group_name']?.toString() ?? '',
+          amils: amils,
+        );
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _amilKpiError = 'Gagal memuat data KPI Amil.');
+    } finally {
+      if (mounted) setState(() => _isLoadingAmilKpi = false);
+    }
+  }
 
   /// Fetches saved adjustments from the API keyed by distribution_id.
   Future<void> _loadAdjustments([String? yearId]) async {
@@ -615,6 +671,7 @@ class _LaporanBodyState extends State<LaporanBody> {
             if (!mounted) return;
             _loadDistributionConfig(selectedYearId);
             _loadAdjustments(selectedYearId);
+            _loadAmilKpi(selectedYearId);
           });
         }
 
@@ -698,6 +755,7 @@ class _LaporanBodyState extends State<LaporanBody> {
             provider.fetchMuzakki(),
             provider.fetchLaporanSummary(),
             if (selectedYearId.isNotEmpty) _loadMustahiqRecap(selectedYearId),
+            if (selectedYearId.isNotEmpty) _loadAmilKpi(selectedYearId),
             _loadDistributionConfig(yr),
             _loadAdjustments(yr),
           ]);
@@ -1202,6 +1260,11 @@ class _LaporanBodyState extends State<LaporanBody> {
 
                 const SizedBox(height: 28),
 
+                // ── Amil KPI ────────────────────────────────────────
+                _buildAmilKpiCard(),
+
+                const SizedBox(height: 16),
+
                 // ── Footer note ──────────────────────────
                 Container(
                   width: double.infinity,
@@ -1541,6 +1604,246 @@ class _LaporanBodyState extends State<LaporanBody> {
       ),
     );
   }
+
+  Widget _buildAmilKpiCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'KPI Amil',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF1A1A1A),
+                  ),
+                ),
+              ),
+              if (_isLoadingAmilKpi)
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: _green,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          if (_amilKpiData != null && _amilKpiData!.groupName.isNotEmpty)
+            Text(
+              _amilKpiData!.groupName,
+              style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+            ),
+          const SizedBox(height: 10),
+          if (_isLoadingAmilKpi && _amilKpiData == null)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: CircularProgressIndicator(color: _green),
+              ),
+            )
+          else if (_amilKpiError != null)
+            Text(
+              _amilKpiError!,
+              style: const TextStyle(fontSize: 12, color: Color(0xFFDC2626)),
+            )
+          else if (_amilKpiData == null || _amilKpiData!.amils.isEmpty)
+            const Text(
+              'Belum ada data KPI Amil.',
+              style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+            )
+          else
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Table(
+                defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+                columnWidths: const {
+                  0: FixedColumnWidth(130),
+                  1: FixedColumnWidth(72),
+                  2: FixedColumnWidth(72),
+                  3: FixedColumnWidth(72),
+                  4: FixedColumnWidth(72),
+                  5: FixedColumnWidth(110),
+                },
+                border: TableBorder.all(
+                  color: const Color(0xFFE2E8F0),
+                  width: 0.8,
+                ),
+                children: [
+                  // Header row
+                  TableRow(
+                    decoration:
+                        const BoxDecoration(color: Color(0xFFF8FAFC)),
+                    children: [
+                      'Amil',
+                      'Dicatat',
+                      'Serah\nTerima',
+                      'Jiwa',
+                      'So',
+                      'Total Uang',
+                    ]
+                        .map(
+                          (h) => Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 6),
+                            child: Text(
+                              h,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF64748B),
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                  // Data rows
+                  ..._amilKpiData!.amils.map((a) {
+                    const cellStyle = TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF1A1A1A),
+                    );
+                    return TableRow(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 6),
+                          child: Text(a.amilName, style: cellStyle),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: Text(
+                            '${a.recordedCount}',
+                            textAlign: TextAlign.center,
+                            style: cellStyle,
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: Text(
+                            '${a.serahTerimaCount}',
+                            textAlign: TextAlign.center,
+                            style: cellStyle,
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: Text(
+                            '${a.totalSouls}',
+                            textAlign: TextAlign.center,
+                            style: cellStyle,
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: Text(
+                            a.totalRiceQty % 1 == 0
+                                ? '${a.totalRiceQty.toInt()}'
+                                : a.totalRiceQty.toStringAsFixed(2),
+                            textAlign: TextAlign.center,
+                            style: cellStyle,
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 6),
+                          child: Text(
+                            _formatRupiahFull(a.totalMoney),
+                            textAlign: TextAlign.right,
+                            style: cellStyle,
+                          ),
+                        ),
+                      ],
+                    );
+                  }),
+                  // Totals row
+                  if (_amilKpiData!.amils.length > 1)
+                    TableRow(
+                      decoration:
+                          const BoxDecoration(color: Color(0xFFF0FDF4)),
+                      children: [
+                        const Padding(
+                          padding: EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 6),
+                          child: Text(
+                            'Total',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF1A1A1A),
+                            ),
+                          ),
+                        ),
+                        ...(() {
+                          final totRec = _amilKpiData!.amils
+                              .fold(0, (s, a) => s + a.recordedCount);
+                          final totSt = _amilKpiData!.amils
+                              .fold(0, (s, a) => s + a.serahTerimaCount);
+                          final totSouls = _amilKpiData!.amils
+                              .fold(0, (s, a) => s + a.totalSouls);
+                          final totRice = _amilKpiData!.amils
+                              .fold(0.0, (s, a) => s + a.totalRiceQty);
+                          final totMoney = _amilKpiData!.amils
+                              .fold(0.0, (s, a) => s + a.totalMoney);
+                          const ts = TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          );
+                          return [totRec, totSt, totSouls].map(
+                            (v) => Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 6),
+                              child: Text(
+                                '$v',
+                                textAlign: TextAlign.center,
+                                style: ts,
+                              ),
+                            ),
+                          ).toList()
+                            ..add(Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 6),
+                              child: Text(
+                                totRice % 1 == 0
+                                    ? '${totRice.toInt()}'
+                                    : totRice.toStringAsFixed(2),
+                                textAlign: TextAlign.center,
+                                style: ts,
+                              ),
+                            ))
+                            ..add(Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 6),
+                              child: Text(
+                                _formatRupiahFull(totMoney),
+                                textAlign: TextAlign.right,
+                                style: ts,
+                              ),
+                            ));
+                        })(),
+                      ],
+                    ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }
 
 class _AmilChildConfig {
@@ -1575,4 +1878,35 @@ class _MustahiqRecapRow {
         .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
         .join(' ');
   }
+}
+
+// ───────────────────────────────────────────────────────────────────────────────
+class _AmilKpiData {
+  const _AmilKpiData({
+    required this.yearLabel,
+    required this.groupName,
+    required this.amils,
+  });
+
+  final String yearLabel;
+  final String groupName;
+  final List<_AmilKpiEntry> amils;
+}
+
+class _AmilKpiEntry {
+  const _AmilKpiEntry({
+    required this.amilName,
+    required this.recordedCount,
+    required this.serahTerimaCount,
+    required this.totalSouls,
+    required this.totalRiceQty,
+    required this.totalMoney,
+  });
+
+  final String amilName;
+  final int recordedCount;
+  final int serahTerimaCount;
+  final int totalSouls;
+  final double totalRiceQty;
+  final double totalMoney;
 }
