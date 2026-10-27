@@ -36,7 +36,6 @@ class _AddMuzakkiScreenState extends State<AddMuzakkiScreen> {
   final _firstNameController = TextEditingController();
   final _lastNameController = TextEditingController();
   final _surnameController = TextEditingController();
-  final _groupNameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _addressController = TextEditingController();
 
@@ -86,7 +85,6 @@ class _AddMuzakkiScreenState extends State<AddMuzakkiScreen> {
       _firstNameController.text = m.firstName;
       _lastNameController.text = m.lastName;
       _surnameController.text = m.surname;
-      _groupNameController.text = m.groupName;
       _phoneController.text = m.phone;
       _addressController.text = m.address;
       _familyIdController.text = m.familyId;
@@ -114,7 +112,6 @@ class _AddMuzakkiScreenState extends State<AddMuzakkiScreen> {
     _firstNameController.dispose();
     _lastNameController.dispose();
     _surnameController.dispose();
-    _groupNameController.dispose();
     _phoneController.dispose();
     _addressController.dispose();
     _familyIdController.dispose();
@@ -156,8 +153,7 @@ class _AddMuzakkiScreenState extends State<AddMuzakkiScreen> {
           'phone': _phoneController.text.trim(),
           'group_name': _isInternal
               ? (widget.initialMuzakki?.groupName ?? '')
-              : (_selectedExternalGroup?.value ??
-                  _groupNameController.text.trim()),
+              : (_selectedExternalGroup?.value ?? ''),
           'afiliasi': _isAfiliasi ? (_selectedAfiliasi?.value ?? '') : '',
         });
       } else {
@@ -173,7 +169,7 @@ class _AddMuzakkiScreenState extends State<AddMuzakkiScreen> {
           address: _addressController.text.trim(),
           phone: _phoneController.text.trim(),
           groupName: _isInternal
-              ? (_isJoiningFamily ? '' : _groupNameController.text.trim())
+              ? ''
               : (_selectedExternalGroup?.value ?? ''),
           afiliasi: _isAfiliasi ? (_selectedAfiliasi?.value ?? '') : '',
           yearId: yearId,
@@ -220,11 +216,7 @@ class _AddMuzakkiScreenState extends State<AddMuzakkiScreen> {
   }
 
   void _closeAfterSubmit() {
-    if (Navigator.of(context).canPop()) {
-      context.pop();
-    } else {
-      context.go('/zakat-fitrah');
-    }
+    context.go('/zakat-fitrah/muzakki');
   }
 
   // ── Fetch external groups from config ─────────────────────────────────────
@@ -239,7 +231,7 @@ class _AddMuzakkiScreenState extends State<AddMuzakkiScreen> {
       final list = (map['data'] is List
               ? map['data'] as List
               : raw is List
-                  ? raw as List
+                  ? raw
                   : <dynamic>[])
           .cast<Map<String, dynamic>>();
 
@@ -284,7 +276,7 @@ class _AddMuzakkiScreenState extends State<AddMuzakkiScreen> {
       final list = (map['data'] is List
               ? map['data'] as List
               : raw is List
-                  ? raw as List
+                  ? raw
                   : <dynamic>[])
           .cast<Map<String, dynamic>>();
       final groups = list
@@ -409,19 +401,7 @@ class _AddMuzakkiScreenState extends State<AddMuzakkiScreen> {
                 hint: 'Contoh: Aziz (dipakai utk pengelompokan keluarga)',
                 icon: Icons.family_restroom_outlined,
               ),
-              if (!_isJoiningFamily && widget.initialMuzakki == null) ...[
-                const SizedBox(height: 14),
-                _label('Group Name *'),
-                const SizedBox(height: 6),
-                _textField(
-                  controller: _groupNameController,
-                  hint: 'Contoh: MBL 1',
-                  icon: Icons.group_work_outlined,
-                  validator: (v) => (v == null || v.trim().isEmpty)
-                      ? 'Group name wajib diisi'
-                      : null,
-                ),
-              ],
+
               const SizedBox(height: 14),
 
               // Sex toggle

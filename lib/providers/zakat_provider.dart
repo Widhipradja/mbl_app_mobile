@@ -328,6 +328,29 @@ class ZakatProvider extends ChangeNotifier {
     }
   }
 
+  /// Verify / unverify a muzakki.
+  /// Calls `PATCH /api/zakat-fitrah/muzakki/{id}/verify`.
+  Future<bool> verifyMuzakki(String id, {required bool status}) async {
+    final index = _muzakkiList.indexWhere((m) => m.id == id);
+    if (index == -1) return false;
+
+    final previous = _muzakkiList[index];
+    _muzakkiList[index] = previous.copyWith(isVerified: status);
+    notifyListeners();
+
+    try {
+      final api = ApiService();
+      await api.verifyMuzakki(id, status: status);
+      return true;
+    } catch (e) {
+      _muzakkiList[index] = previous;
+      errorMessage = 'Gagal memperbarui status verifikasi muzakki.';
+      notifyListeners();
+      debugPrint('ZakatProvider.verifyMuzakki error: $e');
+      return false;
+    }
+  }
+
   /// Reset all cached zakat data. Call this on logout or when switching users
   /// so stale data from a previous group_name is not shown to the new user.
   void reset() {

@@ -41,6 +41,9 @@ class Muzakki {
   /// Driven by the `is_akad_done` flag on the muzakki record.
   final bool isAkadDone;
 
+  /// Verification status for administrative validation.
+  final bool isVerified;
+
   // ── Optional zakat fields (future API) ───────────────────────────────────
   final PaymentType? paymentType;
   final double amountSo;
@@ -68,6 +71,7 @@ class Muzakki {
     this.isPaid = false,
     this.amilName = '',
     this.isAkadDone = false,
+    this.isVerified = false,
     this.paymentType,
     this.amountSo = 0,
     this.amountRp = 0,
@@ -129,6 +133,10 @@ class Muzakki {
         isInternal: json['is_internal'] as bool? ?? true,
         isPaid: json['is_paid'] as bool? ?? false,
         isAkadDone: json['is_akad_done'] as bool? ?? false,
+        isVerified: json['is_verified'] as bool? ??
+            json['verified'] as bool? ??
+            json['verification_status'] as bool? ??
+            false,
         amilName: () {
           final tx = json['transaction'] as Map<String, dynamic>?;
           return tx?['amil_name'] as String? ??
@@ -200,10 +208,67 @@ class Muzakki {
         'is_internal': isInternal,
         'is_paid': isPaid,
         'is_akad_done': isAkadDone,
+        'is_verified': isVerified,
         'amil_name': amilName,
         if (paymentType != null) 'zakat_type': paymentType!.name,
         'amount_so': amountSo,
         'amount_rp': amountRp,
         'jiwa_count': numberOfPeople,
       };
+
+  Muzakki copyWith({
+    String? id,
+    String? memberId,
+    String? familyId,
+    String? yearId,
+    ZakatYear? zakatYear,
+    String? firstName,
+    String? lastName,
+    String? surname,
+    String? sex,
+    String? relationship,
+    bool? isHeadOfFamily,
+    String? address,
+    String? phone,
+    String? groupName,
+    String? afiliasi,
+    DateTime? createdAt,
+    bool? isInternal,
+    bool? isPaid,
+    String? amilName,
+    bool? isAkadDone,
+    bool? isVerified,
+    PaymentType? paymentType,
+    double? amountSo,
+    double? amountRp,
+    int? numberOfPeople,
+  }) {
+    return Muzakki(
+      id: id ?? this.id,
+      memberId: memberId ?? this.memberId,
+      familyId: familyId ?? this.familyId,
+      yearId: yearId ?? this.yearId,
+      zakatYear: zakatYear ?? this.zakatYear,
+      firstName: firstName ?? this.firstName,
+      lastName: lastName ?? this.lastName,
+      surname: surname ?? this.surname,
+      sex: sex ?? this.sex,
+      relationship: relationship ?? this.relationship,
+      isHeadOfFamily: isHeadOfFamily ?? this.isHeadOfFamily,
+      address: address ?? this.address,
+      phone: phone ?? this.phone,
+      groupName: groupName ?? this.groupName,
+      afiliasi: afiliasi ?? this.afiliasi,
+      createdAt: createdAt ?? this.createdAt,
+      isInternal: isInternal ?? this.isInternal,
+      isPaid: isPaid ?? this.isPaid,
+      amilName: amilName ?? this.amilName,
+      isAkadDone: isAkadDone ?? this.isAkadDone,
+      isVerified: isVerified ?? this.isVerified,
+      paymentType: paymentType ?? this.paymentType,
+      amountSo: amountSo ?? this.amountSo,
+      amountRp: amountRp ?? this.amountRp,
+      numberOfPeople: numberOfPeople ?? this.numberOfPeople,
+    );
+  }
 }

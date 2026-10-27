@@ -610,12 +610,12 @@ class _ZakatTransactionScreenState extends State<ZakatTransactionScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
+                    const Row(
                       children: [
-                        const Icon(Icons.format_quote_rounded,
+                        Icon(Icons.format_quote_rounded,
                             size: 16, color: _green),
-                        const SizedBox(width: 6),
-                        const Text(
+                        SizedBox(width: 6),
+                        Text(
                           'Ikrar Zakat',
                           style: TextStyle(
                             fontSize: 12,
@@ -1171,14 +1171,14 @@ class _ZakatTransactionScreenState extends State<ZakatTransactionScreen> {
 
           // ── Warning: amil belum dipilih ──────────────────────────────────
           if (_serahTerimaMode != _SerahTerimaMode.none && !hasAmil)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(14, 0, 14, 12),
               child: Row(
                 children: [
-                  const Icon(Icons.info_outline,
+                  Icon(Icons.info_outline,
                       size: 14, color: Color(0xFFD97706)),
-                  const SizedBox(width: 6),
-                  const Expanded(
+                  SizedBox(width: 6),
+                  Expanded(
                     child: Text(
                       'Pilih nama amil di section "Pilih Amil" di atas agar tercatat.',
                       style: TextStyle(fontSize: 11, color: Color(0xFFD97706)),

@@ -394,6 +394,29 @@ class ApiService {
     return await _dio.patch('/api/zakat-fitrah/muzakki/$id/family-head');
   }
 
+  /// Verify or unverify a muzakki record.
+  ///
+  /// Endpoint: `PATCH /api/zakat-fitrah/muzakki/{id}/verify`
+  /// Payload: `{ status: bool }`
+  Future<Response> verifyMuzakki(String id, {required bool status}) async {
+    return await _dio.patch(
+      '/api/zakat-fitrah/muzakki/$id/verify',
+      data: {'status': status},
+    );
+  }
+
+  /// Fetch verification recap for muzakki by year.
+  ///
+  /// Endpoint: `GET /api/zakat-fitrah/muzakki/verification-recap?year_id={yearId}`
+  Future<Response> getZakatMuzakkiVerificationRecap({
+    required String yearId,
+  }) async {
+    return await _dio.get(
+      '/api/zakat-fitrah/muzakki/verification-recap',
+      queryParameters: {'year_id': yearId},
+    );
+  }
+
   /// Fetch recent zakat payment transactions.
   ///
   /// Endpoint: `GET /api/zakat-fitrah/transaction/recent?limit={limit}`
@@ -832,5 +855,25 @@ class ApiService {
 
   Future<Response> deleteConfiguration(String oid) async {
     return await _dio.delete('/api/zakat-fitrah/configurations/$oid');
+  }
+
+  // ── Zakat Fitrah History (closing) endpoints ─────────────────────────────
+
+  /// Finalize / close a zakat year — creates a history snapshot.
+  /// Endpoint: `POST /api/zakat-fitrah/history`
+  Future<Response> createZakatHistory(Map<String, dynamic> data) async {
+    return await _dio.post('/api/zakat-fitrah/history', data: data);
+  }
+
+  /// Fetch all history snapshots.
+  /// Endpoint: `GET /api/zakat-fitrah/history`
+  Future<Response> getZakatHistory() async {
+    return await _dio.get('/api/zakat-fitrah/history');
+  }
+
+  /// Fetch a single history snapshot by year ID.
+  /// Endpoint: `GET /api/zakat-fitrah/history/:year_id`
+  Future<Response> getZakatHistoryByYearId(String yearId) async {
+    return await _dio.get('/api/zakat-fitrah/history/$yearId');
   }
 }
