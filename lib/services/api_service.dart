@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 // ...existing imports...
 import 'package:dio/dio.dart';
 import 'storage_service.dart';
@@ -133,6 +135,176 @@ class ApiService {
     return await _dio.get('/api/lookups/type/$type');
   }
 
+  /// One call for the home cards: next event, jimpitan, fundraising and
+  /// shodaqoh. Each section is `{data}` or `{error}` and fails on its own.
+  ///
+  /// Endpoint: `GET /api/m/v1/home`
+  Future<Response> getMobileHome() async {
+    return await _dio.get('/api/m/v1/home');
+  }
+
+  /// Mobile feature flags (`MODULE_<NAME>=false` hides a module) and
+  /// `ORG_NAME`. Endpoint: `GET /api/m/v1/config`
+  Future<Response> getMobileConfig() async {
+    return await _dio.get('/api/m/v1/config');
+  }
+
+  /// Endpoint: `GET /api/m/v1/events?month=YYYY-MM`
+  Future<Response> getMobileEvents(String month) async {
+    return await _dio
+        .get('/api/m/v1/events', queryParameters: {'month': month});
+  }
+
+  /// Endpoint: `GET /api/m/v1/jimpitan?month=YYYY-MM`
+  Future<Response> getMobileJimpitan(String month) async {
+    return await _dio
+        .get('/api/m/v1/jimpitan', queryParameters: {'month': month});
+  }
+
+  /// Endpoint: `GET /api/m/v1/jimpitan/transactions?month=YYYY-MM`
+  Future<Response> getMobileJimpitanTransactions(String month) async {
+    return await _dio.get('/api/m/v1/jimpitan/transactions',
+        queryParameters: {'month': month});
+  }
+
+  // Shodaqoh service, through the gateway. The member is taken from the login
+  // token: no member id in the path or query.
+
+  /// Tabungan Kurban of the member's family (head of family) or of themself.
+  /// Endpoint: `GET /api/m/v1/shodaqoh/me/qurban-savings`
+  Future<Response> getQurbanSavings() async {
+    return await _dio.get('/api/m/v1/shodaqoh/me/qurban-savings');
+  }
+
+  /// Buku Amal Jariyah of one month ([period] is `YYYY-MM`).
+  /// Endpoint: `GET /api/m/v1/shodaqoh/me/family-report?period=YYYY-MM`
+  Future<Response> getFamilyReport(String period) async {
+    return await _dio.get('/api/m/v1/shodaqoh/me/family-report',
+        queryParameters: {'period': period});
+  }
+
+  /// Buku Amal Jariyah of a whole year, one report per month.
+  /// Endpoint: `GET /api/m/v1/shodaqoh/me/family-report-yearly?year=YYYY`
+  Future<Response> getFamilyReportYearly(int year) async {
+    return await _dio.get('/api/m/v1/shodaqoh/me/family-report-yearly',
+        queryParameters: {'year': year});
+  }
+
+  /// Months the member has not deposited yet.
+  /// Endpoint: `GET /api/m/v1/shodaqoh/me/pending-periods`
+  Future<Response> getPendingPeriods() async {
+    return await _dio.get('/api/m/v1/shodaqoh/me/pending-periods');
+  }
+
+  /// The shodaqoh items that can be deposited for [month] (`YYYY-MM`).
+  /// Endpoint: `GET /api/m/v1/shodaqoh/me/collection?month=YYYY-MM`
+  Future<Response> getCollection(String month) async {
+    return await _dio.get('/api/m/v1/shodaqoh/me/collection',
+        queryParameters: {'month': month});
+  }
+
+  /// Self-service deposit, `multipart/form-data`: field `payload` is the JSON
+  /// `{"entries": [...]}` ([entries] each carry `collected_for_period`
+  /// (`YYYY-MM`), `items` / `additional_items`, optional `notes` and
+  /// `collected_at`) and `proof` is the required transfer proof (JPEG, PNG or
+  /// PDF, at most 5 MB). The gateway uploads the proof and the server forces
+  /// `status: "pending"` (waits for the treasurer, KU); if shodaqoh refuses,
+  /// the proof is removed again. No Content-Type is forced: Dio builds it.
+  /// Endpoint: `POST /api/m/v1/shodaqoh/me/collection?month=YYYY-MM`
+  Future<Response> submitCollection(
+    String month,
+    List<Map<String, dynamic>> entries, {
+    required List<int> proofBytes,
+    required String proofName,
+  }) async {
+    return await _dio.post(
+      '/api/m/v1/shodaqoh/me/collection',
+      queryParameters: {'month': month},
+      data: FormData.fromMap({
+        'payload': jsonEncode({'entries': entries}),
+        'proof': MultipartFile.fromBytes(proofBytes, filename: proofName),
+      }),
+      options: Options(
+        sendTimeout: const Duration(seconds: 90),
+        receiveTimeout: const Duration(seconds: 90),
+      ),
+    );
+  }
+
+  /// Target and amount collected for one item (`K-07` is kurban).
+  /// Endpoint: `GET /api/m/v1/shodaqoh/me/family-collection-summary`
+  Future<Response> getFamilyCollectionSummary(String itemCode) async {
+    return await _dio.get('/api/m/v1/shodaqoh/me/family-collection-summary',
+        queryParameters: {'item_code': itemCode});
+  }
+
+  /// Endpoint: `GET /api/m/v1/fundraising`
+  Future<Response> getMobileFundraising() async {
+    return await _dio.get('/api/m/v1/fundraising');
+  }
+
+  /// The request that donates to a fundraising campaign, apart from the call
+  /// itself so it can be checked without a server.
+  ///
+  /// Four form fields only: the donor is taken from the login token, and a
+  /// `member_id` or `donor_name` from the client would be ignored. No
+  /// Content-Type is forced: Dio builds the multipart one, boundary included.
+  static ({String path, FormData data, Options options}) donationRequest({
+    required String campaignId,
+    required String amount,
+    required String paidDate,
+    String notes = '',
+    required List<int> proofBytes,
+    required String proofName,
+    required String idempotencyKey,
+  }) {
+    return (
+      path:
+          '/api/m/v1/fundraising/${Uri.encodeComponent(campaignId)}/donations',
+      data: FormData.fromMap({
+        'amount': amount,
+        'paid_date': paidDate,
+        if (notes.trim().isNotEmpty) 'notes': notes.trim(),
+        'proof': MultipartFile.fromBytes(proofBytes, filename: proofName),
+      }),
+      options: Options(
+        headers: {'Idempotency-Key': idempotencyKey},
+        // An upload of up to 5 MB needs longer than the 10 s of other calls.
+        sendTimeout: const Duration(seconds: 90),
+        receiveTimeout: const Duration(seconds: 90),
+      ),
+    );
+  }
+
+  /// Donate to a fundraising campaign. Answers 202 `{donation_id, status:
+  /// "pending"}`: the donation waits for the treasurer (KU) and is not part of
+  /// the contribution until approved.
+  ///
+  /// [idempotencyKey] is a UUID per donation attempt: the same one for a retry
+  /// of the same donation, a new one for the next.
+  ///
+  /// Endpoint: `POST /api/m/v1/fundraising/{campaignId}/donations`
+  Future<Response> submitFundraisingDonation({
+    required String campaignId,
+    required String amount,
+    required String paidDate,
+    String notes = '',
+    required List<int> proofBytes,
+    required String proofName,
+    required String idempotencyKey,
+  }) async {
+    final r = donationRequest(
+      campaignId: campaignId,
+      amount: amount,
+      paidDate: paidDate,
+      notes: notes,
+      proofBytes: proofBytes,
+      proofName: proofName,
+      idempotencyKey: idempotencyKey,
+    );
+    return await _dio.post(r.path, data: r.data, options: r.options);
+  }
+
   Future<Response> getTransactionSummary() async {
     return await _dio.get('/api/ku/transaction/summary/categories');
   }
@@ -219,41 +391,6 @@ class ApiService {
     return await _dio.get('/user/profile');
   }
 
-  // Attendance endpoints
-  Future<Response> markAttendance(
-    String eventId,
-    String userId,
-    bool isAttending,
-  ) async {
-    return await _dio.put(
-      '/api/events/$eventId/attendance/user/$userId',
-      data: {'is_attending': isAttending},
-    );
-  }
-
-  Future<Response> updateAttendanceRemark(
-    String eventId,
-    String userId,
-    String remark,
-  ) async {
-    return await _dio.put(
-      '/api/events/$eventId/attendance/user/$userId/remark',
-      data: {'remark': remark},
-    );
-  }
-
-  Future<Response> getEventAttendance(String eventId) async {
-    return await _dio.get('/api/events/$eventId/attendance');
-  }
-
-  Future<Response> getAttendanceTrend() async {
-    return await _dio.get('/api/events/attendance/trend/last2months');
-  }
-
-  Future<Response> syncEventAttendees(String eventId) async {
-    return await _dio.post('/api/events/$eventId/syncattendees');
-  }
-
   // Member endpoints
   Future<Response> getMembers() async {
     return await _dio.get('/api/members');
@@ -330,6 +467,7 @@ class ApiService {
     String phone = '',
     String groupName = '',
     String afiliasi = '',
+    String externalId = '',
   }) async {
     return await _dio.post(
       '/api/zakat-fitrah/muzakki',
@@ -347,6 +485,7 @@ class ApiService {
         'group_name': groupName,
         'year_id': yearId,
         if (afiliasi.isNotEmpty) 'afiliasi': afiliasi,
+        if (externalId.isNotEmpty) 'external_id': externalId,
       },
     );
   }
@@ -396,11 +535,17 @@ class ApiService {
 
   /// Fetch recent zakat payment transactions.
   ///
-  /// Endpoint: `GET /api/zakat-fitrah/transaction/recent?limit={limit}`
-  Future<Response> getZakatRecentTransactions({int limit = 10}) async {
+  /// Endpoint: `GET /api/zakat-fitrah/transactions/recent?limit={limit}&year_id={yearId}`
+  Future<Response> getZakatRecentTransactions({
+    int limit = 10,
+    String? yearId,
+  }) async {
     return await _dio.get(
       '/api/zakat-fitrah/transactions/recent',
-      queryParameters: {'limit': limit},
+      queryParameters: {
+        'limit': limit,
+        if (yearId != null && yearId.isNotEmpty) 'year_id': yearId,
+      },
     );
   }
 
@@ -488,6 +633,31 @@ class ApiService {
         if (serahTerima != null) 'serah_terima': serahTerima,
       },
     );
+  }
+
+  // ── Master Eksternal (global) ───────────────────────────────────────────
+
+  /// Endpoint: `GET /api/zakat-fitrah/externals`
+  Future<Response> getZakatExternals() async {
+    return await _dio.get('/api/zakat-fitrah/externals');
+  }
+
+  /// Endpoint: `POST /api/zakat-fitrah/externals`
+  Future<Response> createZakatExternal(Map<String, dynamic> data) async {
+    return await _dio.post('/api/zakat-fitrah/externals', data: data);
+  }
+
+  /// Endpoint: `PUT /api/zakat-fitrah/externals/{id}`
+  Future<Response> updateZakatExternal(
+    String id,
+    Map<String, dynamic> data,
+  ) async {
+    return await _dio.put('/api/zakat-fitrah/externals/$id', data: data);
+  }
+
+  /// Endpoint: `DELETE /api/zakat-fitrah/externals/{id}`
+  Future<Response> deleteZakatExternal(String id) async {
+    return await _dio.delete('/api/zakat-fitrah/externals/$id');
   }
 
   /// Fetch mustahiq list.
@@ -799,8 +969,14 @@ class ApiService {
     return await _dio.get('/api/zakat-fitrah/configurations');
   }
 
-  Future<Response> getConfigurationsByModule(String module) async {
-    return await _dio.get('/api/zakat-fitrah/configurations/module/$module');
+  Future<Response> getConfigurationsByModule(String module,
+      {String? yearId}) async {
+    return await _dio.get(
+      '/api/zakat-fitrah/configurations/module/$module',
+      queryParameters: {
+        if (yearId != null && yearId.isNotEmpty) 'year_id': yearId,
+      },
+    );
   }
 
   Future<Response> getConfigurationByModuleAndCode(
