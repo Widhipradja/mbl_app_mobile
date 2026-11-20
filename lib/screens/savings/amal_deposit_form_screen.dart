@@ -8,26 +8,61 @@ import '../../services/api_service.dart';
 import '../info/donation_form_screen.dart' show DonationProof, ProofKind;
 import 'ledger_widgets.dart' show monthNames;
 
-/// One shodaqoh item of a month that the member can put an amount on.
+enum _Kind {
+  /// A required item of the month (`allocations`): sent in `items`.
+  required,
+
+  /// An item of the additional catalog (`me/items`): sent in
+  /// `additional_items` with its `catalog_item_id`.
+  catalog,
+
+  /// An additional item the member types in: `additional_items` with only a
+  /// name.
+  free,
+}
+
+/// One line of the form: an amount for one item.
 class _DepositItem {
   _DepositItem({
-    required this.code,
-    required this.name,
-    required this.additional,
+    required this.kind,
+    this.code = '',
+    this.name = '',
+    this.group = '',
+    this.sortOrder = 0,
     int? suggested,
-  }) : controller = TextEditingController(
-            text: suggested == null || suggested <= 0 ? '' : '$suggested');
+  })  : controller = TextEditingController(
+            text: suggested == null || suggested <= 0 ? '' : '$suggested'),
+        nameController = TextEditingController();
 
-  /// `item_snapshot_id` from GET collection.
+  final _Kind kind;
+
+  /// `item_snapshot_id` (required item) or the catalog `id`.
   final String code;
   final String name;
 
-  /// Came from `additional_items`, so it is sent back there.
-  final bool additional;
+  /// Free text set by the admin; shown as the heading of its section.
+  final String group;
+  final num sortOrder;
   final TextEditingController controller;
+
+  /// The name of a [_Kind.free] item.
+  final TextEditingController nameController;
 
   int get amount =>
       int.tryParse(controller.text.replaceAll(RegExp(r'\D'), '')) ?? 0;
+
+  /// Position of [group]: Pusat, Daerah, Desa, Kelompok (ignoring case and
+  /// surrounding spaces), any other group last.
+  int get groupRank {
+    const order = ['pusat', 'daerah', 'desa', 'kelompok'];
+    final i = order.indexOf(group.trim().toLowerCase());
+    return i < 0 ? order.length : i;
+  }
+
+  void dispose() {
+    controller.dispose();
+    nameController.dispose();
+  }
 }
 
 /// Self-service deposit of amal jariyah for one month: an amount per item the
@@ -51,6 +86,8 @@ class AmalDepositFormScreen extends StatefulWidget {
 class _AmalDepositFormScreenState extends State<AmalDepositFormScreen> {
   final _notes = TextEditingController();
   final List<_DepositItem> _items = [];
+  final List<_DepositItem> _catalog = [];
+  final List<_DepositItem> _free = [];
   bool _loading = true;
   bool _sending = false;
   String? _loadError;
@@ -71,8 +108,8 @@ class _AmalDepositFormScreenState extends State<AmalDepositFormScreen> {
   @override
   void dispose() {
     _notes.dispose();
-    for (final i in _items) {
-      i.controller.dispose();
+    for (final i in [..._items, ..._catalog, ..._free]) {
+      i.dispose();
     }
     super.dispose();
   }
@@ -85,22 +122,55 @@ class _AmalDepositFormScreenState extends State<AmalDepositFormScreen> {
     return '';
   }
 
-  static List<_DepositItem> _parse(dynamic raw, String key, bool additional) {
+  static num _order(dynamic v) => num.tryParse(v?.toString() ?? '') ?? 0;
+
+  /// Sorted by group (Pusat, Daerah, Desa, Kelompok, others last), then by
+  /// `sort_order`, then as the server sent them (the index breaks ties,
+  /// because List.sort is not stable).
+  static List<_DepositItem> _sorted(List<_DepositItem> list) {
+    final at = {for (var i = 0; i < list.length; i++) list[i]: i};
+    return [...list]..sort((a, b) {
+        var c = a.groupRank.compareTo(b.groupRank);
+        if (c == 0) c = a.sortOrder.compareTo(b.sortOrder);
+        return c != 0 ? c : at[a]!.compareTo(at[b]!);
+      });
+  }
+
+  /// `allocations` of GET collection.
+  static List<_DepositItem> _parseAllocations(dynamic raw) {
     var src = raw;
     if (src is Map && src['data'] is Map) src = src['data'];
-    final list = src is Map ? src[key] : null;
+    final list = src is Map ? src['allocations'] : null;
     if (list is! List) return const [];
     return [
       for (final r in list.whereType<Map>())
         _DepositItem(
-          code: _str(r,
-              ['item_snapshot_id', 'snapshot_id', 'item_code', 'code', 'id']),
-          name: _str(r, ['item_name', 'name', 'nama', 'item_code', 'code']),
-          additional: additional,
-          suggested: double.tryParse(
-                  (r['final_amount'] ?? r['amount'] ?? '').toString())
-              ?.round(),
+          kind: _Kind.required,
+          code: _str(r, ['item_snapshot_id']),
+          name: _str(r, ['item_name', 'item_code']),
+          group: _str(r, ['group']),
+          sortOrder: _order(r['sort_order']),
+          suggested:
+              double.tryParse((r['final_amount'] ?? '').toString())?.round(),
         ),
+    ];
+  }
+
+  /// The array answered by GET me/items (active additional items).
+  static List<_DepositItem> _parseCatalog(dynamic raw) {
+    var src = raw;
+    if (src is Map) src = src['data'] ?? src['items'];
+    if (src is! List) return const [];
+    return [
+      for (final r in src.whereType<Map>())
+        if (_str(r, ['id']).isNotEmpty && _str(r, ['name']).isNotEmpty)
+          _DepositItem(
+            kind: _Kind.catalog,
+            code: _str(r, ['id']),
+            name: _str(r, ['name']),
+            group: _str(r, ['group']),
+            sortOrder: _order(r['sort_order']),
+          ),
     ];
   }
 
@@ -110,18 +180,28 @@ class _AmalDepositFormScreenState extends State<AmalDepositFormScreen> {
       _loadError = null;
     });
     try {
-      final resp = await ApiService().getCollection(_period);
+      final api = ApiService();
+      // The catalog is optional: without it the required items still work.
+      final catalogFuture = api
+          .getShodaqohItems(isAdditional: true, isActive: true)
+          .then<List<_DepositItem>>((r) => _parseCatalog(r.data))
+          .catchError((Object e) {
+        debugPrint('AmalDepositFormScreen catalog error: $e');
+        return <_DepositItem>[];
+      });
+      final resp = await api.getCollection(_period);
+      final catalog = await catalogFuture;
       if (!mounted) return;
-      final items = [
-        ..._parse(resp.data, 'allocations', false),
-      ];
-      for (final i in _items) {
-        i.controller.dispose();
+      for (final i in [..._items, ..._catalog]) {
+        i.dispose();
       }
       setState(() {
         _items
           ..clear()
-          ..addAll(items);
+          ..addAll(_sorted(_parseAllocations(resp.data)));
+        _catalog
+          ..clear()
+          ..addAll(_sorted(catalog));
       });
     } catch (e) {
       debugPrint('AmalDepositFormScreen load error: $e');
@@ -306,23 +386,40 @@ class _AmalDepositFormScreenState extends State<AmalDepositFormScreen> {
   }
 
   Future<void> _submit() async {
-    final filled = _items.where((i) => i.amount > 0).toList();
+    final filled = [
+      for (final i in [..._items, ..._catalog, ..._free])
+        if (i.amount > 0) i,
+    ];
+    final unnamed = filled.any(
+        (i) => i.kind == _Kind.free && i.nameController.text.trim().isEmpty);
     setState(() {
-      _amountError =
-          filled.isEmpty ? 'Isi minimal satu jumlah lebih dari Rp 0.' : null;
+      _amountError = filled.isEmpty
+          ? 'Isi minimal satu jumlah lebih dari Rp 0.'
+          : unnamed
+              ? 'Isi nama untuk setiap shodaqoh tambahan.'
+              : null;
       _proofError = _proof != null ? null : 'Lampirkan bukti transfer.';
       _sendError = null;
     });
     final proof = _proof;
-    if (filled.isEmpty || proof == null) return;
+    if (_amountError != null || proof == null) return;
 
-    Map<String, dynamic> row(_DepositItem i) =>
-        {'item_snapshot_id': i.code, 'amount': i.amount};
-    final notes = _notes.text.trim();
+    // Amounts go as decimal strings (`actual_amount`).
     final regular = [
-      for (final i in filled.where((i) => !i.additional)) row(i)
+      for (final i in filled.where((i) => i.kind == _Kind.required))
+        {'item_snapshot_id': i.code, 'actual_amount': '${i.amount}'},
     ];
-    final extra = [for (final i in filled.where((i) => i.additional)) row(i)];
+    final extra = [
+      for (final i in filled.where((i) => i.kind != _Kind.required))
+        {
+          if (i.kind == _Kind.catalog) 'catalog_item_id': i.code,
+          'item_name':
+              i.kind == _Kind.catalog ? i.name : i.nameController.text.trim(),
+          if (i.group.isNotEmpty) 'group': i.group,
+          'actual_amount': '${i.amount}',
+        },
+    ];
+    final notes = _notes.text.trim();
     // Each entry needs a non-empty items or additional_items: empty ones are
     // left out. Status and member fields are never sent (server forces them).
     final entry = <String, dynamic>{
@@ -333,9 +430,12 @@ class _AmalDepositFormScreenState extends State<AmalDepositFormScreen> {
       'collected_at': DateTime.now().toUtc().toIso8601String(),
     };
 
+    // `month` is the current month; the entry's period may not be later.
+    final now = DateTime.now();
+    final current = '${now.year}-${now.month.toString().padLeft(2, '0')}';
     setState(() => _sending = true);
     try {
-      await ApiService().submitCollection(_period, [entry],
+      await ApiService().submitCollection(current, [entry],
           proofBytes: proof.bytes, proofName: proof.name);
       if (!mounted) return;
       Navigator.of(context).pop(true);
@@ -395,6 +495,77 @@ class _AmalDepositFormScreenState extends State<AmalDepositFormScreen> {
     );
   }
 
+  Widget _amountField(_DepositItem i) => TextField(
+        controller: i.controller,
+        enabled: !_sending,
+        keyboardType: TextInputType.number,
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        onChanged: (_) => setState(() => _amountError = null),
+        decoration: _decoration.copyWith(prefixText: 'Rp ', hintText: '0'),
+      );
+
+  /// The items with a heading each time the group changes.
+  List<Widget> _section(List<_DepositItem> items) {
+    final out = <Widget>[];
+    String? group;
+    for (final i in items) {
+      final g = i.group.trim();
+      if (g.isNotEmpty && g != group) {
+        out.add(Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Text(g, style: Lx.metadata.copyWith(color: Lx.secondary)),
+        ));
+      }
+      group = g;
+      out.add(Padding(
+        padding: const EdgeInsets.only(bottom: Lx.s12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(i.name, style: Lx.cardHeading),
+            const SizedBox(height: 6),
+            _amountField(i),
+          ],
+        ),
+      ));
+    }
+    return out;
+  }
+
+  Widget _freeRow(int n) {
+    final i = _free[n];
+    return Padding(
+      padding: const EdgeInsets.only(bottom: Lx.s12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: i.nameController,
+                  enabled: !_sending,
+                  textCapitalization: TextCapitalization.sentences,
+                  onChanged: (_) => setState(() => _amountError = null),
+                  decoration: _decoration.copyWith(hintText: 'Nama shodaqoh'),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Hapus',
+                onPressed: _sending
+                    ? null
+                    : () => setState(() => _free.removeAt(n).dispose()),
+                icon: const Icon(Icons.close_rounded),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          _amountField(i),
+        ],
+      ),
+    );
+  }
+
   Widget _form(String title) {
     return ListView(
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
@@ -426,26 +597,21 @@ class _AmalDepositFormScreenState extends State<AmalDepositFormScreen> {
         if (_items.isEmpty)
           Text('Belum ada item yang bisa disetor untuk bulan ini.',
               style: Lx.body),
-        for (final i in _items)
-          Padding(
-            padding: const EdgeInsets.only(bottom: Lx.s12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(i.name, style: Lx.cardHeading),
-                const SizedBox(height: 6),
-                TextField(
-                  controller: i.controller,
-                  enabled: !_sending,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  onChanged: (_) => setState(() => _amountError = null),
-                  decoration:
-                      _decoration.copyWith(prefixText: 'Rp ', hintText: '0'),
-                ),
-              ],
-            ),
-          ),
+        ..._section(_items),
+        if (_catalog.isNotEmpty) ...[
+          Text('Shodaqoh tambahan', style: Lx.sectionHeading),
+          const SizedBox(height: Lx.s8),
+          ..._section(_catalog),
+        ],
+        for (var n = 0; n < _free.length; n++) _freeRow(n),
+        TextButton.icon(
+          onPressed: _sending
+              ? null
+              : () => setState(() => _free.add(_DepositItem(kind: _Kind.free))),
+          icon: const Icon(Icons.add_rounded),
+          label: const Text('Tambah shodaqoh lain'),
+        ),
+        const SizedBox(height: Lx.s8),
         if (_amountError != null)
           Padding(
             padding: const EdgeInsets.only(bottom: Lx.s12),

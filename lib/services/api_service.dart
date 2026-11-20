@@ -209,6 +209,17 @@ class ApiService {
         queryParameters: {'month': month});
   }
 
+  /// Catalog of shodaqoh items for the setoran form. Each filter is sent only
+  /// when given (`true` / `false`).
+  /// Endpoint: `GET /api/m/v1/shodaqoh/me/items?is_additional_item=&is_active=`
+  Future<Response> getShodaqohItems(
+      {bool? isAdditional, bool? isActive}) async {
+    return await _dio.get('/api/m/v1/shodaqoh/me/items', queryParameters: {
+      if (isAdditional != null) 'is_additional_item': '$isAdditional',
+      if (isActive != null) 'is_active': '$isActive',
+    });
+  }
+
   /// Self-service deposit, `multipart/form-data`: field `payload` is the JSON
   /// `{"entries": [...]}` ([entries] each carry `collected_for_period`
   /// (`YYYY-MM`), `items` / `additional_items`, optional `notes` and
@@ -216,6 +227,7 @@ class ApiService {
   /// PDF, at most 5 MB). The gateway uploads the proof and the server forces
   /// `status: "pending"` (waits for the treasurer, KU); if shodaqoh refuses,
   /// the proof is removed again. No Content-Type is forced: Dio builds it.
+  /// [month] is the current month; every entry's period is at most [month].
   /// Endpoint: `POST /api/m/v1/shodaqoh/me/collection?month=YYYY-MM`
   Future<Response> submitCollection(
     String month,

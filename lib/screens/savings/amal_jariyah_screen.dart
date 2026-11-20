@@ -40,8 +40,36 @@ class _AmalJariyahScreenState extends State<AmalJariyahScreen> {
   @override
   void initState() {
     super.initState();
-    _load();
+    _start();
     _loadPending();
+  }
+
+  /// Opens on the latest month that has data (looking back year by year, as
+  /// far as the oldest year the API reports), not on the current month. If
+  /// there is none, or the lookup fails, it stays on the current month.
+  Future<void> _start() async {
+    try {
+      final api = ApiService();
+      for (var y = _now.year;; y--) {
+        final data =
+            AmalJariyahYear.parse((await api.getFamilyReportYearly(y)).data);
+        _earliestYear = data.earliestYear ?? _earliestYear;
+        final withData = data.months
+            .where((m) => !m.isEmpty && m.monthNumber != null)
+            .toList()
+          ..sort((a, b) => a.monthNumber!.compareTo(b.monthNumber!));
+        if (withData.isNotEmpty) {
+          _month = DateTime(y, withData.last.monthNumber!);
+          _year = y;
+          break;
+        }
+        final earliest = data.earliestYear;
+        if (earliest == null || y <= earliest || y <= _now.year - 10) break;
+      }
+    } catch (e) {
+      debugPrint('AmalJariyahScreen start error: $e');
+    }
+    if (mounted) _load();
   }
 
   Future<void> _loadPending() async {
