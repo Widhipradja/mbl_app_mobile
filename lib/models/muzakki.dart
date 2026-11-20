@@ -28,6 +28,14 @@ class Muzakki {
   final String phone;
   final String groupName;
   final String afiliasi;
+
+  /// Master Eksternal this muzakki belongs to (`external_id`), if any.
+  final String externalId;
+
+  /// Display name of that external. Falls back to the legacy `group_name`
+  /// (external muzakki) or `afiliasi` (internal) until the BE returns
+  /// `external_name`.
+  final String externalName;
   final DateTime createdAt;
   final bool isInternal;
 
@@ -40,9 +48,6 @@ class Muzakki {
   /// True when the muzakki's zakat has been formally handed over (akad) to amil.
   /// Driven by the `is_akad_done` flag on the muzakki record.
   final bool isAkadDone;
-
-  /// Verification status for administrative validation.
-  final bool isVerified;
 
   // ── Optional zakat fields (future API) ───────────────────────────────────
   final PaymentType? paymentType;
@@ -66,12 +71,13 @@ class Muzakki {
     this.phone = '',
     this.groupName = '',
     this.afiliasi = '',
+    this.externalId = '',
+    this.externalName = '',
     DateTime? createdAt,
     this.isInternal = true,
     this.isPaid = false,
     this.amilName = '',
     this.isAkadDone = false,
-    this.isVerified = false,
     this.paymentType,
     this.amountSo = 0,
     this.amountRp = 0,
@@ -127,16 +133,17 @@ class Muzakki {
         phone: json['phone'] as String? ?? '',
         groupName: json['group_name'] as String? ?? '',
         afiliasi: json['afiliasi'] as String? ?? '',
+        externalId: json['external_id'] as String? ?? '',
+        externalName: json['external_name'] as String? ??
+            ((json['is_internal'] as bool? ?? true)
+                ? (json['afiliasi'] as String? ?? '')
+                : (json['group_name'] as String? ?? '')),
         createdAt: json['created_at'] != null
             ? DateTime.tryParse(json['created_at'] as String) ?? DateTime.now()
             : DateTime.now(),
         isInternal: json['is_internal'] as bool? ?? true,
         isPaid: json['is_paid'] as bool? ?? false,
         isAkadDone: json['is_akad_done'] as bool? ?? false,
-        isVerified: json['is_verified'] as bool? ??
-            json['verified'] as bool? ??
-            json['verification_status'] as bool? ??
-            false,
         amilName: () {
           final tx = json['transaction'] as Map<String, dynamic>?;
           return tx?['amil_name'] as String? ??
@@ -204,11 +211,12 @@ class Muzakki {
         'phone': phone,
         'group_name': groupName,
         'afiliasi': afiliasi,
+        'external_id': externalId,
+        'external_name': externalName,
         'created_at': createdAt.toIso8601String(),
         'is_internal': isInternal,
         'is_paid': isPaid,
         'is_akad_done': isAkadDone,
-        'is_verified': isVerified,
         'amil_name': amilName,
         if (paymentType != null) 'zakat_type': paymentType!.name,
         'amount_so': amountSo,
@@ -232,12 +240,13 @@ class Muzakki {
     String? phone,
     String? groupName,
     String? afiliasi,
+    String? externalId,
+    String? externalName,
     DateTime? createdAt,
     bool? isInternal,
     bool? isPaid,
     String? amilName,
     bool? isAkadDone,
-    bool? isVerified,
     PaymentType? paymentType,
     double? amountSo,
     double? amountRp,
@@ -259,12 +268,13 @@ class Muzakki {
       phone: phone ?? this.phone,
       groupName: groupName ?? this.groupName,
       afiliasi: afiliasi ?? this.afiliasi,
+      externalId: externalId ?? this.externalId,
+      externalName: externalName ?? this.externalName,
       createdAt: createdAt ?? this.createdAt,
       isInternal: isInternal ?? this.isInternal,
       isPaid: isPaid ?? this.isPaid,
       amilName: amilName ?? this.amilName,
       isAkadDone: isAkadDone ?? this.isAkadDone,
-      isVerified: isVerified ?? this.isVerified,
       paymentType: paymentType ?? this.paymentType,
       amountSo: amountSo ?? this.amountSo,
       amountRp: amountRp ?? this.amountRp,

@@ -1,7 +1,9 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../models/mustahiq_asnaf_summary.dart';
 import '../models/muzakki.dart';
 import '../models/zakat_external_data.dart';
+import '../models/zakat_external_master.dart';
 import '../models/zakat_report_summary.dart';
 import '../models/zakat_transaction.dart';
 import '../models/zakat_year.dart';
@@ -42,6 +44,98 @@ class ZakatProvider extends ChangeNotifier {
             sum + (m.paymentType == PaymentType.uang ? m.amountRp : 0.0),
       );
 
+  // ── Master Eksternal (global, not per year) ──────────────────────────────
+  final List<ExternalMaster> _externals = [];
+  bool isLoadingExternals = false;
+  String? externalsError;
+
+  List<ExternalMaster> get externals => List.unmodifiable(_externals);
+  List<ExternalMaster> get activeExternals =>
+      _externals.where((e) => e.isActive).toList();
+
+  /// Fetch the master list of externals.
+  Future<void> fetchExternals() async {
+    isLoadingExternals = true;
+    externalsError = null;
+    notifyListeners();
+    try {
+      final response = await ApiService().getZakatExternals();
+      final raw = response.data;
+      final list = raw is List
+          ? raw
+          : (raw is Map<String, dynamic>
+              ? (raw['data'] as List<dynamic>? ?? const [])
+              : const []);
+      _externals
+        ..clear()
+        ..addAll(
+          list
+              .whereType<Map<String, dynamic>>()
+              .map(ExternalMaster.fromJson)
+              .where((e) => e.id.isNotEmpty)
+              .toList()
+            ..sort(
+                (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase())),
+        );
+    } catch (e) {
+      externalsError = 'Gagal memuat data eksternal.';
+      debugPrint('ZakatProvider.fetchExternals error: $e');
+    } finally {
+      isLoadingExternals = false;
+      notifyListeners();
+    }
+  }
+
+  /// Reason the last save/delete of a Master Eksternal failed, if known.
+  String? externalActionError;
+
+  String _externalFailure(Object e, String fallback, String conflict) {
+    if (e is DioException && e.response?.statusCode == 409) return conflict;
+    return fallback;
+  }
+
+  Future<bool> saveExternal(
+    Map<String, dynamic> payload, {
+    String? id,
+  }) async {
+    externalActionError = null;
+    try {
+      final api = ApiService();
+      if (id == null) {
+        await api.createZakatExternal(payload);
+      } else {
+        await api.updateZakatExternal(id, payload);
+      }
+      await fetchExternals();
+      return true;
+    } catch (e) {
+      debugPrint('ZakatProvider.saveExternal error: $e');
+      externalActionError = _externalFailure(
+        e,
+        'Gagal menyimpan Eksternal.',
+        'Nama eksternal sudah ada. Gunakan nama lain.',
+      );
+      return false;
+    }
+  }
+
+  Future<bool> deleteExternal(String id) async {
+    externalActionError = null;
+    try {
+      await ApiService().deleteZakatExternal(id);
+      await fetchExternals();
+      return true;
+    } catch (e) {
+      debugPrint('ZakatProvider.deleteExternal error: $e');
+      externalActionError = _externalFailure(
+        e,
+        'Gagal menghapus Eksternal.',
+        'Masih dipakai muzakki. Nonaktifkan lewat Edit, jangan dihapus.',
+      );
+      return false;
+    }
+  }
+
   // ── Recent Transactions ──────────────────────────────────────────────────
   final List<ZakatTransaction> _recentTransactions = [];
   bool isLoadingRecent = false;
@@ -61,6 +155,18 @@ class ZakatProvider extends ChangeNotifier {
 
   // ── Year operations ──────────────────────────────────────────────────────
 
+  Future<void>? _yearsInFlight;
+
+  /// Makes sure the years are loaded and one of them is selected, and returns
+  /// when that is so. Callers that start at the same time (the shell and its
+  /// first tab) wait for the same request, so nothing below starts before a
+  /// year is selected.
+  Future<void> ensureYears() {
+    if (_years.isNotEmpty && _selectedYear != null) return Future.value();
+    return _yearsInFlight ??=
+        fetchYears().whenComplete(() => _yearsInFlight = null);
+  }
+
   /// Fetch the list of available Zakat Fitrah years.
   Future<void> fetchYears() async {
     isLoadingYears = true;
@@ -75,11 +181,19 @@ class ZakatProvider extends ChangeNotifier {
           .map((j) => ZakatYear.fromJson(j as Map<String, dynamic>))
           .toList();
 
+      if (_selectedYear != null) {
+        // Refresh the selected year so edits (e.g. rice rate) show up; fall
+        // back to the active year if it no longer exists.
+        final refreshed = _years.where((y) => y.id == _selectedYear!.id);
+        _selectedYear = refreshed.isNotEmpty ? refreshed.first : null;
+      }
       // Auto-select active year, or first if none active
-      _selectedYear ??= _years.firstWhere(
-        (y) => y.isActive,
-        orElse: () => _years.isNotEmpty ? _years.first : _selectedYear!,
-      );
+      if (_selectedYear == null && _years.isNotEmpty) {
+        _selectedYear = _years.firstWhere(
+          (y) => y.isActive,
+          orElse: () => _years.first,
+        );
+      }
 
       yearsError = null;
     } catch (e) {
@@ -121,6 +235,14 @@ class ZakatProvider extends ChangeNotifier {
   Future<void> selectYear(ZakatYear year) async {
     if (_selectedYear?.id == year.id) return;
     _selectedYear = year;
+    // Drop the previous year's data so it can't linger under the new label
+    // (e.g. when a fetch below fails).
+    _muzakkiList.clear();
+    _externalByFamily.clear();
+    totalMuzakkiServer = 0;
+    _recentTransactions.clear();
+    _reportSummary = null;
+    _mustahiqAsnafSummary.clear();
     notifyListeners();
     await Future.wait([
       fetchMuzakki(),
@@ -202,21 +324,40 @@ class ZakatProvider extends ChangeNotifier {
 
   /// Fetch the 10 most recent zakat transactions for the selected year.
   Future<void> fetchRecentTransactions() async {
+    final yearId = _selectedYear?.id;
+    // Without a selected year there is nothing to ask for. Asking anyway would
+    // return the latest transactions of every Ramadhan under a year label.
+    if (yearId == null || yearId.isEmpty) {
+      debugPrint('ZakatProvider.fetchRecentTransactions: no year, skipping.');
+      _recentTransactions.clear();
+      notifyListeners();
+      return;
+    }
     isLoadingRecent = true;
     recentError = null;
     notifyListeners();
 
     try {
       final api = ApiService();
-      final response = await api.getZakatRecentTransactions(limit: 10);
+      final response = await api.getZakatRecentTransactions(
+        limit: 10,
+        yearId: yearId,
+      );
+      // The year was changed while this request was out: its answer is for
+      // the previous year and must not replace the new one's.
+      if (_selectedYear?.id != yearId) return;
       final raw = response.data;
       final List<dynamic> list = raw is List
           ? raw
           : (raw as Map<String, dynamic>)['data'] as List<dynamic>? ?? [];
       _recentTransactions
         ..clear()
-        ..addAll(list
-            .map((j) => ZakatTransaction.fromJson(j as Map<String, dynamic>)));
+        ..addAll(
+          list
+              .map((j) => ZakatTransaction.fromJson(j as Map<String, dynamic>))
+              // Safety net while the BE may still ignore `year_id`.
+              .where((t) => t.yearId.isEmpty || t.yearId == yearId),
+        );
       recentError = null;
     } catch (e) {
       recentError = 'Gagal memuat transaksi terbaru.';
@@ -328,34 +469,16 @@ class ZakatProvider extends ChangeNotifier {
     }
   }
 
-  /// Verify / unverify a muzakki.
-  /// Calls `PATCH /api/zakat-fitrah/muzakki/{id}/verify`.
-  Future<bool> verifyMuzakki(String id, {required bool status}) async {
-    final index = _muzakkiList.indexWhere((m) => m.id == id);
-    if (index == -1) return false;
-
-    final previous = _muzakkiList[index];
-    _muzakkiList[index] = previous.copyWith(isVerified: status);
-    notifyListeners();
-
-    try {
-      final api = ApiService();
-      await api.verifyMuzakki(id, status: status);
-      return true;
-    } catch (e) {
-      _muzakkiList[index] = previous;
-      errorMessage = 'Gagal memperbarui status verifikasi muzakki.';
-      notifyListeners();
-      debugPrint('ZakatProvider.verifyMuzakki error: $e');
-      return false;
-    }
-  }
-
   /// Reset all cached zakat data. Call this on logout or when switching users
   /// so stale data from a previous group_name is not shown to the new user.
   void reset() {
+    _externals.clear();
+    isLoadingExternals = false;
+    externalsError = null;
+
     _years = [];
     _selectedYear = null;
+    _yearsInFlight = null;
     isLoadingYears = false;
     yearsError = null;
 

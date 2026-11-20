@@ -57,9 +57,7 @@ class _MustahiqScreenState extends State<MustahiqScreen> {
       return yearId;
     }
 
-    if (!provider.isLoadingYears) {
-      await provider.fetchYears();
-    }
+    await provider.ensureYears();
 
     yearId = _pickYearIdFromProvider(provider);
     if (yearId != null && yearId.isNotEmpty) {
@@ -79,9 +77,7 @@ class _MustahiqScreenState extends State<MustahiqScreen> {
 
   Future<void> _bootstrap() async {
     final provider = context.read<ZakatProvider>();
-    if (provider.years.isEmpty && !provider.isLoadingYears) {
-      await provider.fetchYears();
-    }
+    await provider.ensureYears();
     await _loadData();
   }
 
@@ -954,16 +950,14 @@ class _MustahiqScreenState extends State<MustahiqScreen> {
             GestureDetector(
               onTap: () => _showMustahiqActions(item),
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
                 child: Text('${index + 1}', style: ts),
               ),
             ),
             GestureDetector(
               onTap: () => _showMustahiqActions(item),
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
                 child: Text(item.name, style: ts),
               ),
             ),
@@ -993,8 +987,7 @@ class _MustahiqScreenState extends State<MustahiqScreen> {
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8, horizontal: 6),
               child: Text('Total',
-                  style: TextStyle(
-                      fontSize: 12, fontWeight: FontWeight.w700)),
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
             ),
             const SizedBox.shrink(),
             Padding(
@@ -1044,8 +1037,8 @@ class _MustahiqScreenState extends State<MustahiqScreen> {
                 2: FlexColumnWidth(2),
                 3: FixedColumnWidth(44),
               },
-              border: TableBorder.all(
-                  color: const Color(0xFFE2E8F0), width: 0.8),
+              border:
+                  TableBorder.all(color: const Color(0xFFE2E8F0), width: 0.8),
               children: [
                 headerRow(),
                 ..._mustahiq

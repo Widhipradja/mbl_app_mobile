@@ -1,3 +1,4 @@
+import '../../config/baraka_tokens.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
@@ -70,7 +71,7 @@ class _FamilyGroup {
   }
 
   String get groupName => head?.groupName ?? '';
-  String get afiliasi => head?.afiliasi ?? '';
+  String get externalName => head?.externalName ?? '';
 
   int get memberCount => members.length;
 
@@ -97,61 +98,6 @@ class MuzakkiListScreen extends StatefulWidget {
 }
 
 class _MuzakkiListScreenState extends State<MuzakkiListScreen> {
-    Future<void> _exportMuzakkiToExcel() async {
-      final provider = context.read<ZakatProvider>();
-      final yearId = provider.selectedYear?.id ?? '';
-      final allMuzakki = provider.muzakkiList;
-      final groups = _buildGroups(allMuzakki);
-      final excel = ex.Excel.createExcel();
-      final sheet = excel['REKAP_ZAKAT'];
-      // Header row
-      final headers = [
-        'NO',
-        'NAMA KEPALA KELUARGA',
-        'MAL&TIJAROH',
-        'ZURU''',
-        'TERNAK',
-        'JAMAAH',
-        'SIMPATISAN',
-        'MUZAQI',
-        'MUSTAHIQ',
-        'ZAKAT (RP)',
-        'TOTAL',
-      ];
-      for (var col = 0; col < headers.length; col++) {
-        sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: col, rowIndex: 0)).value = ex.TextCellValue(headers[col]);
-      }
-      // Data rows
-      for (var i = 0; i < groups.length; i++) {
-        final g = groups[i];
-        final headName = g.head?.fullName ?? '-';
-        final jamaah = g.members.where((m) => m.isInternal).length;
-        final simpatisan = g.members.where((m) => !m.isInternal).length;
-        final muzaqi = g.memberCount;
-        sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: i + 1)).value = ex.TextCellValue('${i + 1}');
-        sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: i + 1)).value = ex.TextCellValue(headName);
-        sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: i + 1)).value = ex.TextCellValue('-'); // Mal&Tijaroh
-        sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: i + 1)).value = ex.TextCellValue('-'); // Zuru'
-        sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: i + 1)).value = ex.TextCellValue('-'); // Ternak
-        sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: i + 1)).value = ex.TextCellValue('$jamaah');
-        sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: i + 1)).value = ex.TextCellValue('$simpatisan');
-        sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: 7, rowIndex: i + 1)).value = ex.TextCellValue('$muzaqi');
-        sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: 8, rowIndex: i + 1)).value = ex.TextCellValue('-'); // Mustahiq
-        sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: 9, rowIndex: i + 1)).value = ex.TextCellValue('-'); // Zakat (RP)
-        sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: 10, rowIndex: i + 1)).value = ex.TextCellValue('-'); // Total
-      }
-      // Save file
-      final bytes = excel.encode();
-      final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/rekap_zakat_${DateTime.now().millisecondsSinceEpoch}.xlsx');
-      await file.writeAsBytes(bytes!);
-      await Share.shareXFiles([
-        XFile(file.path, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
-      ],
-        subject: 'Rekap Zakat Fitrah',
-        text: 'Rekap Zakat Fitrah',
-      );
-    }
   static const _green = Color(0xFF066046);
 
   final TextEditingController _searchController = TextEditingController();
@@ -161,12 +107,23 @@ class _MuzakkiListScreenState extends State<MuzakkiListScreen> {
   bool _filterAmilPending = false;
   bool _isImportingExcel = false;
 
+  /// null = all, 'internal', or 'ext:<Master Eksternal name>'.
+  String? _filterOrigin;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final p = context.read<ZakatProvider>();
+      final cfg = context.read<ConfigurationProvider>();
       if (p.muzakkiList.isEmpty && !p.isLoading) p.fetchMuzakki();
+      if (p.externals.isEmpty && !p.isLoadingExternals) p.fetchExternals();
+      if (cfg.configurations.isEmpty && !cfg.isLoading) {
+        cfg.fetchConfigurations(
+          module: ConfigurationProvider.moduleZakatFitrah,
+          yearId: p.selectedYear?.id,
+        );
+      }
     });
   }
 
@@ -204,8 +161,19 @@ class _MuzakkiListScreenState extends State<MuzakkiListScreen> {
           g.members.any((m) {
             return m.fullName.toLowerCase().contains(q) ||
                 m.surname.toLowerCase().contains(q) ||
-                m.groupName.toLowerCase().contains(q);
+                m.groupName.toLowerCase().contains(q) ||
+                m.externalName.toLowerCase().contains(q);
           });
+
+      final head = g.head;
+      final matchOrigin = switch (_filterOrigin) {
+        null => true,
+        'internal' => head?.isInternal ?? true,
+        final o when o.startsWith('ext:') => g.members.any(
+            (m) => m.externalName.trim() == o.substring(4),
+          ),
+        _ => true,
+      };
 
       final matchGroup = _filterGroup == null ||
           g.members.any((m) => m.groupName == _filterGroup);
@@ -216,7 +184,11 @@ class _MuzakkiListScreenState extends State<MuzakkiListScreen> {
       final matchAmilPending = !_filterAmilPending ||
           g.members.any((m) => m.isPaid && !m.isSerahTerimaAmil);
 
-      return matchSearch && matchGroup && matchPaid && matchAmilPending;
+      return matchSearch &&
+          matchOrigin &&
+          matchGroup &&
+          matchPaid &&
+          matchAmilPending;
     }).toList();
 
     // 5. Sort groups by family name
@@ -552,6 +524,15 @@ class _MuzakkiListScreenState extends State<MuzakkiListScreen> {
   Widget build(BuildContext context) {
     return Consumer<ZakatProvider>(
       builder: (context, provider, _) {
+        // The internal chip is named after the GROUP set in Configuration.
+        final groupLabel = context
+                .watch<ConfigurationProvider>()
+                .configurations
+                .where((c) => c.code == 'GROUP' && c.value.trim().isNotEmpty)
+                .map((c) => c.value.trim())
+                .firstOrNull ??
+            'Internal';
+
         // Loading
         if (provider.isLoading) {
           return const Center(
@@ -663,7 +644,6 @@ class _MuzakkiListScreenState extends State<MuzakkiListScreen> {
                             if (value == 'upload' && !_isImportingExcel) {
                               _uploadExcelMuzakki();
                             }
-                            if (value == 'export') _exportMuzakkiToExcel();
                           },
                           icon: Container(
                             padding: const EdgeInsets.all(8),
@@ -675,16 +655,6 @@ class _MuzakkiListScreenState extends State<MuzakkiListScreen> {
                                 color: Color(0xFF64748B), size: 20),
                           ),
                           itemBuilder: (_) => [
-                            const PopupMenuItem(
-                              value: 'export',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.file_download_outlined, size: 18, color: Color(0xFF066046)),
-                                  SizedBox(width: 10),
-                                  Text('Export Rekap Excel', style: TextStyle(fontSize: 13)),
-                                ],
-                              ),
-                            ),
                             const PopupMenuItem(
                               value: 'download',
                               child: Row(
@@ -752,10 +722,12 @@ class _MuzakkiListScreenState extends State<MuzakkiListScreen> {
                         color: _green,
                         isActive: _filterPaid == null &&
                             _filterGroup == null &&
+                            _filterOrigin == null &&
                             !_filterAmilPending,
                         onTap: () => setState(() {
                           _filterPaid = null;
                           _filterGroup = null;
+                          _filterOrigin = null;
                           _filterAmilPending = false;
                         }),
                       ),
@@ -797,6 +769,49 @@ class _MuzakkiListScreenState extends State<MuzakkiListScreen> {
                 ),
               ),
 
+              // ── Origin filter: internal / eksternal / per Master Eksternal
+              SizedBox(
+                height: 44,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  children: [
+                    for (final o in <(String?, String)>[
+                      (null, 'Semua'),
+                      ('internal', groupLabel),
+                      for (final e in provider.externals
+                          .where((e) => e.isActive && e.name.trim().isNotEmpty))
+                        ('ext:${e.name.trim()}', e.name.trim()),
+                    ])
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ChoiceChip(
+                          label: Text(o.$2),
+                          selected: _filterOrigin == o.$1,
+                          showCheckmark: false,
+                          selectedColor: _green,
+                          backgroundColor: Colors.white,
+                          side: BorderSide(
+                            color: _filterOrigin == o.$1
+                                ? _green
+                                : const Color(0xFFE3EAE6),
+                          ),
+                          labelStyle: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: _filterOrigin == o.$1
+                                ? Colors.white
+                                : const Color(0xFF0F1F1A),
+                          ),
+                          onSelected: (_) =>
+                              setState(() => _filterOrigin = o.$1),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 6),
+
               // ── Family list ───────────────────────────────────────────
               Expanded(
                 child: groups.isEmpty
@@ -804,8 +819,12 @@ class _MuzakkiListScreenState extends State<MuzakkiListScreen> {
                     : ListView.builder(
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
                         itemCount: groups.length,
-                        itemBuilder: (context, i) =>
-                            _FamilyCard(group: groups[i]),
+                        itemBuilder: (context, i) => _FamilyCard(
+                          key: ValueKey(groups[i].familyId),
+                          group: groups[i],
+                          // A search should show the matching members.
+                          initiallyExpanded: _searchQuery.trim().isNotEmpty,
+                        ),
                       ),
               ),
             ],
@@ -847,15 +866,28 @@ typedef MuzakkiListBody = MuzakkiListScreen;
 // Family Card (collapsible)
 // ─────────────────────────────────────────────────────────────────────────────
 class _FamilyCard extends StatefulWidget {
-  const _FamilyCard({required this.group});
+  const _FamilyCard({
+    super.key,
+    required this.group,
+    this.initiallyExpanded = false,
+  });
   final _FamilyGroup group;
+  final bool initiallyExpanded;
 
   @override
   State<_FamilyCard> createState() => _FamilyCardState();
 }
 
 class _FamilyCardState extends State<_FamilyCard> {
-  bool _expanded = true;
+  late bool _expanded = widget.initiallyExpanded;
+
+  @override
+  void didUpdateWidget(covariant _FamilyCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initiallyExpanded != widget.initiallyExpanded) {
+      _expanded = widget.initiallyExpanded;
+    }
+  }
 
   static const _green = Color(0xFF066046);
 
@@ -866,211 +898,152 @@ class _FamilyCardState extends State<_FamilyCard> {
       (p) => p.getExternalByFamilyId(g.familyId)?.externalTotalSouls ?? 0,
     );
 
+    final paidCount = g.members.where((m) => m.isPaid).length;
+    final akadDone = g.members.every((m) => !m.isPaid || m.isSerahTerimaAmil);
+    final Widget status = g.nonePaid
+        ? const BkStatusPill.idle('Belum bayar')
+        : !g.allPaid
+            ? BkStatusPill.pending('$paidCount/${g.memberCount} bayar')
+            : akadDone
+                ? const BkStatusPill.done('Selesai')
+                : const BkStatusPill.pending('Belum akad');
+    final subtitle = <String>[
+      '${g.memberCount} jiwa',
+      if (externalSoulsCount > 0) '+$externalSoulsCount ext',
+      if (g.groupName.isNotEmpty && g.groupName != g.externalName) g.groupName,
+      if (g.externalName.isNotEmpty) g.externalName,
+    ].join(' · ');
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: g.allPaid
-              ? const Color(0xFFBBF7D0)
-              : g.anyPaid
-                  ? const Color(0xFFFED7AA)
-                  : const Color(0xFFFEE2E2),
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: Bk.card(),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
-          // ── Family header ──────────────────────────────────────────────
-          ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+          // ── Family header (one compact row; tap to expand) ─────────────
+          InkWell(
+            onTap: () => setState(() => _expanded = !_expanded),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              padding: const EdgeInsets.fromLTRB(14, 8, 6, 8),
               child: Row(
                 children: [
-                  // Family info (tappable — expand/collapse)
                   Expanded(
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => setState(() => _expanded = !_expanded),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  g.familyName,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
-                                    color: Color(0xFF1A1A1A),
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          g.familyName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                            color: Bk.text,
                           ),
-                          const SizedBox(height: 3),
-                          Wrap(
-                            spacing: 4,
-                            runSpacing: 3,
-                            children: [
-                              _Badge(
-                                label: '${g.memberCount} jiwa',
-                                bg: const Color(0xFFEFF6FF),
-                                fg: const Color(0xFF1D4ED8),
-                                icon: Icons.people_alt_outlined,
-                              ),
-                              if (externalSoulsCount > 0)
-                                _Badge(
-                                  label: '+$externalSoulsCount ext',
-                                  bg: const Color(0xFFF3E8FF),
-                                  fg: const Color(0xFF7E22CE),
-                                  icon: Icons.group_add_outlined,
-                                ),
-                              if (g.groupName.isNotEmpty)
-                                _Badge(
-                                  label: g.groupName,
-                                  bg: const Color(0xFFF8FAFC),
-                                  fg: const Color(0xFF64748B),
-                                  icon: Icons.group_outlined,
-                                ),
-                              if (g.afiliasi.isNotEmpty)
-                                _Badge(
-                                  label: g.afiliasi,
-                                  bg: const Color(0xFFFAF5FF),
-                                  fg: const Color(0xFF9333EA),
-                                  icon: Icons.handshake_outlined,
-                                ),
-                            ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Bk.textMuted,
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
-
-                  // Right column: status icons + action buttons + expand
                   const SizedBox(width: 8),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // ── Status icons row ──────────────────────────
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // Payment status icon
-                          _StatusIcon(
-                            icon: g.allPaid
-                                ? Icons.check_circle_rounded
-                                : g.anyPaid
-                                    ? Icons.pending_rounded
-                                    : Icons.cancel_outlined,
-                            color: g.allPaid
-                                ? const Color(0xFF16A34A)
-                                : g.anyPaid
-                                    ? const Color(0xFFD97706)
-                                    : const Color(0xFFDC2626),
-                            tooltip: g.allPaid
-                                ? 'Semua sudah setor'
-                                : g.anyPaid
-                                    ? g.paymentSummary
-                                    : 'Belum ada yang setor',
-                          ),
-                          const SizedBox(width: 4),
-                          // Akad status icon
-                          _StatusIcon(
-                            icon: g.members.any((m) => m.isSerahTerimaAmil)
-                                ? Icons.handshake_rounded
-                                : Icons.handshake_outlined,
-                            color: g.members.every(
-                                    (m) => !m.isPaid || m.isSerahTerimaAmil)
-                                ? const Color(0xFF16A34A)
-                                : g.members.any((m) => m.isSerahTerimaAmil)
-                                    ? const Color(0xFFD97706)
-                                    : const Color(0xFFCBD5E1),
-                            tooltip: g.members.every(
-                                    (m) => !m.isPaid || m.isSerahTerimaAmil)
-                                ? 'Semua sudah akad'
-                                : 'Belum semua akad ke amil',
-                          ),
-                        ],
+                  status,
+                  // Quick pay without expanding the card first.
+                  if (!_expanded && !g.allPaid && g.head != null) ...[
+                    const SizedBox(width: 8),
+                    FilledButton(
+                      onPressed: () => context.push(
+                        '/zakat-fitrah/transaction',
+                        extra: g.head,
                       ),
-                      const SizedBox(height: 6),
-                      // ── Action buttons + expand ───────────────────
-                      GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () => setState(() => _expanded = !_expanded),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // Akad
-                            if (g.anyPaid) ...[
-                              _ActionIconBtn(
-                                icon: Icons.handshake_outlined,
-                                color: _green,
-                                bg: const Color(0xFFE8F5F0),
-                                tooltip: 'Akad ke Amil',
-                                onTap: () => _showAkadDialog(context),
-                              ),
-                              const SizedBox(width: 4),
-                            ],
-                            // Pay / Edit
-                            if (g.head != null) ...[
-                              _ActionIconBtn(
-                                icon: g.allPaid
-                                    ? Icons.edit_note_rounded
-                                    : Icons.payment_rounded,
-                                color: g.allPaid
-                                    ? _green
-                                    : const Color(0xFFDC2626),
-                                bg: g.allPaid
-                                    ? const Color(0xFFE8F5F0)
-                                    : const Color(0xFFFEE2E2),
-                                tooltip: g.allPaid
-                                    ? 'Edit Pembayaran'
-                                    : 'Bayar Zakat',
-                                onTap: () => context.go(
-                                    '/zakat-fitrah/transaction',
-                                    extra: g.head),
-                              ),
-                              const SizedBox(width: 4),
-                            ],
-                            // Receipt
-                            if (g.anyPaid && g.head != null) ...[
-                              _ActionIconBtn(
-                                icon: Icons.receipt_long_rounded,
-                                color: _green,
-                                bg: const Color(0xFFE8F5F0),
-                                tooltip: 'Kirim Bukti Zakat',
-                                onTap: () => _sendFamilyReceipt(context),
-                              ),
-                              const SizedBox(width: 4),
-                            ],
-                            // Expand arrow
-                            Icon(
-                              _expanded ? Icons.expand_less : Icons.expand_more,
-                              size: 18,
-                              color: const Color(0xFF94A3B8),
-                            ),
-                          ],
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _green,
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size(0, 44),
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                    ],
+                      child: const Text('Bayar'),
+                    ),
+                  ],
+                  SizedBox(
+                    width: 36,
+                    height: 44,
+                    child: Icon(
+                      _expanded ? Icons.expand_less : Icons.expand_more,
+                      size: 22,
+                      color: Bk.textMuted,
+                    ),
                   ),
                 ],
               ),
             ),
           ),
+
+          // ── Action buttons ─────────────────────────────────────────────
+          if (_expanded && g.head != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+              child: Row(
+                children: [
+                  // Akad is part of every new transaction; this stays for
+                  // older payments and for correcting the amil.
+                  if (g.anyPaid) ...[
+                    Expanded(
+                      child: _ActionBtn(
+                        icon: Icons.handshake_outlined,
+                        label: g.members
+                                .any((m) => m.isPaid && !m.isSerahTerimaAmil)
+                            ? 'Akad'
+                            : 'Ubah Akad',
+                        color: _green,
+                        bg: const Color(0xFFE8F5F0),
+                        onTap: () => _showAkadDialog(context),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  // Pay / Edit
+                  Expanded(
+                    child: _ActionBtn(
+                      icon: g.allPaid
+                          ? Icons.edit_note_rounded
+                          : Icons.payment_rounded,
+                      label: g.allPaid ? 'Edit Bayar' : 'Bayar Zakat',
+                      color: g.allPaid ? _green : Colors.white,
+                      bg: g.allPaid ? const Color(0xFFE8F5F0) : _green,
+                      onTap: () => context.push(
+                        '/zakat-fitrah/transaction',
+                        extra: g.head,
+                      ),
+                    ),
+                  ),
+                  // Receipt
+                  if (g.anyPaid) ...[
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _ActionBtn(
+                        icon: Icons.receipt_long_rounded,
+                        label: 'Bukti',
+                        color: _green,
+                        bg: const Color(0xFFE8F5F0),
+                        onTap: () => _sendFamilyReceipt(context),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
 
           // ── Members ───────────────────────────────────────────────────
           if (_expanded) ...[
@@ -1125,11 +1098,12 @@ class _FamilyCardState extends State<_FamilyCard> {
       final yearId = provider.selectedYear?.id ?? '';
       final results = await Future.wait([
         api.getZakatAmilList(yearId: yearId.isNotEmpty ? yearId : null),
-        api.getZakatConfigurationByModuleAndCode('ZAKATFITRAH', 'IKRAR_ZAKAT'),
+        context
+            .read<ConfigurationProvider>()
+            .fetchEffectiveValue('IKRAR_ZAKAT', yearId),
       ]);
 
-      final amilResp = results[0];
-      final raw = amilResp.data;
+      final raw = (results[0] as dynamic).data;
       final list = raw is List
           ? raw
           : (raw as Map<String, dynamic>)['data'] as List<dynamic>? ?? [];
@@ -1138,14 +1112,17 @@ class _FamilyCardState extends State<_FamilyCard> {
           .where((a) => a.id.isNotEmpty && a.name.isNotEmpty)
           .toList();
 
-      final ikrarResp = results[1];
-      final ikrarRaw = ikrarResp.data;
-      final ikrarMap =
-          ikrarRaw is Map<String, dynamic> ? ikrarRaw : <String, dynamic>{};
-      final ikrarPayload = ikrarMap['data'] is Map<String, dynamic>
-          ? ikrarMap['data'] as Map<String, dynamic>
-          : ikrarMap;
-      ikrarZakat = ikrarPayload['value']?.toString() ?? '';
+      ikrarZakat = (results[1] as String?) ?? '';
+      final existing = g.members
+          .where((m) => m.isPaid && m.amilName.isNotEmpty)
+          .map((m) => m.amilName)
+          .firstOrNull;
+      if (existing != null) {
+        selectedAmil = amilList.firstWhere(
+          (a) => a.name == existing,
+          orElse: () => _Amil(id: existing, name: existing),
+        );
+      }
     } catch (e) {
       debugPrint('_showAkadDialog fetchAmil error: $e');
     } finally {
@@ -1918,100 +1895,6 @@ class _MemberRow extends StatelessWidget {
     }
   }
 
-  Future<void> _showVerifyDialog(BuildContext context) async {
-    final provider = context.read<ZakatProvider>();
-    final m = muzakki;
-    bool status = m.isVerified;
-
-    final submit = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Verifikasi Muzakki'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Atur status verifikasi untuk "${m.fullName}".',
-                style: const TextStyle(fontSize: 13, color: Color(0xFF334155)),
-              ),
-              const SizedBox(height: 14),
-              Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                ),
-                child: SwitchListTile(
-                  value: status,
-                  onChanged: (v) => setDialogState(() => status = v),
-                  activeColor: const Color(0xFF16A34A),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-                  title: Text(
-                    status ? 'Terverifikasi' : 'Belum diverifikasi',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  subtitle: Text(
-                    status
-                        ? 'Data muzakki dinyatakan valid.'
-                        : 'Data masih menunggu verifikasi.',
-                    style:
-                        const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text(
-                'Batal',
-                style: TextStyle(color: Color(0xFF64748B)),
-              ),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF066046),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              child: const Text('Simpan'),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (submit != true || !context.mounted || status == m.isVerified) return;
-
-    final ok = await provider.verifyMuzakki(m.id, status: status);
-    if (!context.mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          ok
-              ? (status
-                  ? 'Muzakki berhasil diverifikasi.'
-                  : 'Status verifikasi dibatalkan.')
-              : 'Gagal memperbarui verifikasi. Coba lagi.',
-        ),
-        backgroundColor: ok ? const Color(0xFF066046) : const Color(0xFFDC2626),
-      ),
-    );
-  }
-
   Future<void> _showActions(BuildContext context) async {
     final provider = context.read<ZakatProvider>();
     final m = muzakki;
@@ -2080,41 +1963,24 @@ class _MemberRow extends StatelessWidget {
                     style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
                 onTap: () => Navigator.pop(ctx, 'set_head'),
               ),
-            // Verify status
-            ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: m.isVerified
-                      ? const Color(0xFFECFDF3)
-                      : const Color(0xFFFFF7ED),
-                  borderRadius: BorderRadius.circular(8),
+            // Correct a mistaken akad
+            if (m.isPaid && m.isSerahTerimaAmil)
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF7ED),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.replay_rounded,
+                      color: Color(0xFFD97706), size: 18),
                 ),
-                child: Icon(
-                  m.isVerified
-                      ? Icons.verified_rounded
-                      : Icons.verified_outlined,
-                  color: m.isVerified
-                      ? const Color(0xFF16A34A)
-                      : const Color(0xFFD97706),
-                  size: 18,
-                ),
+                title: const Text('Koreksi: Tandai Belum Akad',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: const Text('Untuk memperbaiki salah input akad',
+                    style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+                onTap: () => Navigator.pop(ctx, 'cancel_akad'),
               ),
-              title: Text(
-                m.isVerified ? 'Batalkan Verifikasi' : 'Verifikasi Muzakki',
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-              subtitle: Text(
-                m.isVerified
-                    ? 'Status saat ini: terverifikasi'
-                    : 'Status saat ini: belum diverifikasi',
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: Color(0xFF94A3B8),
-                ),
-              ),
-              onTap: () => Navigator.pop(ctx, 'verify'),
-            ),
             // Delete
             ListTile(
               leading: Container(
@@ -2174,8 +2040,43 @@ class _MemberRow extends StatelessWidget {
       case 'delete':
         await _confirmDelete(context);
         break;
-      case 'verify':
-        await _showVerifyDialog(context);
+      case 'cancel_akad':
+        final confirmCancel = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Text('Tandai Belum Akad'),
+            content: Text(
+              'Ubah status "${m.fullName}" menjadi belum akad? '
+              'Gunakan ini hanya untuk memperbaiki kesalahan input.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Batal',
+                    style: TextStyle(color: Color(0xFF64748B))),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Ya, Ubah',
+                    style: TextStyle(color: Color(0xFFD97706))),
+              ),
+            ],
+          ),
+        );
+        if (confirmCancel == true && context.mounted) {
+          try {
+            await ApiService().patchZakatMuzakkiAkad(m.id, status: false);
+            if (context.mounted) await provider.fetchMuzakki();
+          } catch (_) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Gagal mengubah status akad.')),
+              );
+            }
+          }
+        }
         break;
     }
   }
@@ -2198,7 +2099,7 @@ class _MemberRow extends StatelessWidget {
     final handoverLabel = !m.isPaid
         ? 'Belum Setor'
         : isSerah
-            ? (m.amilName.isNotEmpty ? '✓ ${m.amilName}' : 'Sudah Akad Amil')
+            ? (m.amilName.isNotEmpty ? 'Selesai · ${m.amilName}' : 'Selesai')
             : 'Belum Akad Amil';
 
     return GestureDetector(
@@ -2295,41 +2196,6 @@ class _MemberRow extends StatelessWidget {
                                   ),
                                 ),
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: m.isVerified
-                                ? const Color(0xFFDCFCE7)
-                                : const Color(0xFFFFF3E0),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                m.isVerified
-                                    ? Icons.verified_rounded
-                                    : Icons.pending_outlined,
-                                size: 11,
-                                color: m.isVerified
-                                    ? const Color(0xFF16A34A)
-                                    : const Color(0xFFD97706),
-                              ),
-                              const SizedBox(width: 3),
-                              Text(
-                                m.isVerified ? 'Verif' : 'Draft',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700,
-                                  color: m.isVerified
-                                      ? const Color(0xFF16A34A)
-                                      : const Color(0xFFD97706),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
                       ],
                     ),
                   ],
@@ -2344,54 +2210,52 @@ class _MemberRow extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Small status icon badge
-// ─────────────────────────────────────────────────────────────────────────────
-class _StatusIcon extends StatelessWidget {
-  const _StatusIcon({
-    required this.icon,
-    required this.color,
-    required this.tooltip,
-  });
-  final IconData icon;
-  final Color color;
-  final String tooltip;
-
-  @override
-  Widget build(BuildContext context) => Tooltip(
-        message: tooltip,
-        child: Icon(icon, size: 16, color: color),
-      );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Compact action icon button
 // ─────────────────────────────────────────────────────────────────────────────
-class _ActionIconBtn extends StatelessWidget {
-  const _ActionIconBtn({
+class _ActionBtn extends StatelessWidget {
+  const _ActionBtn({
     required this.icon,
+    required this.label,
     required this.color,
     required this.bg,
-    required this.tooltip,
     required this.onTap,
   });
   final IconData icon;
+  final String label;
   final Color color;
   final Color bg;
-  final String tooltip;
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Tooltip(
-        message: tooltip,
-        child: GestureDetector(
+  Widget build(BuildContext context) => Material(
+        color: bg,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
           onTap: onTap,
-          child: Container(
-            padding: const EdgeInsets.all(5),
-            decoration: BoxDecoration(
-              color: bg,
-              borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.circular(10),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 44),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(icon, size: 18, color: color),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: color,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
             ),
-            child: Icon(icon, size: 14, color: color),
           ),
         ),
       );
@@ -2517,6 +2381,7 @@ class _Chip extends StatelessWidget {
     required this.label,
     required this.isActive,
     required this.onTap,
+    this.activeColor = const Color(0xFF066046),
   });
   final String label;
   final bool isActive;

@@ -1,3 +1,4 @@
+import '../../providers/configuration_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -25,8 +26,6 @@ class _Amil {
 
 enum _ZakatType { beras, uang, campuran }
 
-enum _SerahTerimaMode { none, titip, akad }
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Screen
 // ─────────────────────────────────────────────────────────────────────────────
@@ -53,11 +52,13 @@ class _ZakatTransactionScreenState extends State<ZakatTransactionScreen> {
   int _externalSouls = 0;
   int _externalMoneySouls = 0;
 
+  /// Optional Master Eksternal the non-registered souls belong to.
+  String? _externalId;
+
   _Amil? _selectedAmil;
   final _catatanCtrl = TextEditingController();
 
   // ── Serah Terima state ────────────────────────────────────────────────────
-  _SerahTerimaMode _serahTerimaMode = _SerahTerimaMode.none;
 
   // ── Amil list ─────────────────────────────────────────────────────────────
   List<_Amil> _amilList = [];
@@ -126,6 +127,11 @@ class _ZakatTransactionScreenState extends State<ZakatTransactionScreen> {
       if (externalData != null) {
         _externalSouls = externalData.externalTotalSouls;
         _externalMoneySouls = externalData.externalTotalMoneySouls;
+        final withExternal = externalData.externalSouls
+            .where((e) => e.externalId.isNotEmpty)
+            .map((e) => e.externalId)
+            .firstOrNull;
+        _externalId = withExternal;
       }
 
       final hasMoney = _moneyIds.isNotEmpty || _externalMoneySouls > 0;
@@ -144,6 +150,13 @@ class _ZakatTransactionScreenState extends State<ZakatTransactionScreen> {
       // Default behavior for new payment flow.
       _selectedIds.add(widget.muzakki.id);
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final zakat = context.read<ZakatProvider>();
+      if (zakat.externals.isEmpty && !zakat.isLoadingExternals) {
+        zakat.fetchExternals();
+      }
+    });
     _fetchTitipUangRate();
     _fetchAmil();
     _fetchIkrarZakat();
@@ -173,6 +186,7 @@ class _ZakatTransactionScreenState extends State<ZakatTransactionScreen> {
             .map((j) => _Amil.fromJson(j as Map<String, dynamic>))
             .where((a) => a.id.isNotEmpty && a.name.isNotEmpty)
             .toList();
+        _prefillAmilFromExisting();
       });
     } catch (e) {
       debugPrint('ZakatTransactionScreen._fetchAmil error: $e');
@@ -181,19 +195,31 @@ class _ZakatTransactionScreenState extends State<ZakatTransactionScreen> {
     }
   }
 
+  /// When editing a paid family, keep the amil that already received the
+  /// zakat so a correction doesn't force re-picking it.
+  void _prefillAmilFromExisting() {
+    if (_selectedAmil != null || !widget.muzakki.isPaid) return;
+    final name = _familyMembers
+        .where((m) => m.isPaid && m.amilName.isNotEmpty)
+        .map((m) => m.amilName)
+        .firstOrNull;
+    if (name == null) return;
+    _selectedAmil = _amilList.firstWhere(
+      (a) => a.name == name,
+      orElse: () => _Amil(id: name, name: name),
+    );
+  }
+
+  Future<String?> _yearConfigValue(String code) {
+    final yearId = context.read<ZakatProvider>().selectedYear?.id ?? '';
+    return context
+        .read<ConfigurationProvider>()
+        .fetchEffectiveValue(code, yearId);
+  }
+
   Future<void> _fetchTitipUangRate() async {
     try {
-      final api = ApiService();
-      final resp = await api.getZakatConfigurationByModuleAndCode(
-        'ZAKATFITRAH',
-        'TITIP_UANG',
-      );
-      final raw = resp.data;
-      final map = raw is Map<String, dynamic> ? raw : <String, dynamic>{};
-      final payload = map['data'] is Map<String, dynamic>
-          ? map['data'] as Map<String, dynamic>
-          : map;
-      final value = payload['value']?.toString() ?? '';
+      final value = await _yearConfigValue('TITIP_UANG') ?? '';
       final parsed = double.tryParse(value);
       if (parsed != null && parsed > 0 && mounted) {
         setState(() => _titipUangRate = parsed);
@@ -205,17 +231,7 @@ class _ZakatTransactionScreenState extends State<ZakatTransactionScreen> {
 
   Future<void> _fetchIkrarZakat() async {
     try {
-      final api = ApiService();
-      final resp = await api.getZakatConfigurationByModuleAndCode(
-        'ZAKATFITRAH',
-        'IKRAR_ZAKAT',
-      );
-      final raw = resp.data;
-      final map = raw is Map<String, dynamic> ? raw : <String, dynamic>{};
-      final payload = map['data'] is Map<String, dynamic>
-          ? map['data'] as Map<String, dynamic>
-          : map;
-      final value = payload['value']?.toString() ?? '';
+      final value = await _yearConfigValue('IKRAR_ZAKAT') ?? '';
       if (mounted) {
         setState(() {
           _ikrarZakat = value;
@@ -292,6 +308,11 @@ class _ZakatTransactionScreenState extends State<ZakatTransactionScreen> {
       return;
     }
 
+    if (_selectedAmil == null) {
+      _showSnack('Pilih nama amil untuk akad', isError: true);
+      return;
+    }
+
     final provider = context.read<ZakatProvider>();
     final selectedYear = provider.selectedYear;
     final yearId = selectedYear?.id ?? '';
@@ -333,6 +354,8 @@ class _ZakatTransactionScreenState extends State<ZakatTransactionScreen> {
         'rice_souls': externalRiceSouls,
         'money_souls': externalMoneySouls,
         'notes': _externalSouls > 0 ? notes : '',
+        if (_externalSouls > 0 && _externalId != null)
+          'external_id': _externalId,
       };
 
       final paymentBreakdown = [
@@ -359,27 +382,30 @@ class _ZakatTransactionScreenState extends State<ZakatTransactionScreen> {
         externalBreakdown: externalBreakdown,
         paymentBreakdown: paymentBreakdown,
         totalSouls: _totalSouls,
-        serahTerima:
-            _selectedAmil != null && _serahTerimaMode != _SerahTerimaMode.none
-                ? {
-                    'mode': _serahTerimaMode == _SerahTerimaMode.akad
-                        ? 'akad'
-                        : 'titip',
-                    'amil_name': _selectedAmil!.name,
-                  }
-                : null,
+        // Saving a transaction is the akad: paid and handed over in one step.
+        serahTerima: {'mode': 'akad', 'amil_name': _selectedAmil!.name},
       );
 
       await provider.fetchMuzakki();
 
       if (mounted) {
         _showSnack('Transaksi berhasil disimpan!');
-        context.go('/zakat-fitrah');
+        _close();
       }
     } catch (e) {
       if (mounted) _showSnack('Gagal menyimpan transaksi: $e', isError: true);
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  /// Returns to the Muzakki list, keeping its search/filter state when this
+  /// screen was pushed on top of it.
+  void _close() {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/zakat-fitrah/muzakki');
     }
   }
 
@@ -402,7 +428,7 @@ class _ZakatTransactionScreenState extends State<ZakatTransactionScreen> {
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) context.go('/zakat-fitrah');
+        if (!didPop) _close();
       },
       child: Scaffold(
         backgroundColor: _bg,
@@ -411,278 +437,274 @@ class _ZakatTransactionScreenState extends State<ZakatTransactionScreen> {
           elevation: 0,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back, color: Color(0xFF1A1A1A)),
-            onPressed: () => context.go('/zakat-fitrah'),
+            onPressed: _close,
           ),
-        title: const Text(
-          'Transaksi Zakat',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF1A1A1A),
-            fontSize: 18,
+          title: const Text(
+            'Transaksi Zakat',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF1A1A1A),
+              fontSize: 18,
+            ),
           ),
         ),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Section 1: Pilih Anggota Keluarga ────────────────────────
-            _buildFamilyHeader(members),
-            const SizedBox(height: 8),
-            _buildMemberList(members),
-            const SizedBox(height: 20),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Section 1: Pilih Anggota Keluarga ────────────────────────
+              _buildFamilyHeader(members),
+              const SizedBox(height: 8),
+              _buildMemberList(members),
+              const SizedBox(height: 20),
 
-            // ── Section 2: Pilih Jenis Zakat ─────────────────────────────
-            _sectionLabel('PILIH JENIS ZAKAT'),
-            const SizedBox(height: 8),
-            Consumer<ZakatProvider>(
-              builder: (_, provider, __) => Row(
-                children: [
-                  Expanded(
-                    child: _ZakatTypeCard(
-                      icon: '🌾',
-                      title: 'Beras',
-                      subtitle: '$_totalSouls So\'',
-                      isSelected: _type == _ZakatType.beras,
-                      onTap: () => setState(() => _type = _ZakatType.beras),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _ZakatTypeCard(
-                      icon: '💵',
-                      title: 'Uang Tunai',
-                      subtitle:
-                          'Rp ${_formatRp(provider.selectedYear?.riceRatePerSo ?? _titipUangRate)}/jiwa',
-                      isSelected: _type == _ZakatType.uang,
-                      onTap: () => setState(() => _type = _ZakatType.uang),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            _ZakatTypeCard(
-              icon: '⚖️',
-              title: 'Campuran',
-              subtitle: '$_riceJiwa beras • $_moneyJiwa uang',
-              isSelected: _type == _ZakatType.campuran,
-              onTap: () => setState(() => _type = _ZakatType.campuran),
-            ),
-            const SizedBox(height: 12),
-            _buildExternalSoulsCard(),
-            if (_type == _ZakatType.campuran) ...[
-              const SizedBox(height: 12),
-              _buildMixedAllocation(members),
-            ],
-            const SizedBox(height: 20),
-
-            // ── Section 3: Total ──────────────────────────────────────────
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Total Pembayaran',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF334155),
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        _type == _ZakatType.campuran
-                            ? '$_riceJiwa beras • $_moneyJiwa uang'
-                            : '$_totalSouls jiwa dihitung',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF94A3B8),
-                        ),
-                      ),
-                    ],
-                  ),
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 200),
-                    child: Text(
-                      _totalSouls == 0
-                          ? '—'
-                          : _type == _ZakatType.beras
-                              ? '$_totalSouls So\' Beras'
-                              : _type == _ZakatType.uang
-                                  ? 'Rp ${_formatRp(_totalUang)}'
-                                  : _moneyJiwa == 0
-                                      ? '$_totalSouls So\' Beras'
-                                      : _riceJiwa == 0
-                                          ? 'Rp ${_formatRp(_totalUang)}'
-                                          : '$_riceJiwa So\' + Rp ${_formatRp(_totalUang)}',
-                      key: ValueKey('$_type$_totalSouls$_moneyJiwa'),
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color:
-                            _totalSouls == 0 ? const Color(0xFFCBD5E1) : _green,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // ── Section 4: Pilih Amil ─────────────────────────────────────
-            _sectionLabel('PILIH AMIL'),
-            const SizedBox(height: 8),
-            _buildAmilSelector(),
-            const SizedBox(height: 20),
-
-            // ── Section 5: Serah Terima ───────────────────────────────────
-            _sectionLabel('SERAH TERIMA (OPSIONAL)'),
-            const SizedBox(height: 8),
-            _buildSerahTerimaSection(),
-            const SizedBox(height: 20),
-
-            // ── Section 6: Catatan ────────────────────────────────────────
-            _sectionLabel('CATATAN (OPSIONAL)'),
-            const SizedBox(height: 8),
-            TextFormField(
-              controller: _catatanCtrl,
-              maxLines: 3,
-              decoration: InputDecoration(
-                hintText: 'Contoh: Niat zakat untuk keluarga...',
-                hintStyle:
-                    const TextStyle(color: Color(0xFFCBD5E1), fontSize: 13),
-                filled: true,
-                fillColor: Colors.white,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: _green, width: 1.5),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            // ── Ikrar Zakat ────────────────────────────────────────────────
-            if (_loadingIkrar)
-              Container(
-                height: 48,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF0FDF4),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFBBF7D0)),
-                ),
-                alignment: Alignment.center,
-                child: const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child:
-                      CircularProgressIndicator(strokeWidth: 2, color: _green),
-                ),
-              )
-            else if (_ikrarZakat.isNotEmpty)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF0FDF4),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFBBF7D0)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              // ── Section 2: Pilih Jenis Zakat ─────────────────────────────
+              _sectionLabel('PILIH JENIS ZAKAT'),
+              const SizedBox(height: 8),
+              Consumer<ZakatProvider>(
+                builder: (_, provider, __) => Row(
                   children: [
-                    const Row(
-                      children: [
-                        Icon(Icons.format_quote_rounded,
-                            size: 16, color: _green),
-                        SizedBox(width: 6),
-                        Text(
-                          'Ikrar Zakat',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: _green,
-                          ),
-                        ),
-                      ],
+                    Expanded(
+                      child: _ZakatTypeCard(
+                        icon: '🌾',
+                        title: 'Beras',
+                        subtitle: '$_totalSouls So\'',
+                        isSelected: _type == _ZakatType.beras,
+                        onTap: () => setState(() => _type = _ZakatType.beras),
+                      ),
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _ikrarZakat,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: Color(0xFF166534),
-                        height: 1.5,
-                        fontStyle: FontStyle.italic,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _ZakatTypeCard(
+                        icon: '💵',
+                        title: 'Uang Tunai',
+                        subtitle:
+                            'Rp ${_formatRp(provider.selectedYear?.riceRatePerSo ?? _titipUangRate)}/jiwa',
+                        isSelected: _type == _ZakatType.uang,
+                        onTap: () => setState(() => _type = _ZakatType.uang),
                       ),
                     ),
                   ],
                 ),
               ),
-            const SizedBox(height: 32),
+              const SizedBox(height: 12),
+              _ZakatTypeCard(
+                icon: '⚖️',
+                title: 'Campuran',
+                subtitle: '$_riceJiwa beras • $_moneyJiwa uang',
+                isSelected: _type == _ZakatType.campuran,
+                onTap: () => setState(() => _type = _ZakatType.campuran),
+              ),
+              const SizedBox(height: 12),
+              _buildExternalSoulsCard(),
+              if (_type == _ZakatType.campuran) ...[
+                const SizedBox(height: 12),
+                _buildMixedAllocation(members),
+              ],
+              const SizedBox(height: 20),
 
-            // ── Bayar Button ──────────────────────────────────────────────
-            SizedBox(
-              width: double.infinity,
-              height: 54,
-              child: ElevatedButton.icon(
-                onPressed:
-                    (_isSubmitting || _selectedIds.isEmpty) ? null : _submit,
-                icon: _isSubmitting
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation(Colors.white),
-                        ),
-                      )
-                    : const Icon(Icons.check_circle_outline, size: 20),
-                label: Text(
-                  _isSubmitting
-                      ? 'Menyimpan…'
-                      : _totalSouls == 0
-                          ? 'Pilih Anggota'
-                          : 'Bayar Zakat ($_totalSouls jiwa)',
-                  style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.bold),
+              // ── Section 3: Total ──────────────────────────────────────────
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(14),
                 ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _green,
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: _green.withOpacity(0.4),
-                  disabledForegroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                  elevation: 4,
-                  shadowColor: _green.withOpacity(0.4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Total Pembayaran',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF334155),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _type == _ZakatType.campuran
+                              ? '$_riceJiwa beras • $_moneyJiwa uang'
+                              : '$_totalSouls jiwa dihitung',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF94A3B8),
+                          ),
+                        ),
+                      ],
+                    ),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 200),
+                      child: Text(
+                        _totalSouls == 0
+                            ? '—'
+                            : _type == _ZakatType.beras
+                                ? '$_totalSouls So\' Beras'
+                                : _type == _ZakatType.uang
+                                    ? 'Rp ${_formatRp(_totalUang)}'
+                                    : _moneyJiwa == 0
+                                        ? '$_totalSouls So\' Beras'
+                                        : _riceJiwa == 0
+                                            ? 'Rp ${_formatRp(_totalUang)}'
+                                            : '$_riceJiwa So\' + Rp ${_formatRp(_totalUang)}',
+                        key: ValueKey('$_type$_totalSouls$_moneyJiwa'),
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: _totalSouls == 0
+                              ? const Color(0xFFCBD5E1)
+                              : _green,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
-            const SizedBox(height: 24),
-          ],
+              const SizedBox(height: 20),
+
+              // ── Section 4: Pilih Amil ─────────────────────────────────────
+              _sectionLabel('PILIH AMIL (AKAD)'),
+              const SizedBox(height: 8),
+              _buildAmilSelector(),
+              const SizedBox(height: 20),
+
+              // ── Section 5: Catatan ────────────────────────────────────────
+              _sectionLabel('CATATAN (OPSIONAL)'),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _catatanCtrl,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  hintText: 'Contoh: Niat zakat untuk keluarga...',
+                  hintStyle:
+                      const TextStyle(color: Color(0xFFCBD5E1), fontSize: 13),
+                  filled: true,
+                  fillColor: Colors.white,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: _green, width: 1.5),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // ── Ikrar Zakat ────────────────────────────────────────────────
+              if (_loadingIkrar)
+                Container(
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF0FDF4),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFBBF7D0)),
+                  ),
+                  alignment: Alignment.center,
+                  child: const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: _green),
+                  ),
+                )
+              else if (_ikrarZakat.isNotEmpty)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF0FDF4),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFBBF7D0)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.format_quote_rounded,
+                              size: 16, color: _green),
+                          SizedBox(width: 6),
+                          Text(
+                            'Ikrar Zakat',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: _green,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _ikrarZakat,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF166534),
+                          height: 1.5,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              const SizedBox(height: 32),
+
+              // ── Bayar Button ──────────────────────────────────────────────
+              SizedBox(
+                width: double.infinity,
+                height: 54,
+                child: ElevatedButton.icon(
+                  onPressed:
+                      (_isSubmitting || _selectedIds.isEmpty) ? null : _submit,
+                  icon: _isSubmitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation(Colors.white),
+                          ),
+                        )
+                      : const Icon(Icons.check_circle_outline, size: 20),
+                  label: Text(
+                    _isSubmitting
+                        ? 'Menyimpan…'
+                        : _totalSouls == 0
+                            ? 'Pilih Anggota'
+                            : 'Bayar Zakat ($_totalSouls jiwa)',
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _green,
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: _green.withOpacity(0.4),
+                    disabledForegroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                    elevation: 4,
+                    shadowColor: _green.withOpacity(0.4),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+          ),
         ),
       ),
-    ),
     );
   }
 
@@ -720,6 +742,59 @@ class _ZakatTransactionScreenState extends State<ZakatTransactionScreen> {
             onMinus: () => _changeExternalSouls(-1),
             onPlus: () => _changeExternalSouls(1),
           ),
+          if (_externalSouls > 0) ...[
+            const SizedBox(height: 10),
+            const Text(
+              'Dari eksternal (opsional)',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF64748B),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Consumer<ZakatProvider>(
+              builder: (context, zakat, _) {
+                final options = zakat.externals
+                    .where((e) => e.isActive || e.id == _externalId)
+                    .toList();
+                if (options.isEmpty) {
+                  return const Text(
+                    'Belum ada data eksternal (Config → Master Eksternal).',
+                    style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                  );
+                }
+                return Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: options.map((e) {
+                    final selected = _externalId == e.id;
+                    return ChoiceChip(
+                      label: Text(e.name),
+                      selected: selected,
+                      onSelected: (_) => setState(
+                        () => _externalId = selected ? null : e.id,
+                      ),
+                      selectedColor: const Color(0xFF7E22CE),
+                      labelStyle: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color:
+                            selected ? Colors.white : const Color(0xFF7E22CE),
+                      ),
+                      showCheckmark: false,
+                      backgroundColor: Colors.white,
+                      side: BorderSide(
+                        color: selected
+                            ? const Color(0xFF7E22CE)
+                            : const Color(0xFFE2E8F0),
+                      ),
+                    );
+                  }).toList(),
+                );
+              },
+            ),
+          ],
           if (_type == _ZakatType.campuran) ...[
             const SizedBox(height: 8),
             _buildCounterRow(
@@ -895,7 +970,6 @@ class _ZakatTransactionScreenState extends State<ZakatTransactionScreen> {
           final i = entry.key;
           final m = entry.value;
           final isSelected = _selectedIds.contains(m.id);
-          final isMale = m.isMale;
           final isLast = i == members.length - 1;
 
           return Column(
@@ -909,7 +983,7 @@ class _ZakatTransactionScreenState extends State<ZakatTransactionScreen> {
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 150),
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
                   decoration: BoxDecoration(
                     color: isSelected
                         ? const Color(0xFFE8F5F0)
@@ -942,56 +1016,39 @@ class _ZakatTransactionScreenState extends State<ZakatTransactionScreen> {
                       ),
                       const SizedBox(width: 12),
 
-                      // Avatar
-                      CircleAvatar(
-                        radius: 16,
-                        backgroundColor:
-                            isMale ? _greenLight : const Color(0xFFFCE4EC),
-                        child: Text(
-                          m.initials,
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                            color: isMale ? _green : const Color(0xFFC2185B),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-
-                      // Name + relationship
+                      // Name · relationship on one line
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    m.fullName,
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      color: Color(0xFF1A1A1A),
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
+                        child: Text.rich(
+                          TextSpan(
+                            text: m.fullName,
+                            children: [
+                              if (m.isHeadOfFamily)
+                                const TextSpan(
+                                  text: '  KK',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF9A3412),
                                   ),
                                 ),
-                                if (m.isHeadOfFamily) ...[
-                                  const SizedBox(width: 4),
-                                  const Icon(Icons.star_rounded,
-                                      size: 13, color: Color(0xFFE65100)),
-                                ],
-                              ],
-                            ),
-                            if (m.relationship.isNotEmpty)
-                              Text(
-                                m.relationship,
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  color: Color(0xFF94A3B8),
+                              if (m.relationship.isNotEmpty)
+                                TextSpan(
+                                  text: '  ·  ${m.relationship}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w400,
+                                    color: Color(0xFF64748B),
+                                  ),
                                 ),
-                              ),
-                          ],
+                            ],
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1A1A1A),
+                          ),
                         ),
                       ),
 
@@ -1005,7 +1062,7 @@ class _ZakatTransactionScreenState extends State<ZakatTransactionScreen> {
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: const Text(
-                            '✓ Lunas',
+                            'Lunas',
                             style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.bold,
@@ -1017,8 +1074,7 @@ class _ZakatTransactionScreenState extends State<ZakatTransactionScreen> {
                   ),
                 ),
               ),
-              if (!isLast)
-                const Divider(height: 1, indent: 48, color: Color(0xFFEEF2F7)),
+              if (!isLast) const Divider(height: 1, color: Color(0xFFEEF2F7)),
             ],
           );
         }).toList(),
@@ -1116,76 +1172,6 @@ class _ZakatTransactionScreenState extends State<ZakatTransactionScreen> {
                   ),
                 );
               },
-            ),
-        ],
-      ),
-    );
-  }
-
-  // ── Serah Terima section ─────────────────────────────────────────────────
-  Widget _buildSerahTerimaSection() {
-    final hasAmil = _selectedAmil != null;
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── Option 1: Titip Zakat ────────────────────────────────────────
-          _SerahTerimaOption(
-            icon: Icons.handshake_outlined,
-            title: 'Titip Zakat',
-            subtitle: hasAmil && _serahTerimaMode == _SerahTerimaMode.titip
-                ? 'Dititipkan ke ${_selectedAmil!.name}, belum ucap akad'
-                : 'Zakat dititipkan ke amil, belum mengucapkan akad',
-            isSelected: _serahTerimaMode == _SerahTerimaMode.titip,
-            iconBg: const Color(0xFFFFF7ED),
-            iconColor: const Color(0xFFD97706),
-            onTap: () => setState(() {
-              _serahTerimaMode = _serahTerimaMode == _SerahTerimaMode.titip
-                  ? _SerahTerimaMode.none
-                  : _SerahTerimaMode.titip;
-            }),
-          ),
-          const Divider(height: 1, color: Color(0xFFF1F5F9)),
-
-          // ── Option 2: Langsung Akad ke Amil ─────────────────────────────
-          _SerahTerimaOption(
-            icon: Icons.verified_outlined,
-            title: 'Langsung Akad ke Amil',
-            subtitle: hasAmil && _serahTerimaMode == _SerahTerimaMode.akad
-                ? 'Akad zakat fitrah ke ${_selectedAmil!.name} ✓'
-                : 'Serahkan zakat sambil ucap akad titip zakat fitrah',
-            isSelected: _serahTerimaMode == _SerahTerimaMode.akad,
-            iconBg: const Color(0xFFE8F5F0),
-            iconColor: _green,
-            onTap: () => setState(() {
-              _serahTerimaMode = _serahTerimaMode == _SerahTerimaMode.akad
-                  ? _SerahTerimaMode.none
-                  : _SerahTerimaMode.akad;
-            }),
-          ),
-
-          // ── Warning: amil belum dipilih ──────────────────────────────────
-          if (_serahTerimaMode != _SerahTerimaMode.none && !hasAmil)
-            const Padding(
-              padding: EdgeInsets.fromLTRB(14, 0, 14, 12),
-              child: Row(
-                children: [
-                  Icon(Icons.info_outline,
-                      size: 14, color: Color(0xFFD97706)),
-                  SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      'Pilih nama amil di section "Pilih Amil" di atas agar tercatat.',
-                      style: TextStyle(fontSize: 11, color: Color(0xFFD97706)),
-                    ),
-                  ),
-                ],
-              ),
             ),
         ],
       ),
@@ -1426,109 +1412,6 @@ class _ZakatTypeCard extends StatelessWidget {
                 child:
                     Icon(Icons.check_circle_rounded, size: 20, color: _green),
               ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Serah Terima Option Row
-// ─────────────────────────────────────────────────────────────────────────────
-class _SerahTerimaOption extends StatelessWidget {
-  const _SerahTerimaOption({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.isSelected,
-    required this.iconBg,
-    required this.iconColor,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final bool isSelected;
-  final Color iconBg;
-  final Color iconColor;
-  final VoidCallback onTap;
-
-  static const _green = Color(0xFF066046);
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFE8F5F0) : Colors.transparent,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Row(
-          children: [
-            // Icon badge
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: isSelected ? iconBg : const Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(
-                icon,
-                size: 20,
-                color: isSelected ? iconColor : const Color(0xFF94A3B8),
-              ),
-            ),
-            const SizedBox(width: 12),
-            // Text
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: isSelected
-                          ? const Color(0xFF1A1A1A)
-                          : const Color(0xFF334155),
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: Color(0xFF94A3B8),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // Radio indicator
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              width: 20,
-              height: 20,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: isSelected ? _green : Colors.white,
-                border: Border.all(
-                  color: isSelected ? _green : const Color(0xFFCBD5E1),
-                  width: 2,
-                ),
-              ),
-              child: isSelected
-                  ? const Icon(Icons.circle, size: 8, color: Colors.white)
-                  : null,
-            ),
           ],
         ),
       ),
