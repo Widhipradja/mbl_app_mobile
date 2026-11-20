@@ -84,7 +84,13 @@ class ApiService {
           );
           debugPrint('🔴 FULL ERROR: $error');
           debugPrint('🔴 ERROR URL: ${error.requestOptions.uri}');
-          debugPrint('🔴 ERROR PAYLOAD: ${error.requestOptions.data}');
+          // Never print what carries a password.
+          final path = error.requestOptions.path;
+          final secret = path.contains('/password') ||
+              path.contains('/profile') ||
+              path.contains('login');
+          debugPrint(
+              '🔴 ERROR PAYLOAD: ${secret ? '<hidden>' : error.requestOptions.data}');
           if (error.response?.statusCode == 401) {
             // Token expired, logout user
             StorageService.clearAll();
@@ -387,8 +393,31 @@ class ApiService {
   }
 
   // User endpoints
+  /// Own profile. Endpoint: `GET /api/m/v1/profile` (flat answer; no `sex`
+  /// for an account not linked to a member). See docs/PROFILE_PASSWORD_API.md.
   Future<Response> getProfile() async {
-    return await _dio.get('/user/profile');
+    return await _dio.get('/api/m/v1/profile');
+  }
+
+  /// Edit own profile, partially: only the fields in [data] change
+  /// (`first_name`, `last_name`, `email`, `phone`, `sex`). Changing the email
+  /// also needs `current_password`. Never the `user_id`. Answers the updated
+  /// profile. Endpoint: `PUT /api/m/v1/profile`.
+  Future<Response> updateProfile(Map<String, dynamic> data) async {
+    return await _dio.put('/api/m/v1/profile', data: data);
+  }
+
+  /// Change own password. Endpoint: `PUT /api/m/v1/password`.
+  Future<Response> changePassword({
+    required String currentPassword,
+    required String newPassword,
+    required String confirmPassword,
+  }) async {
+    return await _dio.put('/api/m/v1/password', data: {
+      'current_password': currentPassword,
+      'new_password': newPassword,
+      'confirm_password': confirmPassword,
+    });
   }
 
   // Member endpoints

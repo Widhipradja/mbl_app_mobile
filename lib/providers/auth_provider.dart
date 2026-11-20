@@ -18,7 +18,7 @@ class AuthProvider with ChangeNotifier {
   final ApiService _apiService;
 
   AuthProvider({ApiService? apiService})
-    : _apiService = apiService ?? ApiService();
+      : _apiService = apiService ?? ApiService();
 
   // Initialize user from storage
   Future<void> init() async {
@@ -181,8 +181,7 @@ class AuthProvider with ChangeNotifier {
         _error = 'Network error. Please check your internet connection.';
       } else if (e.response?.data != null) {
         // Check for both 'error' and 'message' fields from gin.H
-        _error =
-            e.response?.data['error'] ??
+        _error = e.response?.data['error'] ??
             e.response?.data['message'] ??
             'Login failed. Please try again.';
       } else {
@@ -213,6 +212,31 @@ class AuthProvider with ChangeNotifier {
       _user = null;
       notifyListeners();
     }
+  }
+
+  /// Saves own profile edits: [changes] holds only the fields that changed
+  /// (never the `user_id`). The answer is flat and has no roles, tenant or
+  /// group, so those stay as they are. Throws on failure so the form can show
+  /// the reason.
+  Future<void> updateProfile(Map<String, dynamic> changes) async {
+    final resp = await _apiService.updateProfile(changes);
+    final body = resp.data;
+    final current = _user?.toJson() ?? <String, dynamic>{};
+    final sent = {...changes}..remove('current_password');
+    final merged = {
+      ...current,
+      ...sent,
+      if (body is Map<String, dynamic>)
+        for (final e in body.entries)
+          // avatar and address always come back empty: keep ours.
+          if (e.key != 'avatar' && e.key != 'address') e.key: e.value,
+    };
+    for (final k in ['user_id', 'tenant_id', 'id']) {
+      merged[k] = current[k];
+    }
+    _user = User.fromJson(merged);
+    await StorageService.saveUser(_user!);
+    notifyListeners();
   }
 
   // Clear error
