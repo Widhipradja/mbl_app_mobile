@@ -319,7 +319,7 @@ class DistributionConfigSectionState
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // ── Header ──────────────────────────────────────────────────────
-          _SectionBadge(label: 'DISTRIBUSI ZAKAT FITRAH'),
+          const _SectionBadge(label: 'DISTRIBUSI ZAKAT FITRAH'),
           const SizedBox(height: 6),
           Row(
             children: [

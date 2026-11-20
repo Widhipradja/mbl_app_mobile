@@ -158,6 +158,17 @@ class _ZakatBerandaBodyState extends State<ZakatBerandaBody> {
             summary?.summary.totalExternalSouls ?? externalSouls;
         final totalExternal = externalRegistered + externalNonRegistered;
         final totalMuzakkiOverall = totalInternal + totalExternal;
+        final totalRegisteredMuzakki = provider.muzakkiList.length;
+        final paidRegisteredMuzakki =
+            provider.muzakkiList.where((m) => m.isPaid).length;
+        final collectedPercent = totalRegisteredMuzakki > 0
+            ? (paidRegisteredMuzakki / totalRegisteredMuzakki) * 100
+            : 0.0;
+        final collectedProgress = totalRegisteredMuzakki > 0
+            ? (paidRegisteredMuzakki / totalRegisteredMuzakki)
+                .clamp(0.0, 1.0)
+                .toDouble()
+            : 0.0;
 
         final moneySouls = internalMoneySouls + externalMoneySouls;
 
@@ -284,18 +295,17 @@ class _ZakatBerandaBodyState extends State<ZakatBerandaBody> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // ── Summary Cards ──
+                _SummaryCard(
+                  title: 'Total Muzakki',
+                  value: totalMuzakkiOverall.toString(),
+                  unit: 'Orang',
+                  icon: Icons.people_outline,
+                  secondaryValue: '$totalSoulsOverall Jiwa',
+                  fullWidth: true,
+                ),
+                const SizedBox(height: 12),
                 Row(
                   children: [
-                    Expanded(
-                      child: _SummaryCard(
-                        title: 'Total Muzakki',
-                        value: totalMuzakkiOverall.toString(),
-                        unit: 'Orang',
-                        icon: Icons.people_outline,
-                        secondaryValue: '$totalSoulsOverall Jiwa',
-                      ),
-                    ),
-                    const SizedBox(width: 12),
                     Expanded(
                       child: _SummaryCard(
                         title: 'Total Beras',
@@ -304,15 +314,60 @@ class _ZakatBerandaBodyState extends State<ZakatBerandaBody> {
                         icon: Icons.rice_bowl_outlined,
                       ),
                     ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _SummaryCard(
+                        title: 'Total Uang',
+                        value: _formatRupiah(totalRp),
+                        unit: '',
+                        icon: Icons.payments_outlined,
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 12),
-                _SummaryCard(
-                  title: 'Total Uang',
-                  value: _formatRupiah(totalRp),
-                  unit: '',
-                  icon: Icons.payments_outlined,
-                  fullWidth: true,
+                Container(
+                  width: double.infinity,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.task_alt_rounded,
+                            size: 16,
+                            color: _green,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Sudah Mengumpulkan: $paidRegisteredMuzakki / $totalRegisteredMuzakki (${collectedPercent.toStringAsFixed(1)}%)',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF1A1A1A),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(99),
+                        child: LinearProgressIndicator(
+                          minHeight: 8,
+                          value: collectedProgress,
+                          backgroundColor: const Color(0xFFE2E8F0),
+                          valueColor: const AlwaysStoppedAnimation(_green),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 24),
 
@@ -689,7 +744,7 @@ class _ZakatBerandaBodyState extends State<ZakatBerandaBody> {
   String _formatRupiah(double amount) {
     if (amount == 0) return 'Rp 0';
     if (amount >= 1000000) {
-      return 'Rp ${(amount / 1000000).toStringAsFixed(1)} jt';
+      return 'Rp ${(amount / 1000000).toStringAsFixed(3)} jt';
     }
     if (amount >= 1000) {
       return 'Rp ${(amount / 1000).toStringAsFixed(0)} rb';
@@ -1107,136 +1162,137 @@ class ZakatDashboardScreen extends StatelessWidget {
             icon: const Icon(Icons.arrow_back, color: Color(0xFF1A1A1A)),
             onPressed: () => context.go('/dashboard'),
           ),
-        title: const Text(
-          'Zakat Fitrah 1447H',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF1A1A1A),
-            fontSize: 18,
+          title: const Text(
+            'Zakat Fitrah 1447H',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF1A1A1A),
+              fontSize: 18,
+            ),
           ),
+          actions: [
+            IconButton(
+              onPressed: () {},
+              icon: const Icon(Icons.notifications_none_outlined,
+                  color: Color(0xFF1A1A1A)),
+              tooltip: 'Notifikasi',
+            ),
+          ],
         ),
-        actions: [
-          IconButton(
-            onPressed: () {},
-            icon: const Icon(Icons.notifications_none_outlined,
-                color: Color(0xFF1A1A1A)),
-            tooltip: 'Notifikasi',
-          ),
-        ],
-      ),
-      body: Consumer<ZakatProvider>(
-        builder: (context, provider, _) {
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ── Summary Cards ──
-                Row(
-                  children: [
-                    Expanded(
-                      child: _SummaryCard(
-                        title: 'Total Muzakki',
-                        value: provider.totalMuzakki.toString(),
-                        unit: 'KK',
-                        icon: Icons.people_outline,
-                        secondaryValue: '${provider.totalJiwa} Jiwa',
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _SummaryCard(
-                        title: 'Total Beras',
-                        value: provider.totalRiceKg.toStringAsFixed(1),
-                        unit: 'Kg',
-                        icon: Icons.rice_bowl_outlined,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                _SummaryCard(
-                  title: 'Total Uang',
-                  value: _formatRupiah(provider.totalMoneyRp),
-                  unit: '',
-                  icon: Icons.payments_outlined,
-                  fullWidth: true,
-                ),
-                const SizedBox(height: 24),
-
-                // ── Add Muzakki Button ──
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: ElevatedButton.icon(
-                    onPressed: () => context.go('/zakat-fitrah/add'),
-                    icon: const Icon(Icons.person_add_alt_1_outlined, size: 20),
-                    label: const Text(
-                      'Tambah Muzakki',
-                      style:
-                          TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _green,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      elevation: 3,
-                      shadowColor: _green.withOpacity(0.35),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 28),
-
-                // ── Recent Muzakki ──
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Daftar Muzakki Terbaru',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF1A1A1A),
-                      ),
-                    ),
-                    if (provider.muzakkiList.isNotEmpty)
-                      Text(
-                        '${provider.muzakkiList.length} data',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: _green,
-                          fontWeight: FontWeight.w500,
+        body: Consumer<ZakatProvider>(
+          builder: (context, provider, _) {
+            return SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── Summary Cards ──
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _SummaryCard(
+                          title: 'Total Muzakki',
+                          value: provider.totalMuzakki.toString(),
+                          unit: 'KK',
+                          icon: Icons.people_outline,
+                          secondaryValue: '${provider.totalJiwa} Jiwa',
                         ),
                       ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-
-                if (provider.muzakkiList.isEmpty)
-                  _buildEmptyState()
-                else
-                  ListView.separated(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: provider.muzakkiList.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemBuilder: (context, index) {
-                      final m = provider.muzakkiList[index];
-                      return _MuzakkiTile(
-                        muzakki: m,
-                        onDelete: () => _confirmDelete(context, provider, m),
-                      );
-                    },
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _SummaryCard(
+                          title: 'Total Beras',
+                          value: provider.totalRiceKg.toStringAsFixed(1),
+                          unit: 'Kg',
+                          icon: Icons.rice_bowl_outlined,
+                        ),
+                      ),
+                    ],
                   ),
-                const SizedBox(height: 24),
-              ],
-            ),
-          );
-        },
+                  const SizedBox(height: 12),
+                  _SummaryCard(
+                    title: 'Total Uang',
+                    value: _formatRupiah(provider.totalMoneyRp),
+                    unit: '',
+                    icon: Icons.payments_outlined,
+                    fullWidth: true,
+                  ),
+                  const SizedBox(height: 24),
+
+                  // ── Add Muzakki Button ──
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton.icon(
+                      onPressed: () => context.go('/zakat-fitrah/add'),
+                      icon:
+                          const Icon(Icons.person_add_alt_1_outlined, size: 20),
+                      label: const Text(
+                        'Tambah Muzakki',
+                        style: TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.bold),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _green,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 3,
+                        shadowColor: _green.withOpacity(0.35),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+
+                  // ── Recent Muzakki ──
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Daftar Muzakki Terbaru',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1A1A1A),
+                        ),
+                      ),
+                      if (provider.muzakkiList.isNotEmpty)
+                        Text(
+                          '${provider.muzakkiList.length} data',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: _green,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  if (provider.muzakkiList.isEmpty)
+                    _buildEmptyState()
+                  else
+                    ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: provider.muzakkiList.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      itemBuilder: (context, index) {
+                        final m = provider.muzakkiList[index];
+                        return _MuzakkiTile(
+                          muzakki: m,
+                          onDelete: () => _confirmDelete(context, provider, m),
+                        );
+                      },
+                    ),
+                  const SizedBox(height: 24),
+                ],
+              ),
+            );
+          },
+        ),
       ),
-    ),
     );
   }
 
@@ -1387,7 +1443,6 @@ class _SummaryCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Container(
                       padding: const EdgeInsets.all(8),
@@ -1397,25 +1452,34 @@ class _SummaryCard extends StatelessWidget {
                       ),
                       child: Icon(icon, color: _green, size: 18),
                     ),
-                    if (secondaryValue != null)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE8F5F0),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          secondaryValue!,
-                          style: const TextStyle(
-                            color: _green,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
+                    if (secondaryValue != null) ...[
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE8F5F0),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              secondaryValue!,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: _green,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ),
                         ),
                       ),
+                    ],
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -1431,12 +1495,16 @@ class _SummaryCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.baseline,
                   textBaseline: TextBaseline.alphabetic,
                   children: [
-                    Text(
-                      value,
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF1A1A1A),
+                    Flexible(
+                      child: Text(
+                        value,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1A1A1A),
+                        ),
                       ),
                     ),
                     if (unit.isNotEmpty) ...[

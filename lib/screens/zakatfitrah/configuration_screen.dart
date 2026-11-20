@@ -120,7 +120,7 @@ class _ConfigurationScreenState extends State<ConfigurationScreen> {
             ? defaultGroup
             : null;
 
-    String _fmt(DateTime? d) => d != null
+    String fmt(DateTime? d) => d != null
         ? '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}'
         : '';
 
@@ -130,7 +130,7 @@ class _ConfigurationScreenState extends State<ConfigurationScreen> {
         builder: (ctx, setLocal) {
           // ignore: prefer_function_declarations_over_variables
           final setActive = (bool v) => setLocal(() => isActive = v);
-          Widget _datePicker({
+          Widget datePicker({
             required String label,
             required DateTime? value,
             required void Function(DateTime) onPicked,
@@ -166,7 +166,7 @@ class _ConfigurationScreenState extends State<ConfigurationScreen> {
                   children: [
                     Expanded(
                       child: Text(
-                        value != null ? _fmt(value) : 'Pilih tanggal',
+                        value != null ? fmt(value) : 'Pilih tanggal',
                         style: TextStyle(
                           fontSize: 14,
                           color: value != null
@@ -199,7 +199,7 @@ class _ConfigurationScreenState extends State<ConfigurationScreen> {
                   const Text('Ramadhan Start',
                       style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
                   const SizedBox(height: 4),
-                  _datePicker(
+                  datePicker(
                     label: 'Ramadhan Start',
                     value: ramadhanStart,
                     onPicked: (d) => ramadhanStart = d,
@@ -208,7 +208,7 @@ class _ConfigurationScreenState extends State<ConfigurationScreen> {
                   const Text('Ramadhan End',
                       style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
                   const SizedBox(height: 4),
-                  _datePicker(
+                  datePicker(
                     label: 'Ramadhan End',
                     value: ramadhanEnd,
                     onPicked: (d) => ramadhanEnd = d,
@@ -258,16 +258,17 @@ class _ConfigurationScreenState extends State<ConfigurationScreen> {
               ElevatedButton(
                 onPressed: () async {
                   final hijriYear = int.tryParse(hijriYearCtrl.text.trim());
-                  if (hijriYear == null || labelCtrl.text.trim().isEmpty)
+                  if (hijriYear == null || labelCtrl.text.trim().isEmpty) {
                     return;
+                  }
 
                   final payload = <String, dynamic>{
                     'hijri_year': hijriYear,
                     'label': labelCtrl.text.trim(),
                     'ramadhan_start':
-                        ramadhanStart != null ? _fmt(ramadhanStart) : null,
+                        ramadhanStart != null ? fmt(ramadhanStart) : null,
                     'ramadhan_end':
-                        ramadhanEnd != null ? _fmt(ramadhanEnd) : null,
+                        ramadhanEnd != null ? fmt(ramadhanEnd) : null,
                     'rice_rate_per_so': riceRateCtrl.text.trim(),
                     'group_name': selectedGroupName ?? '',
                     'is_active': isActive,

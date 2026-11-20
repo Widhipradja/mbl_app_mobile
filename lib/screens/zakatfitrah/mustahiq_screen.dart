@@ -907,17 +907,128 @@ class _MustahiqScreenState extends State<MustahiqScreen> {
   }
 
   Widget _buildMustahiqTable({required int totalSouls}) {
+    TableRow headerRow() => const TableRow(
+          decoration: BoxDecoration(color: Color(0xFFF8FAFC)),
+          children: [
+            Padding(
+              padding: EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+              child: Text('No',
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF64748B))),
+            ),
+            Padding(
+              padding: EdgeInsets.symmetric(vertical: 6, horizontal: 6),
+              child: Text('Nama',
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF64748B))),
+            ),
+            Padding(
+              padding: EdgeInsets.symmetric(vertical: 6),
+              child: Text('Asnaf',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF64748B))),
+            ),
+            Padding(
+              padding: EdgeInsets.symmetric(vertical: 6),
+              child: Text('Jiwa',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF64748B))),
+            ),
+          ],
+        );
+
+    const ts = TextStyle(fontSize: 12, color: Color(0xFF1A1A1A));
+
+    TableRow dataRow(_MustahiqItem item, int index) => TableRow(
+          children: [
+            GestureDetector(
+              onTap: () => _showMustahiqActions(item),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                child: Text('${index + 1}', style: ts),
+              ),
+            ),
+            GestureDetector(
+              onTap: () => _showMustahiqActions(item),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+                child: Text(item.name, style: ts),
+              ),
+            ),
+            GestureDetector(
+              onTap: () => _showMustahiqActions(item),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(item.asnafLabel,
+                    textAlign: TextAlign.center, style: ts),
+              ),
+            ),
+            GestureDetector(
+              onTap: () => _showMustahiqActions(item),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text('${item.souls}',
+                    textAlign: TextAlign.center, style: ts),
+              ),
+            ),
+          ],
+        );
+
+    TableRow totalRow() => TableRow(
+          decoration: const BoxDecoration(color: Color(0xFFF1F5F9)),
+          children: [
+            const SizedBox.shrink(),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+              child: Text('Total',
+                  style: TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.w700)),
+            ),
+            const SizedBox.shrink(),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text('$totalSouls',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.w700)),
+            ),
+          ],
+        );
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
-      child: _mustahiq.isEmpty
-          ? const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Daftar Mustahiq',
+            style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF1A1A1A)),
+          ),
+          const SizedBox(height: 10),
+          if (_mustahiq.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
               child: Center(
                 child: Text(
                   'Belum ada data mustahiq',
@@ -925,49 +1036,27 @@ class _MustahiqScreenState extends State<MustahiqScreen> {
                 ),
               ),
             )
-          : SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: DataTable(
-                headingRowHeight: 36,
-                dataRowMinHeight: 44,
-                dataRowMaxHeight: 52,
-                columns: const [
-                  DataColumn(label: Text('Nama')),
-                  DataColumn(label: Text('Asnaf')),
-                  DataColumn(numeric: true, label: Text('Jiwa')),
-                ],
-                rows: [
-                  ..._mustahiq.map(
-                    (item) => DataRow(
-                      onLongPress: () => _showMustahiqActions(item),
-                      cells: [
-                        DataCell(Text(item.name)),
-                        DataCell(Text(item.asnafLabel)),
-                        DataCell(Text('${item.souls}')),
-                      ],
-                    ),
-                  ),
-                  DataRow(
-                    color: WidgetStateProperty.all(const Color(0xFFF1F5F9)),
-                    cells: [
-                      const DataCell(
-                        Text(
-                          'TOTAL',
-                          style: TextStyle(fontWeight: FontWeight.w700),
-                        ),
-                      ),
-                      const DataCell(SizedBox.shrink()),
-                      DataCell(
-                        Text(
-                          '$totalSouls',
-                          style: const TextStyle(fontWeight: FontWeight.w700),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+          else
+            Table(
+              columnWidths: const {
+                0: FixedColumnWidth(32),
+                1: FlexColumnWidth(3),
+                2: FlexColumnWidth(2),
+                3: FixedColumnWidth(44),
+              },
+              border: TableBorder.all(
+                  color: const Color(0xFFE2E8F0), width: 0.8),
+              children: [
+                headerRow(),
+                ..._mustahiq
+                    .asMap()
+                    .entries
+                    .map((e) => dataRow(e.value, e.key)),
+                totalRow(),
+              ],
             ),
+        ],
+      ),
     );
   }
 

@@ -78,12 +78,34 @@ class Event {
       '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
   Map<String, dynamic> toJson() {
+    String? eventTimeFromIso;
+    String? eventTimeToIso;
+    if (timeFrom != null) {
+      final fromDateTime = DateTime(
+        dateTime.year,
+        dateTime.month,
+        dateTime.day,
+        timeFrom!.hour,
+        timeFrom!.minute,
+      );
+      eventTimeFromIso = fromDateTime.toIso8601String();
+    }
+    if (timeTo != null) {
+      final toDateTime = DateTime(
+        dateTime.year,
+        dateTime.month,
+        dateTime.day,
+        timeTo!.hour,
+        timeTo!.minute,
+      );
+      eventTimeToIso = toDateTime.toIso8601String();
+    }
     return {
       if (id != null) 'id': id,
       'event_name': name,
       'event_date': dateTime.toIso8601String(),
-      if (timeFrom != null) 'event_time_from': _fmt(timeFrom!),
-      if (timeTo != null) 'event_time_to': _fmt(timeTo!),
+      if (eventTimeFromIso != null) 'event_time_from': eventTimeFromIso,
+      if (eventTimeToIso != null) 'event_time_to': eventTimeToIso,
       'location': location,
       'category': category,
       if (remark != null) 'remark': remark,

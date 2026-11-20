@@ -97,6 +97,61 @@ class MuzakkiListScreen extends StatefulWidget {
 }
 
 class _MuzakkiListScreenState extends State<MuzakkiListScreen> {
+    Future<void> _exportMuzakkiToExcel() async {
+      final provider = context.read<ZakatProvider>();
+      final yearId = provider.selectedYear?.id ?? '';
+      final allMuzakki = provider.muzakkiList;
+      final groups = _buildGroups(allMuzakki);
+      final excel = ex.Excel.createExcel();
+      final sheet = excel['REKAP_ZAKAT'];
+      // Header row
+      final headers = [
+        'NO',
+        'NAMA KEPALA KELUARGA',
+        'MAL&TIJAROH',
+        'ZURU''',
+        'TERNAK',
+        'JAMAAH',
+        'SIMPATISAN',
+        'MUZAQI',
+        'MUSTAHIQ',
+        'ZAKAT (RP)',
+        'TOTAL',
+      ];
+      for (var col = 0; col < headers.length; col++) {
+        sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: col, rowIndex: 0)).value = ex.TextCellValue(headers[col]);
+      }
+      // Data rows
+      for (var i = 0; i < groups.length; i++) {
+        final g = groups[i];
+        final headName = g.head?.fullName ?? '-';
+        final jamaah = g.members.where((m) => m.isInternal).length;
+        final simpatisan = g.members.where((m) => !m.isInternal).length;
+        final muzaqi = g.memberCount;
+        sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: i + 1)).value = ex.TextCellValue('${i + 1}');
+        sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: i + 1)).value = ex.TextCellValue(headName);
+        sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: i + 1)).value = ex.TextCellValue('-'); // Mal&Tijaroh
+        sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: i + 1)).value = ex.TextCellValue('-'); // Zuru'
+        sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: i + 1)).value = ex.TextCellValue('-'); // Ternak
+        sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: i + 1)).value = ex.TextCellValue('$jamaah');
+        sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: i + 1)).value = ex.TextCellValue('$simpatisan');
+        sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: 7, rowIndex: i + 1)).value = ex.TextCellValue('$muzaqi');
+        sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: 8, rowIndex: i + 1)).value = ex.TextCellValue('-'); // Mustahiq
+        sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: 9, rowIndex: i + 1)).value = ex.TextCellValue('-'); // Zakat (RP)
+        sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: 10, rowIndex: i + 1)).value = ex.TextCellValue('-'); // Total
+      }
+      // Save file
+      final bytes = excel.encode();
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/rekap_zakat_${DateTime.now().millisecondsSinceEpoch}.xlsx');
+      await file.writeAsBytes(bytes!);
+      await Share.shareXFiles([
+        XFile(file.path, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
+      ],
+        subject: 'Rekap Zakat Fitrah',
+        text: 'Rekap Zakat Fitrah',
+      );
+    }
   static const _green = Color(0xFF066046);
 
   final TextEditingController _searchController = TextEditingController();
@@ -608,6 +663,7 @@ class _MuzakkiListScreenState extends State<MuzakkiListScreen> {
                             if (value == 'upload' && !_isImportingExcel) {
                               _uploadExcelMuzakki();
                             }
+                            if (value == 'export') _exportMuzakkiToExcel();
                           },
                           icon: Container(
                             padding: const EdgeInsets.all(8),
@@ -619,6 +675,16 @@ class _MuzakkiListScreenState extends State<MuzakkiListScreen> {
                                 color: Color(0xFF64748B), size: 20),
                           ),
                           itemBuilder: (_) => [
+                            const PopupMenuItem(
+                              value: 'export',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.file_download_outlined, size: 18, color: Color(0xFF066046)),
+                                  SizedBox(width: 10),
+                                  Text('Export Rekap Excel', style: TextStyle(fontSize: 13)),
+                                ],
+                              ),
+                            ),
                             const PopupMenuItem(
                               value: 'download',
                               child: Row(
@@ -926,14 +992,14 @@ class _FamilyCardState extends State<_FamilyCard> {
                             icon: g.members.any((m) => m.isSerahTerimaAmil)
                                 ? Icons.handshake_rounded
                                 : Icons.handshake_outlined,
-                            color: g.members.every((m) =>
-                                        !m.isPaid || m.isSerahTerimaAmil)
+                            color: g.members.every(
+                                    (m) => !m.isPaid || m.isSerahTerimaAmil)
                                 ? const Color(0xFF16A34A)
                                 : g.members.any((m) => m.isSerahTerimaAmil)
                                     ? const Color(0xFFD97706)
                                     : const Color(0xFFCBD5E1),
                             tooltip: g.members.every(
-                                        (m) => !m.isPaid || m.isSerahTerimaAmil)
+                                    (m) => !m.isPaid || m.isSerahTerimaAmil)
                                 ? 'Semua sudah akad'
                                 : 'Belum semua akad ke amil',
                           ),
@@ -992,9 +1058,7 @@ class _FamilyCardState extends State<_FamilyCard> {
                             ],
                             // Expand arrow
                             Icon(
-                              _expanded
-                                  ? Icons.expand_less
-                                  : Icons.expand_more,
+                              _expanded ? Icons.expand_less : Icons.expand_more,
                               size: 18,
                               color: const Color(0xFF94A3B8),
                             ),
@@ -1103,268 +1167,270 @@ class _FamilyCardState extends State<_FamilyCard> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-              RichText(
-                text: TextSpan(
-                  style:
-                      const TextStyle(fontSize: 13, color: Color(0xFF334155)),
-                  children: [
-                    const TextSpan(
-                        text: 'Serah terima zakat ke amil untuk keluarga '),
-                    TextSpan(
-                      text: g.familyName,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    const TextSpan(text: '.'),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              // ── Amil selector ─────────────────────────────────────────
-              const Text(
-                'Nama Amil *',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF334155),
-                ),
-              ),
-              const SizedBox(height: 6),
-              if (loadingAmil)
-                Container(
-                  height: 48,
-                  decoration: BoxDecoration(
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  alignment: Alignment.center,
-                  child: const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: _green),
-                  ),
-                )
-              else if (amilList.isEmpty)
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Row(
+                RichText(
+                  text: TextSpan(
+                    style:
+                        const TextStyle(fontSize: 13, color: Color(0xFF334155)),
                     children: [
-                      Icon(Icons.warning_amber_rounded,
-                          size: 16, color: Color(0xFFF59E0B)),
-                      SizedBox(width: 8),
-                      Text('Tidak ada data amil',
-                          style: TextStyle(
-                              color: Color(0xFF94A3B8), fontSize: 13)),
+                      const TextSpan(
+                          text: 'Serah terima zakat ke amil untuk keluarga '),
+                      TextSpan(
+                        text: g.familyName,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      const TextSpan(text: '.'),
                     ],
                   ),
-                )
-              else
-                GestureDetector(
-                  onTap: () async {
-                    final picked = await showModalBottomSheet<_Amil>(
-                      context: ctx,
-                      isScrollControlled: true,
-                      shape: const RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius.vertical(top: Radius.circular(16)),
-                      ),
-                      builder: (sheetCtx) => DraggableScrollableSheet(
-                        expand: false,
-                        initialChildSize: 0.5,
-                        maxChildSize: 0.85,
-                        builder: (_, sc) => Column(
-                          children: [
-                            Container(
-                              margin: const EdgeInsets.only(top: 10, bottom: 8),
-                              width: 36,
-                              height: 4,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFCBD5E1),
-                                borderRadius: BorderRadius.circular(2),
-                              ),
-                            ),
-                            const Padding(
-                              padding: EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 6),
-                              child: Text('Pilih Nama Amil',
-                                  style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 15)),
-                            ),
-                            const Divider(height: 1),
-                            Expanded(
-                              child: ListView.builder(
-                                controller: sc,
-                                itemCount: amilList.length,
-                                itemBuilder: (_, i) {
-                                  final a = amilList[i];
-                                  final isSel = selectedAmil?.id == a.id;
-                                  return ListTile(
-                                    leading: CircleAvatar(
-                                      radius: 18,
-                                      backgroundColor: const Color(0xFFE8F5F0),
-                                      child: Text(
-                                        a.name.isNotEmpty
-                                            ? a.name[0].toUpperCase()
-                                            : '?',
-                                        style: const TextStyle(
-                                            color: _green,
-                                            fontWeight: FontWeight.bold),
-                                      ),
-                                    ),
-                                    title: Text(a.name,
-                                        style: const TextStyle(
-                                            fontWeight: FontWeight.w600)),
-                                    subtitle: a.groupName.isNotEmpty
-                                        ? Text(a.groupName)
-                                        : null,
-                                    trailing: isSel
-                                        ? const Icon(Icons.check_circle,
-                                            color: _green)
-                                        : null,
-                                    selected: isSel,
-                                    onTap: () => Navigator.pop(sheetCtx, a),
-                                  );
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                    if (picked != null) {
-                      setDialogState(() => selectedAmil = picked);
-                    }
-                  },
-                  child: Container(
+                ),
+                const SizedBox(height: 16),
+                // ── Amil selector ─────────────────────────────────────────
+                const Text(
+                  'Nama Amil *',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF334155),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                if (loadingAmil)
+                  Container(
+                    height: 48,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    alignment: Alignment.center,
+                    child: const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: _green),
+                    ),
+                  )
+                else if (amilList.isEmpty)
+                  Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 12, vertical: 12),
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      border: Border.all(
-                        color: selectedAmil != null
-                            ? _green
-                            : const Color(0xFFE2E8F0),
-                        width: selectedAmil != null ? 1.5 : 1,
-                      ),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Row(
+                    child: const Row(
                       children: [
-                        Icon(
-                          Icons.person_outline,
-                          size: 18,
+                        Icon(Icons.warning_amber_rounded,
+                            size: 16, color: Color(0xFFF59E0B)),
+                        SizedBox(width: 8),
+                        Text('Tidak ada data amil',
+                            style: TextStyle(
+                                color: Color(0xFF94A3B8), fontSize: 13)),
+                      ],
+                    ),
+                  )
+                else
+                  GestureDetector(
+                    onTap: () async {
+                      final picked = await showModalBottomSheet<_Amil>(
+                        context: ctx,
+                        isScrollControlled: true,
+                        shape: const RoundedRectangleBorder(
+                          borderRadius:
+                              BorderRadius.vertical(top: Radius.circular(16)),
+                        ),
+                        builder: (sheetCtx) => DraggableScrollableSheet(
+                          expand: false,
+                          initialChildSize: 0.5,
+                          maxChildSize: 0.85,
+                          builder: (_, sc) => Column(
+                            children: [
+                              Container(
+                                margin:
+                                    const EdgeInsets.only(top: 10, bottom: 8),
+                                width: 36,
+                                height: 4,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFCBD5E1),
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                              const Padding(
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 6),
+                                child: Text('Pilih Nama Amil',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15)),
+                              ),
+                              const Divider(height: 1),
+                              Expanded(
+                                child: ListView.builder(
+                                  controller: sc,
+                                  itemCount: amilList.length,
+                                  itemBuilder: (_, i) {
+                                    final a = amilList[i];
+                                    final isSel = selectedAmil?.id == a.id;
+                                    return ListTile(
+                                      leading: CircleAvatar(
+                                        radius: 18,
+                                        backgroundColor:
+                                            const Color(0xFFE8F5F0),
+                                        child: Text(
+                                          a.name.isNotEmpty
+                                              ? a.name[0].toUpperCase()
+                                              : '?',
+                                          style: const TextStyle(
+                                              color: _green,
+                                              fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                      title: Text(a.name,
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.w600)),
+                                      subtitle: a.groupName.isNotEmpty
+                                          ? Text(a.groupName)
+                                          : null,
+                                      trailing: isSel
+                                          ? const Icon(Icons.check_circle,
+                                              color: _green)
+                                          : null,
+                                      selected: isSel,
+                                      onTap: () => Navigator.pop(sheetCtx, a),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                      if (picked != null) {
+                        setDialogState(() => selectedAmil = picked);
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        border: Border.all(
                           color: selectedAmil != null
                               ? _green
-                              : const Color(0xFF94A3B8),
+                              : const Color(0xFFE2E8F0),
+                          width: selectedAmil != null ? 1.5 : 1,
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            selectedAmil?.name ?? 'Pilih Nama Amil...',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: selectedAmil != null
-                                  ? const Color(0xFF1A1A1A)
-                                  : const Color(0xFFCBD5E1),
-                              fontWeight: selectedAmil != null
-                                  ? FontWeight.w600
-                                  : FontWeight.normal,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.person_outline,
+                            size: 18,
+                            color: selectedAmil != null
+                                ? _green
+                                : const Color(0xFF94A3B8),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              selectedAmil?.name ?? 'Pilih Nama Amil...',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: selectedAmil != null
+                                    ? const Color(0xFF1A1A1A)
+                                    : const Color(0xFFCBD5E1),
+                                fontWeight: selectedAmil != null
+                                    ? FontWeight.w600
+                                    : FontWeight.normal,
+                              ),
+                            ),
+                          ),
+                          const Icon(Icons.expand_more,
+                              color: Color(0xFF94A3B8), size: 18),
+                        ],
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 16),
+                // ── Action buttons ────────────────────────────────────────
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: const Text('Batal',
+                          style: TextStyle(color: Color(0xFF64748B))),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: selectedAmil == null
+                          ? null
+                          : () => Navigator.pop(ctx, true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _green,
+                        foregroundColor: Colors.white,
+                        disabledBackgroundColor: _green.withOpacity(0.4),
+                        disabledForegroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                      ),
+                      child: const Text('Akad'),
+                    ),
+                  ],
+                ),
+                // ── Ikrar Zakat ───────────────────────────────────────────
+                if (ikrarZakat.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF0FDF4),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFBBF7D0)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Padding(
+                          padding: EdgeInsets.fromLTRB(14, 12, 14, 8),
+                          child: Row(
+                            children: [
+                              Icon(Icons.format_quote_rounded,
+                                  size: 16, color: _green),
+                              SizedBox(width: 6),
+                              Text(
+                                'Ikrar Zakat',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: _green,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Divider(height: 1, color: Color(0xFFBBF7D0)),
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxHeight: 120),
+                          child: SingleChildScrollView(
+                            padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+                            child: Text(
+                              ikrarZakat,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: Color(0xFF166534),
+                                height: 1.5,
+                                fontStyle: FontStyle.italic,
+                              ),
                             ),
                           ),
                         ),
-                        const Icon(Icons.expand_more,
-                            color: Color(0xFF94A3B8), size: 18),
                       ],
                     ),
                   ),
-                ),
-              const SizedBox(height: 16),
-              // ── Action buttons ────────────────────────────────────────
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx, false),
-                    child: const Text('Batal',
-                        style: TextStyle(color: Color(0xFF64748B))),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: selectedAmil == null
-                        ? null
-                        : () => Navigator.pop(ctx, true),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _green,
-                      foregroundColor: Colors.white,
-                      disabledBackgroundColor: _green.withOpacity(0.4),
-                      disabledForegroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                    ),
-                    child: const Text('Akad'),
-                  ),
                 ],
-              ),
-              // ── Ikrar Zakat ───────────────────────────────────────────
-              if (ikrarZakat.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF0FDF4),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFBBF7D0)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.format_quote_rounded,
-                                size: 16, color: _green),
-                            const SizedBox(width: 6),
-                            const Text(
-                              'Ikrar Zakat',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: _green,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const Divider(height: 1, color: Color(0xFFBBF7D0)),
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxHeight: 120),
-                        child: SingleChildScrollView(
-                          padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
-                          child: Text(
-                            ikrarZakat,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: Color(0xFF166534),
-                              height: 1.5,
-                              fontStyle: FontStyle.italic,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
               ],
-            ],
-          ),
+            ),
           ),
         ),
       ),
@@ -1404,8 +1470,19 @@ class _FamilyCardState extends State<_FamilyCard> {
 
     final now = DateTime.now();
     const months = [
-      '', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
+      '',
+      'Januari',
+      'Februari',
+      'Maret',
+      'April',
+      'Mei',
+      'Juni',
+      'Juli',
+      'Agustus',
+      'September',
+      'Oktober',
+      'November',
+      'Desember',
     ];
     final tanggal = '${now.day} ${months[now.month]} ${now.year}';
 
@@ -1414,13 +1491,15 @@ class _FamilyCardState extends State<_FamilyCard> {
     final List<Map<String, dynamic>> paidMembers = [];
 
     // ── Read org/location from already-loaded ConfigurationProvider ───
-    final _cfgs = context.read<ConfigurationProvider>().configurations;
-    String _cfgVal(String code) =>
-        _cfgs.firstWhere((c) => c.code == code,
-            orElse: () => const AppConfiguration(oid: '', module: '', code: '')).value.trim();
-    final orgName = _cfgVal('GROUP');
-    final location = _cfgVal('LOCATION');
-    final locationAddr = _cfgVal('LOCATION_ADDR');
+    final cfgs = context.read<ConfigurationProvider>().configurations;
+    String cfgVal(String code) => cfgs
+        .firstWhere((c) => c.code == code,
+            orElse: () => const AppConfiguration(oid: '', module: '', code: ''))
+        .value
+        .trim();
+    final orgName = cfgVal('GROUP');
+    final location = cfgVal('LOCATION');
+    final locationAddr = cfgVal('LOCATION_ADDR');
 
     if (head.familyId.isNotEmpty && yearId.isNotEmpty) {
       try {
@@ -1480,10 +1559,8 @@ class _FamilyCardState extends State<_FamilyCard> {
       }
     }
 
-    String fmtRp(double v) => v
-        .toInt()
-        .toString()
-        .replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => '${m[1]!}.');
+    String fmtRp(double v) => v.toInt().toString().replaceAllMapped(
+        RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => '${m[1]!}.');
 
     String sejumlah;
     if (totalRp > 0 && totalSo > 0) {
@@ -1645,13 +1722,15 @@ class _MemberRow extends StatelessWidget {
     final List<Map<String, dynamic>> paidMembers = [];
 
     // ── Read org/location from already-loaded ConfigurationProvider ───
-    final _cfgs2 = context.read<ConfigurationProvider>().configurations;
-    String _cfgVal2(String code) =>
-        _cfgs2.firstWhere((c) => c.code == code,
-            orElse: () => const AppConfiguration(oid: '', module: '', code: '')).value.trim();
-    final orgName = _cfgVal2('GROUP');
-    final location = _cfgVal2('LOCATION');
-    final locationAddr = _cfgVal2('LOCATION_ADDR');
+    final cfgs2 = context.read<ConfigurationProvider>().configurations;
+    String cfgVal2(String code) => cfgs2
+        .firstWhere((c) => c.code == code,
+            orElse: () => const AppConfiguration(oid: '', module: '', code: ''))
+        .value
+        .trim();
+    final orgName = cfgVal2('GROUP');
+    final location = cfgVal2('LOCATION');
+    final locationAddr = cfgVal2('LOCATION_ADDR');
 
     if (m.familyId.isNotEmpty && yearId.isNotEmpty) {
       try {
@@ -1668,7 +1747,8 @@ class _MemberRow extends StatelessWidget {
         final members = data['members'] as List<dynamic>? ?? [];
         for (final raw in members) {
           final member = raw as Map<String, dynamic>;
-          debugPrint('[receipt] member keys: ${member.keys.toList()}  name=${member['name']}  full_name=${member['full_name']}  first_name=${member['first_name']}');
+          debugPrint(
+              '[receipt] member keys: ${member.keys.toList()}  name=${member['name']}  full_name=${member['full_name']}  first_name=${member['first_name']}');
           if (member['is_paid'] == true) {
             // Name: try common flat-field names first, then fall back to
             // Muzakki.fromJson which combines first_name + last_name.
@@ -1677,8 +1757,7 @@ class _MemberRow extends StatelessWidget {
                 (member['member_name'] as String?)?.trim() ??
                 '';
             final mz = Muzakki.fromJson(member);
-            final resolvedName =
-                rawName.isNotEmpty ? rawName : mz.fullName;
+            final resolvedName = rawName.isNotEmpty ? rawName : mz.fullName;
 
             // Payment figures: the family-resume endpoint returns these as
             // flat fields directly on the member object (not nested inside
@@ -1723,7 +1802,7 @@ class _MemberRow extends StatelessWidget {
 
     // ── Format totals ─────────────────────────────────────────────────
     String fmtRp(double v) => v.toInt().toString().replaceAllMapped(
-        RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => (m[1] ?? '') + '.');
+        RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => '${m[1] ?? ''}.');
 
     String sejumlah;
     if (totalRp > 0 && totalSo > 0) {
@@ -1839,6 +1918,100 @@ class _MemberRow extends StatelessWidget {
     }
   }
 
+  Future<void> _showVerifyDialog(BuildContext context) async {
+    final provider = context.read<ZakatProvider>();
+    final m = muzakki;
+    bool status = m.isVerified;
+
+    final submit = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Verifikasi Muzakki'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Atur status verifikasi untuk "${m.fullName}".',
+                style: const TextStyle(fontSize: 13, color: Color(0xFF334155)),
+              ),
+              const SizedBox(height: 14),
+              Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: SwitchListTile(
+                  value: status,
+                  onChanged: (v) => setDialogState(() => status = v),
+                  activeColor: const Color(0xFF16A34A),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                  title: Text(
+                    status ? 'Terverifikasi' : 'Belum diverifikasi',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  subtitle: Text(
+                    status
+                        ? 'Data muzakki dinyatakan valid.'
+                        : 'Data masih menunggu verifikasi.',
+                    style:
+                        const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text(
+                'Batal',
+                style: TextStyle(color: Color(0xFF64748B)),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF066046),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: const Text('Simpan'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (submit != true || !context.mounted || status == m.isVerified) return;
+
+    final ok = await provider.verifyMuzakki(m.id, status: status);
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          ok
+              ? (status
+                  ? 'Muzakki berhasil diverifikasi.'
+                  : 'Status verifikasi dibatalkan.')
+              : 'Gagal memperbarui verifikasi. Coba lagi.',
+        ),
+        backgroundColor: ok ? const Color(0xFF066046) : const Color(0xFFDC2626),
+      ),
+    );
+  }
+
   Future<void> _showActions(BuildContext context) async {
     final provider = context.read<ZakatProvider>();
     final m = muzakki;
@@ -1907,6 +2080,41 @@ class _MemberRow extends StatelessWidget {
                     style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
                 onTap: () => Navigator.pop(ctx, 'set_head'),
               ),
+            // Verify status
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: m.isVerified
+                      ? const Color(0xFFECFDF3)
+                      : const Color(0xFFFFF7ED),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  m.isVerified
+                      ? Icons.verified_rounded
+                      : Icons.verified_outlined,
+                  color: m.isVerified
+                      ? const Color(0xFF16A34A)
+                      : const Color(0xFFD97706),
+                  size: 18,
+                ),
+              ),
+              title: Text(
+                m.isVerified ? 'Batalkan Verifikasi' : 'Verifikasi Muzakki',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              subtitle: Text(
+                m.isVerified
+                    ? 'Status saat ini: terverifikasi'
+                    : 'Status saat ini: belum diverifikasi',
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: Color(0xFF94A3B8),
+                ),
+              ),
+              onTap: () => Navigator.pop(ctx, 'verify'),
+            ),
             // Delete
             ListTile(
               leading: Container(
@@ -1965,6 +2173,9 @@ class _MemberRow extends StatelessWidget {
         break;
       case 'delete':
         await _confirmDelete(context);
+        break;
+      case 'verify':
+        await _showVerifyDialog(context);
         break;
     }
   }
@@ -2083,6 +2294,41 @@ class _MemberRow extends StatelessWidget {
                                     color: Color(0xFFDC2626),
                                   ),
                                 ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: m.isVerified
+                                ? const Color(0xFFDCFCE7)
+                                : const Color(0xFFFFF3E0),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                m.isVerified
+                                    ? Icons.verified_rounded
+                                    : Icons.pending_outlined,
+                                size: 11,
+                                color: m.isVerified
+                                    ? const Color(0xFF16A34A)
+                                    : const Color(0xFFD97706),
+                              ),
+                              const SizedBox(width: 3),
+                              Text(
+                                m.isVerified ? 'Verif' : 'Draft',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: m.isVerified
+                                      ? const Color(0xFF16A34A)
+                                      : const Color(0xFFD97706),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -2271,7 +2517,6 @@ class _Chip extends StatelessWidget {
     required this.label,
     required this.isActive,
     required this.onTap,
-    this.activeColor = const Color(0xFF066046),
   });
   final String label;
   final bool isActive;
@@ -2427,11 +2672,14 @@ class _ReceiptCard extends StatelessWidget {
                   ),
                 ),
                 // Org / location block — only shown when non-empty
-                if (orgName.isNotEmpty || location.isNotEmpty || locationAddr.isNotEmpty) ...[
+                if (orgName.isNotEmpty ||
+                    location.isNotEmpty ||
+                    locationAddr.isNotEmpty) ...[
                   const SizedBox(height: 6),
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 10),
+                    padding:
+                        const EdgeInsets.symmetric(vertical: 5, horizontal: 10),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.12),
                       borderRadius: BorderRadius.circular(6),
@@ -2469,12 +2717,12 @@ class _ReceiptCard extends StatelessWidget {
                               color: Colors.white70,
                             ),
                           ),
-                      ],                   // end inner Column children
-                    ),                     // end inner Column
-                  ),                       // end Container (semi-transparent box)
-                ],                         // end outer if spread
-              ],                           // end outer Column children
-            ),                             // end outer Column
+                      ], // end inner Column children
+                    ), // end inner Column
+                  ), // end Container (semi-transparent box)
+                ], // end outer if spread
+              ], // end outer Column children
+            ), // end outer Column
           ),
 
           // ── Body ─────────────────────────────────────────────────────
@@ -2542,8 +2790,8 @@ class _ReceiptCard extends StatelessWidget {
                           ),
                           Text(
                             detail,
-                            style: const TextStyle(
-                                fontSize: 11, color: _textDark),
+                            style:
+                                const TextStyle(fontSize: 11, color: _textDark),
                           ),
                         ],
                       ),
@@ -2615,8 +2863,7 @@ class _ReceiptCard extends StatelessWidget {
                 style: const TextStyle(fontSize: 12, color: _textMuted),
               ),
             ),
-            const Text(': ',
-                style: TextStyle(fontSize: 12, color: _textMuted)),
+            const Text(': ', style: TextStyle(fontSize: 12, color: _textMuted)),
             Expanded(
               child: Text(
                 value,

@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -18,6 +16,228 @@ class LaporanBody extends StatefulWidget {
 }
 
 class _LaporanBodyState extends State<LaporanBody> {
+      Map<int, TableColumnWidth> getDistColumnWidths(int amilCount) {
+        final map = <int, TableColumnWidth>{
+          0: const FixedColumnWidth(130),
+          1: const FixedColumnWidth(80),
+          2: const FixedColumnWidth(80),
+        };
+        for (var index = 0; index < amilCount; index++) {
+          map[3 + index] = const FixedColumnWidth(90);
+        }
+        map[3 + amilCount] = const FixedColumnWidth(80);
+        map[4 + amilCount] = const FixedColumnWidth(110);
+        return map;
+      }
+    bool _showAdjustment = false;
+    bool _showFinal = false;
+
+    Widget _distribusiCombinedTable({
+      required List<String> amilChildrenLabels,
+      required double sbPercent,
+      required double asnafPercent,
+      required int kalkulasiJumlah,
+      required int kalkulasiSb,
+      required List<int> kalkulasiAmilChildren,
+      required int kalkulasiAsnaf,
+      required int kalkulasiTotal,
+      required int finalJumlah,
+      required int finalSb,
+      required List<int> finalAmilChildren,
+      required int finalAsnaf,
+      required int finalTotal,
+      required bool hasManualOverride,
+      double? finalJumlahRp,
+      double? finalSbRp,
+      List<double>? finalAmilChildrenRp,
+      double? finalAsnafRp,
+      double? finalTotalRp,
+    }) {
+      final hasFinalCurrency = finalJumlahRp != null &&
+          finalSbRp != null &&
+          finalAmilChildrenRp != null &&
+          finalAsnafRp != null &&
+          finalTotalRp != null;
+
+      return Card(
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        elevation: 0,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Distribusi Zakat',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1A1A1A),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Table(
+                  defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+                  columnWidths: getDistColumnWidths(amilChildrenLabels.length),
+                  border: const TableBorder(
+                    left: BorderSide(color: Color(0xFFCBD5E1)),
+                    right: BorderSide(color: Color(0xFFCBD5E1)),
+                    bottom: BorderSide(color: Color(0xFFCBD5E1)),
+                    horizontalInside: BorderSide(color: Color(0xFFCBD5E1)),
+                    verticalInside: BorderSide(color: Color(0xFFCBD5E1)),
+                  ),
+                  children: [
+                    _distSubHeaderRow(
+                      sbPercent: sbPercent,
+                      amilChildren: amilChildrenLabels,
+                      asnafPercent: asnafPercent,
+                    ),
+                    _distDataRow(
+                      label: 'Rekapitulasi Kalkulasi',
+                      jumlah: kalkulasiJumlah,
+                      sb: kalkulasiSb,
+                      amilChildren: kalkulasiAmilChildren,
+                      asnaf: kalkulasiAsnaf,
+                      total: kalkulasiTotal,
+                    ),
+                    // _distSectionLabelRow(
+                    //   label: hasManualOverride
+                    //       ? 'Final Distribution (Adjustment Manual)'
+                    //       : 'Final Distribution (Mengikuti Kalkulasi)',
+                    //   colCount: amilChildrenLabels.length,
+                    // ),
+                    _distDataRow(
+                      label: 'Final Distribution',
+                      jumlah: finalJumlah,
+                      sb: finalSb,
+                      amilChildren: finalAmilChildren,
+                      asnaf: finalAsnaf,
+                      total: finalTotal,
+                      isTotal: true,
+                    ),
+                    if (hasFinalCurrency)
+                      _distCurrencyRow(
+                        label: 'Konversi Rupiah (Final)',
+                        jumlah: finalJumlahRp,
+                        sb: finalSbRp,
+                        amilChildren: finalAmilChildrenRp,
+                        asnaf: finalAsnafRp,
+                        total: finalTotalRp,
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    Widget _distribusiTable({
+      required String title,
+      required int jumlah,
+      required int sb,
+      required List<int> amilChildren,
+      required int asnaf,
+      required int total,
+      required double sbPercent,
+      required List<String> amilChildrenLabels,
+      required double asnafPercent,
+      bool showAdjustment = false,
+      bool isFinal = false,
+      double? jumlahRp,
+      double? sbRp,
+      List<double>? amilChildrenRp,
+      double? asnafRp,
+      double? totalRp,
+    }) {
+      return Card(
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        elevation: 0,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1A1A1A),
+                      ),
+                    ),
+                  ),
+                  if (showAdjustment || isFinal)
+                    IconButton(
+                      icon: Icon(
+                        (showAdjustment && !_showAdjustment) || (isFinal && !_showFinal)
+                            ? Icons.expand_more
+                            : Icons.expand_less,
+                        color: const Color(0xFF64748B),
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          if (showAdjustment) _showAdjustment = !_showAdjustment;
+                          if (isFinal) _showFinal = !_showFinal;
+                        });
+                      },
+                    ),
+                ],
+              ),
+              if (!showAdjustment || _showAdjustment)
+                if (!isFinal || _showFinal)
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Table(
+                      defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+                      columnWidths: getDistColumnWidths(amilChildrenLabels.length),
+                      border: const TableBorder(
+                        left: BorderSide(color: Color(0xFFCBD5E1)),
+                        right: BorderSide(color: Color(0xFFCBD5E1)),
+                        bottom: BorderSide(color: Color(0xFFCBD5E1)),
+                        horizontalInside: BorderSide(color: Color(0xFFCBD5E1)),
+                        verticalInside: BorderSide(color: Color(0xFFCBD5E1)),
+                      ),
+                      children: [
+                        _distSubHeaderRow(
+                          sbPercent: sbPercent,
+                          amilChildren: amilChildrenLabels,
+                          asnafPercent: asnafPercent,
+                        ),
+                        _distDataRow(
+                          label: title,
+                          jumlah: jumlah,
+                          sb: sb,
+                          amilChildren: amilChildren,
+                          asnaf: asnaf,
+                          total: total,
+                          isTotal: isFinal,
+                        ),
+                        if (jumlahRp != null && sbRp != null && amilChildrenRp != null && asnafRp != null && totalRp != null)
+                          _distCurrencyRow(
+                            label: 'Konversi Rupiah',
+                            jumlah: jumlahRp,
+                            sb: sbRp,
+                            amilChildren: amilChildrenRp,
+                            asnaf: asnafRp,
+                            total: totalRp,
+                          ),
+                      ],
+                    ),
+                  ),
+            ],
+          ),
+        ),
+      );
+    }
   final ApiService _api = ApiService();
 
   static const _green = Color(0xFF066046);
@@ -25,7 +245,7 @@ class _LaporanBodyState extends State<LaporanBody> {
   double _jatahSb = 40;
   double _jatahAmil = 15;
   double _jatahAsnaf = 45;
-  double _titipUang = 45000;
+  final double _titipUang = 45000;
   List<_AmilChildConfig> _amilChildren = const [];
   String? _sbDistributionId;
   List<String> _asnafDistributionIds = const [];
@@ -34,17 +254,29 @@ class _LaporanBodyState extends State<LaporanBody> {
   final TextEditingController _notesController = TextEditingController();
   bool _isLoadingConfig = false;
   bool _isLoadingMustahiqRecap = false;
+  bool _isLoadingVerificationRecap = false;
   String? _configError;
   String? _mustahiqRecapError;
+  String? _verificationRecapError;
   String _lastRecapYearId = '';
   String _lastConfigYearId = '';
+  String _lastVerificationRecapYearId = '';
 
   List<_MustahiqRecapRow> _mustahiqRecapRows = const [];
+  List<Map<String, dynamic>> _asnafBobotRows = const [];
+  _VerificationRecapData? _verificationRecapData;
 
   // Amil KPI state
   bool _isLoadingAmilKpi = false;
   String? _amilKpiError;
   _AmilKpiData? _amilKpiData;
+
+  // Closing / history state
+  bool _isSaving = false;
+  String? _saveError;
+  bool _isLoadingHistory = false;
+  Map<String, dynamic>? _existingHistory;
+  String _lastHistoryYearId = '';
 
   @override
   void dispose() {
@@ -59,6 +291,129 @@ class _LaporanBodyState extends State<LaporanBody> {
       _loadDistributionConfig();
       _loadAdjustments();
     });
+  }
+
+  Future<void> _loadHistory(String yearId) async {
+    if (yearId.isEmpty) return;
+    setState(() {
+      _isLoadingHistory = true;
+      _existingHistory = null;
+    });
+    try {
+      final response = await _api.getZakatHistoryByYearId(yearId);
+      final raw = response.data;
+      final data = raw is Map<String, dynamic>
+          ? (raw['data'] is Map<String, dynamic> ? raw['data'] as Map<String, dynamic> : raw)
+          : null;
+      if (!mounted) return;
+      setState(() => _existingHistory = data);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _existingHistory = null);
+    } finally {
+      if (mounted) setState(() => _isLoadingHistory = false);
+    }
+  }
+
+  Map<String, dynamic> _buildFinalPayload({
+    required String yearId,
+    required String yearLabel,
+    required int wajibZakat,
+    required int sbBase,
+    required List<int> amilBase,
+    required int asnafBase,
+    required int totalBase,
+    required int adjSbVal,
+    required List<int> adjAmilChildrenVal,
+    required int adjAsnafVal,
+    required int adjustmentTotal,
+    required int finalSb,
+    required List<int> finalAmilChildren,
+    required int finalAsnaf,
+    required int finalTotal,
+    required int finalJumlah,
+    required List<_AmilChildConfig> amilChildren,
+  }) {
+    String amilCode(_AmilChildConfig c) =>
+        'JATAH_AMIL_${c.label.replaceAll(' ', '_')}';
+    String finalizedAtUtc() =>
+        DateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'").format(DateTime.now().toUtc());
+
+    return {
+      'year_id': yearId,
+      'year_label': yearLabel,
+      'module': 'ZAKATFITRAH',
+      'notes': _notesController.text.trim(),
+      'money_nominal': _titipUang.toStringAsFixed(0),
+      'config': {
+        'titip_uang': _titipUang.toStringAsFixed(0),
+        'jatah_sb': _jatahSb,
+        'jatah_amil': _jatahAmil,
+        'jatah_asnaf': _jatahAsnaf,
+        'amil_children': List.generate(
+          amilChildren.length,
+          (i) => {
+            'code': amilCode(amilChildren[i]),
+            'label': amilChildren[i].label,
+            'percent': amilChildren[i].percent,
+          },
+        ),
+        'asnaf_bobot': List.generate(
+          _asnafBobotRows.length,
+          (i) => {
+            'year_id': (_asnafBobotRows[i]['year_id']?.toString().isNotEmpty ?? false)
+                ? _asnafBobotRows[i]['year_id']?.toString()
+                : yearId,
+            'asnaf_type': _normalizeAsnafType(
+                _asnafBobotRows[i]['asnaf_type']?.toString() ?? ''),
+            'bobot': _parseDouble(_asnafBobotRows[i]['bobot'], fallback: 0).round(),
+          },
+        ),
+      },
+      'base': {
+        'wajib_zakat': wajibZakat,
+        'sb': sbBase,
+        'amil_children': List.generate(
+          amilChildren.length,
+          (i) => {
+            'code': amilCode(amilChildren[i]),
+            'label': amilChildren[i].label,
+            'value': i < amilBase.length ? amilBase[i] : 0,
+          },
+        ),
+        'asnaf': asnafBase,
+        'total': totalBase,
+      },
+      'adjustment': {
+        'jumlah': adjustmentTotal,
+        'sb': adjSbVal,
+        'amil_children': List.generate(
+          amilChildren.length,
+          (i) => {
+            'code': amilCode(amilChildren[i]),
+            'label': amilChildren[i].label,
+            'value': i < adjAmilChildrenVal.length ? adjAmilChildrenVal[i] : 0,
+          },
+        ),
+        'asnaf': adjAsnafVal,
+        'total': adjustmentTotal,
+      },
+      'result': {
+        'jumlah': finalJumlah,
+        'sb': finalSb,
+        'amil_children': List.generate(
+          amilChildren.length,
+          (i) => {
+            'code': amilCode(amilChildren[i]),
+            'label': amilChildren[i].label,
+            'value': i < finalAmilChildren.length ? finalAmilChildren[i] : 0,
+          },
+        ),
+        'asnaf': finalAsnaf,
+        'total': finalTotal,
+      },
+      'finalized_at': finalizedAtUtc(),
+    };
   }
 
   Future<void> _loadDistributionConfig([String? yearId]) async {
@@ -99,7 +454,7 @@ class _LaporanBodyState extends State<LaporanBody> {
         if (hasChildren) {
           // Amil
           amil = pct;
-          for (final child in rawChildren as List) {
+          for (final child in rawChildren) {
             if (child is! Map<String, dynamic>) continue;
             final childId = child['id']?.toString() ?? '';
             final childName = (child['name']?.toString() ?? '').trim();
@@ -200,6 +555,7 @@ class _LaporanBodyState extends State<LaporanBody> {
       if (!mounted) return;
       setState(() {
         _mustahiqRecapRows = rows;
+        _asnafBobotRows = asnafRaw;
       });
     } catch (_) {
       if (!mounted) return;
@@ -213,6 +569,96 @@ class _LaporanBodyState extends State<LaporanBody> {
         });
       }
     }
+  }
+
+  Future<void> _loadVerificationRecap(String yearId) async {
+    if (yearId.isEmpty) return;
+
+    setState(() {
+      _isLoadingVerificationRecap = true;
+      _verificationRecapError = null;
+    });
+
+    try {
+      final response =
+          await _api.getZakatMuzakkiVerificationRecap(yearId: yearId);
+      final parsed = _parseVerificationRecap(response.data);
+      if (!mounted) return;
+      setState(() {
+        _verificationRecapData = parsed;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _verificationRecapError = 'Rekap verifikasi muzakki gagal dimuat.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingVerificationRecap = false;
+        });
+      }
+    }
+  }
+
+  _VerificationRecapData _parseVerificationRecap(dynamic raw) {
+    final top = raw is Map<String, dynamic> ? raw : <String, dynamic>{};
+    final payload = top['data'] is Map<String, dynamic>
+        ? top['data'] as Map<String, dynamic>
+        : top;
+
+    List<_VerificationMemberRow> parseMembers(dynamic source,
+        {required bool verified}) {
+      if (source is! List) return const [];
+      final rows = <_VerificationMemberRow>[];
+      for (final item in source.whereType<Map<String, dynamic>>()) {
+        rows.add(
+          _VerificationMemberRow(
+            id: item['id']?.toString() ?? '',
+            fullName: (item['full_name']?.toString() ??
+                    item['name']?.toString() ??
+                    '-')
+                .trim(),
+            familyId: item['family_id']?.toString() ?? '',
+            relationship: item['relationship']?.toString() ?? '',
+            isHeadOfFamily: item['is_head_of_family'] as bool? ?? false,
+            isInternal: item['is_internal'] as bool? ?? true,
+            externalGroup: item['external_group']?.toString() ?? '',
+            afiliasi: item['afiliasi']?.toString() ?? '',
+            isVerified: verified,
+          ),
+        );
+      }
+      return rows;
+    }
+
+    final verifiedMembers = parseMembers(payload['verified'], verified: true);
+    final unverifiedMembers =
+        parseMembers(payload['unverified'], verified: false);
+
+    final verified = _parseInt(
+      payload['verified_count'] ?? payload['verified_total'],
+      fallback: verifiedMembers.length,
+    );
+    final unverified = _parseInt(
+      payload['unverified_count'] ?? payload['unverified_total'],
+      fallback: unverifiedMembers.length,
+    );
+    final total = _parseInt(
+      payload['total_muzakki'] ?? payload['total'],
+      fallback: verified + unverified,
+    );
+    final percent = total > 0 ? ((verified / total) * 100).toDouble() : 0.0;
+
+    return _VerificationRecapData(
+      yearId: payload['year_id']?.toString() ?? '',
+      total: total,
+      verified: verified,
+      unverified: unverified,
+      verifiedPercent: percent,
+      verifiedMembers: verifiedMembers,
+      unverifiedMembers: unverifiedMembers,
+    );
   }
 
   List<int> _splitAmilCount(int amilTotal, List<_AmilChildConfig> children) {
@@ -312,15 +758,19 @@ class _LaporanBodyState extends State<LaporanBody> {
               .map((a) => _AmilKpiEntry(
                     amilName: a['amil_name']?.toString() ?? '',
                     recordedCount:
-                        int.tryParse(a['recorded_count']?.toString() ?? '') ?? 0,
-                    serahTerimaCount:
-                        int.tryParse(a['serah_terima_count']?.toString() ?? '') ?? 0,
+                        int.tryParse(a['recorded_count']?.toString() ?? '') ??
+                            0,
+                    serahTerimaCount: int.tryParse(
+                            a['serah_terima_count']?.toString() ?? '') ??
+                        0,
                     totalSouls:
                         int.tryParse(a['total_souls']?.toString() ?? '') ?? 0,
-                    totalRiceQty:
-                        double.tryParse(a['total_rice_qty']?.toString() ?? '') ?? 0,
+                    totalRiceQty: double.tryParse(
+                            a['total_rice_qty']?.toString() ?? '') ??
+                        0,
                     totalMoney:
-                        double.tryParse(a['total_money']?.toString() ?? '') ?? 0,
+                        double.tryParse(a['total_money']?.toString() ?? '') ??
+                            0,
                   ))
               .toList()
           : <_AmilKpiEntry>[];
@@ -638,15 +1088,34 @@ class _LaporanBodyState extends State<LaporanBody> {
         final externalFamilies = provider.externalByFamily.values;
         final externalSoulsCount = externalFamilies.fold<int>(
             0, (sum, e) => sum + e.externalTotalSouls);
-        final externalRiceSouls = externalFamilies
+        final externalRiceSoulsNonRegistered = externalFamilies
             .fold<int>(0, (sum, e) => sum + e.externalTotalRiceSouls)
             .toDouble();
+        final externalMoneySoulsNonRegistered = externalFamilies.fold<int>(
+            0, (sum, e) => sum + e.externalTotalMoneySouls);
+        final externalRegisteredRiceSouls = provider.muzakkiList
+            .where((m) => !m.isInternal && m.paymentType == PaymentType.beras)
+            .fold<int>(
+                0,
+                (sum, m) =>
+                    sum + (m.numberOfPeople > 0 ? m.numberOfPeople : 1));
+        final externalRegisteredMoneySouls = provider.muzakkiList
+            .where((m) => !m.isInternal && m.paymentType == PaymentType.uang)
+            .fold<int>(
+                0,
+                (sum, m) =>
+                    sum + (m.numberOfPeople > 0 ? m.numberOfPeople : 1));
+        final externalRiceSoulsGroup = externalRegisteredRiceSouls +
+            externalRiceSoulsNonRegistered.toInt();
+        final externalMoneySoulsGroup =
+            externalRegisteredMoneySouls + externalMoneySoulsNonRegistered;
         final externalAmount = externalFamilies.fold<double>(
           0,
           (sum, e) => sum + _parseAmount(e.externalTotalAmount),
         );
 
-        final fallbackTotalSo = totalSoRegistered + externalRiceSouls;
+        final fallbackTotalSo =
+            totalSoRegistered + externalRiceSoulsNonRegistered;
         final fallbackTotalRp = totalRpRegistered + externalAmount;
 
         final summaryTotals = apiSummary?.summary;
@@ -675,6 +1144,24 @@ class _LaporanBodyState extends State<LaporanBody> {
           });
         }
 
+        if (selectedYearId.isNotEmpty &&
+            selectedYearId != _lastVerificationRecapYearId) {
+          _lastVerificationRecapYearId = selectedYearId;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            _loadVerificationRecap(selectedYearId);
+          });
+        }
+
+        if (selectedYearId.isNotEmpty &&
+            selectedYearId != _lastHistoryYearId) {
+          _lastHistoryYearId = selectedYearId;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            _loadHistory(selectedYearId);
+          });
+        }
+
         final totalMuzakki =
             summaryTotals?.totalMuzakki ?? provider.totalMuzakki;
         final totalJiwaOverall = summaryTotals?.totalSoulsOverall ??
@@ -700,44 +1187,57 @@ class _LaporanBodyState extends State<LaporanBody> {
                 _AmilChildConfig(id: '', label: 'AMIL', percent: _jatahAmil),
               ];
 
-        // ── Derive adj values from the API-backed map ────────────────────
-        final adjSb = (_adjByDistributionId[_sbDistributionId] ?? 0).round();
-        final adjAmilChildren = amilChildren
-            .map((c) => (_adjByDistributionId[c.id] ?? 0).round())
-            .toList();
-        final adjAsnaf = _asnafDistributionIds.fold<int>(
-          0,
-          (sum, id) => sum + (_adjByDistributionId[id] ?? 0).round(),
-        );
-
         final sbCount = (totalWajibZakat * sbPercent).round();
         final amilTotalCount = (totalWajibZakat * amilPercent).round();
         final amilChildCounts = _splitAmilCount(amilTotalCount, amilChildren);
         final asnafCount = totalWajibZakat - sbCount - amilTotalCount;
         final totalPembagian = sbCount + amilTotalCount + asnafCount;
 
-        final wajibZakatAmount = totalWajibZakat * _titipUang;
-        final sbAmount = sbCount * _titipUang;
-        final amilChildAmounts =
-            _splitAmilAmount(amilChildCounts, amilChildren);
-        final asnafAmount = asnafCount * _titipUang;
-        final amilTotalAmount =
-            amilChildAmounts.fold<double>(0, (sum, amount) => sum + amount);
-        final totalPembagianAmount = sbAmount + amilTotalAmount + asnafAmount;
+        // Manual adjustment now acts as an override (replacement),
+        // not an additive delta against formula-based distribution.
+        final sbRawOverride = (_sbDistributionId != null &&
+                _adjByDistributionId.containsKey(_sbDistributionId))
+            ? _adjByDistributionId[_sbDistributionId]!.round()
+            : null;
+        final sbOverride =
+            (sbRawOverride != null && sbRawOverride > 0) ? sbRawOverride : null;
+        final amilOverride = amilChildren
+            .map((c) {
+              if (c.id.isEmpty || !_adjByDistributionId.containsKey(c.id)) {
+                return null;
+              }
+              final value = _adjByDistributionId[c.id]!.round();
+              return value > 0 ? value : null;
+            })
+            .toList();
+        final asnafOverrideValues = _asnafDistributionIds
+            .where((id) => _adjByDistributionId.containsKey(id))
+            .map((id) => _adjByDistributionId[id]!.round())
+            .where((value) => value > 0)
+            .toList();
+        final asnafOverride = asnafOverrideValues.isNotEmpty
+            ? asnafOverrideValues.fold<int>(0, (s, v) => s + v)
+            : null;
 
-        final adjustedSb = sbCount + adjSb;
+        final hasManualOverride = sbOverride != null ||
+            amilOverride.any((value) => value != null) ||
+            asnafOverride != null;
+
+        final adjustedSb = sbOverride ?? sbCount;
         final adjustedAmilChildren = List<int>.generate(
           amilChildren.length,
-          (index) => amilChildCounts[index] + adjAmilChildren[index],
+          (index) => amilOverride[index] ?? amilChildCounts[index],
         );
-        final adjustedAsnaf = asnafCount + adjAsnaf;
-        final adjustmentTotal = adjSb +
-            adjAmilChildren.fold<int>(0, (sum, v) => sum + v) +
-            adjAsnaf;
-        final adjustedTotal = adjustedSb +
+        final adjustedAsnaf = asnafOverride ?? asnafCount;
+        final adjustmentTotal = adjustedSb +
             adjustedAmilChildren.fold<int>(0, (sum, v) => sum + v) +
             adjustedAsnaf;
-        final adjustedJumlah = totalWajibZakat + adjustmentTotal;
+        final adjustedTotal = adjustmentTotal;
+        final adjustedJumlah = adjustedTotal;
+
+        final adjSb = adjustedSb;
+        final adjAmilChildren = adjustedAmilChildren;
+        final adjAsnaf = adjustedAsnaf;
 
         final distColumnWidths = <int, TableColumnWidth>{
           0: const FixedColumnWidth(130),
@@ -756,6 +1256,9 @@ class _LaporanBodyState extends State<LaporanBody> {
             provider.fetchLaporanSummary(),
             if (selectedYearId.isNotEmpty) _loadMustahiqRecap(selectedYearId),
             if (selectedYearId.isNotEmpty) _loadAmilKpi(selectedYearId),
+            if (selectedYearId.isNotEmpty)
+              _loadVerificationRecap(selectedYearId),
+            if (selectedYearId.isNotEmpty) _loadHistory(selectedYearId),
             _loadDistributionConfig(yr),
             _loadAdjustments(yr),
           ]);
@@ -825,163 +1328,218 @@ class _LaporanBodyState extends State<LaporanBody> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                // --- Rekapitulasi + Final in one table ---
+                _distribusiCombinedTable(
+                  amilChildrenLabels: _amilChildren.map((a) => a.label).toList(),
+                  sbPercent: _jatahSb,
+                  asnafPercent: _jatahAsnaf,
+                  kalkulasiJumlah: totalWajibZakat,
+                  kalkulasiSb: sbCount,
+                  kalkulasiAmilChildren: amilChildCounts,
+                  kalkulasiAsnaf: asnafCount,
+                  kalkulasiTotal: totalPembagian,
+                  finalJumlah: adjustedJumlah,
+                  finalSb: adjustedSb,
+                  finalAmilChildren: adjustedAmilChildren,
+                  finalAsnaf: adjustedAsnaf,
+                  finalTotal: adjustedTotal,
+                  hasManualOverride: hasManualOverride,
+                  finalJumlahRp: adjustedJumlah * _titipUang,
+                  finalSbRp: adjustedSb * _titipUang,
+                  finalAmilChildrenRp: adjustedAmilChildren
+                      .map((value) => value * _titipUang)
+                      .toList(),
+                  finalAsnafRp: adjustedAsnaf * _titipUang,
+                  finalTotalRp: adjustedTotal * _titipUang,
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _notesController,
+                  minLines: 2,
+                  maxLines: 4,
+                  decoration: InputDecoration(
+                    labelText: 'Notes Laporan',
+                    hintText: 'Catatan untuk snapshot laporan tahun ini',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _distMergedHeaderStrip(amilChildren.length),
-                            Table(
-                              defaultVerticalAlignment:
-                                  TableCellVerticalAlignment.middle,
-                              columnWidths: distColumnWidths,
-                              border: const TableBorder(
-                                left: BorderSide(color: Color(0xFFCBD5E1)),
-                                right: BorderSide(color: Color(0xFFCBD5E1)),
-                                bottom: BorderSide(color: Color(0xFFCBD5E1)),
-                                horizontalInside:
-                                    BorderSide(color: Color(0xFFCBD5E1)),
-                                verticalInside:
-                                    BorderSide(color: Color(0xFFCBD5E1)),
+                ),
+                const SizedBox(height: 12),
+
+                // ── History / Closing status banner ───────────────────────
+                if (_isLoadingHistory)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 10),
+                    child: LinearProgressIndicator(),
+                  )
+                else if (_existingHistory != null) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFDCFCE7),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFF86EFAC)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.check_circle_rounded,
+                            color: Color(0xFF16A34A), size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Tahun ini sudah di-closing',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF15803D),
+                                ),
                               ),
-                              children: [
-                                _distSubHeaderRow(
-                                  sbPercent: _jatahSb,
-                                  amilChildren: amilChildren,
-                                  asnafPercent: _jatahAsnaf,
+                              if (_existingHistory!['finalized_at'] != null)
+                                Text(
+                                  'Tanggal: ${_existingHistory!['finalized_at']}',
+                                  style: const TextStyle(
+                                      fontSize: 11,
+                                      color: Color(0xFF166534)),
                                 ),
-                                _distDataRow(
-                                  label: 'Wajib Zakat',
-                                  jumlah: totalWajibZakat,
-                                  sb: sbCount,
-                                  amilChildren: amilChildCounts,
-                                  asnaf: asnafCount,
-                                  total: totalPembagian,
+                              if ((_existingHistory!['notes'] ?? '').toString().isNotEmpty)
+                                Text(
+                                  'Notes: ${_existingHistory!['notes']}',
+                                  style: const TextStyle(
+                                      fontSize: 11,
+                                      color: Color(0xFF166534)),
                                 ),
-                                _distDataRow(
-                                  label: 'Adjustment',
-                                  jumlah: adjustmentTotal,
-                                  sb: adjSb,
-                                  amilChildren: adjAmilChildren,
-                                  asnaf: adjAsnaf,
-                                  total: adjustmentTotal,
-                                ),
-                                _distCurrencyRow(
-                                  label: 'Konversi Rupiah',
-                                  jumlah: wajibZakatAmount,
-                                  sb: sbAmount,
-                                  amilChildren: amilChildAmounts,
-                                  asnaf: asnafAmount,
-                                  total: totalPembagianAmount,
-                                ),
-                                _distDataRow(
-                                  label: 'Total Pembagian',
-                                  jumlah: adjustedJumlah,
-                                  sb: adjustedSb,
-                                  amilChildren: adjustedAmilChildren,
-                                  asnaf: adjustedAsnaf,
-                                  total: adjustedTotal,
-                                  isTotal: true,
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      TextField(
-                        controller: _notesController,
-                        minLines: 2,
-                        maxLines: 4,
-                        decoration: InputDecoration(
-                          labelText: 'Notes Laporan',
-                          hintText: 'Catatan untuk snapshot laporan tahun ini',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
+                            ],
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 10),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: () async {
-                            final payload = _buildSavePayload(
-                              yearId: provider.selectedYear?.id ?? '',
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+
+                // ── Error banner ──────────────────────────────────────────
+                if (_saveError != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      _saveError!,
+                      style: const TextStyle(
+                          fontSize: 12, color: Color(0xFFDC2626)),
+                    ),
+                  ),
+
+                // ── Closing button ────────────────────────────────────────
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: (_isSaving || selectedYearId.isEmpty)
+                        ? null
+                        : () async {
+                            // Build payload ahead of confirmation dialog
+                            final payload = _buildFinalPayload(
+                              yearId: selectedYearId,
                               yearLabel: yearLabel,
                               wajibZakat: totalWajibZakat,
                               sbBase: sbCount,
                               amilBase: amilChildCounts,
                               asnafBase: asnafCount,
                               totalBase: totalPembagian,
+                              adjSbVal: adjSb,
+                              adjAmilChildrenVal: adjAmilChildren,
+                              adjAsnafVal: adjAsnaf,
                               adjustmentTotal: adjustmentTotal,
-                              totalAdjusted: adjustedTotal,
+                              finalSb: adjustedSb,
+                              finalAmilChildren: adjustedAmilChildren,
+                              finalAsnaf: adjustedAsnaf,
+                              finalTotal: adjustedTotal,
+                              finalJumlah: adjustedJumlah,
                               amilChildren: amilChildren,
-                              adjSb: adjSb,
-                              adjAmilChildren: adjAmilChildren,
-                              adjAsnaf: adjAsnaf,
                             );
 
-                            final payloadText =
-                                const JsonEncoder.withIndent('  ')
-                                    .convert(payload);
-                            await Clipboard.setData(
-                                ClipboardData(text: payloadText));
-                            if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                    'Payload laporan disalin. Endpoint API bisa dibuat berdasarkan payload ini.'),
-                              ),
-                            );
-
-                            if (!context.mounted) return;
-                            await showDialog<void>(
+                            final confirmed = await showDialog<bool>(
                               context: context,
                               builder: (ctx) => AlertDialog(
-                                title: const Text('Payload Simpan Laporan'),
-                                content: SizedBox(
-                                  width: 520,
-                                  child: SingleChildScrollView(
-                                    child: SelectableText(
-                                      payloadText,
-                                      style: const TextStyle(
-                                        fontFamily: 'monospace',
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ),
+                                title: const Text('Closing Tahun Zakat'),
+                                content: Text(
+                                  'Anda akan finalisasi laporan untuk "$yearLabel".\n\n'
+                                  'Total wajib zakat: $totalWajibZakat jiwa\n'
+                                  'Distribusi akhir: $adjustedTotal jiwa\n'
+                                  'SB: $adjustedSb · Asnaf: $adjustedAsnaf\n\n'
+                                  'Lanjutkan?',
                                 ),
                                 actions: [
                                   TextButton(
-                                    onPressed: () => Navigator.pop(ctx),
-                                    child: const Text('Tutup'),
+                                    onPressed: () =>
+                                        Navigator.pop(ctx, false),
+                                    child: const Text('Batal'),
+                                  ),
+                                  ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: _green,
+                                      foregroundColor: Colors.white,
+                                    ),
+                                    onPressed: () =>
+                                        Navigator.pop(ctx, true),
+                                    child: const Text('Ya, Closing'),
                                   ),
                                 ],
                               ),
                             );
+
+                            if (confirmed != true) return;
+                            if (!context.mounted) return;
+
+                            setState(() {
+                              _isSaving = true;
+                              _saveError = null;
+                            });
+
+                            try {
+                              await _api.createZakatHistory(payload);
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                      'Laporan "$yearLabel" berhasil di-closing.'),
+                                  backgroundColor: _green,
+                                ),
+                              );
+                              // Reload history to show the banner
+                              await _loadHistory(selectedYearId);
+                            } catch (e) {
+                              if (!mounted) return;
+                              setState(() => _saveError =
+                                  'Gagal menyimpan laporan: ${e.toString()}');
+                            } finally {
+                              if (mounted) {
+                                setState(() => _isSaving = false);
+                              }
+                            }
                           },
-                          icon: const Icon(Icons.save_alt_rounded),
-                          label: const Text('Simpan Laporan'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _green,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                        ),
-                      ),
-                    ],
+                    icon: _isSaving
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white),
+                          )
+                        : const Icon(Icons.lock_rounded),
+                    label: Text(
+                        _isSaving ? 'Menyimpan...' : 'Closing Tahun Zakat'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor:
+                          _existingHistory != null ? Colors.grey : _green,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
                   ),
                 ),
 
@@ -1087,7 +1645,6 @@ class _LaporanBodyState extends State<LaporanBody> {
                 if (apiSummary != null)
                   Builder(builder: (ctx) {
                     final rows = apiSummary.internalByAfiliasi;
-                    final ext = apiSummary.externalBreakdown;
 
                     const val = TextStyle(
                         fontSize: 12,
@@ -1149,13 +1706,14 @@ class _LaporanBodyState extends State<LaporanBody> {
                     // Totals for footer row
                     final totalMuzakki =
                         rows.fold<int>(0, (s, r) => s + r.totalMuzakki) +
-                            (ext != null ? ext.riceSouls + ext.moneySouls : 0);
+                            externalRiceSoulsGroup +
+                            externalMoneySoulsGroup;
                     final totalRice =
                         rows.fold<int>(0, (s, r) => s + r.riceSouls) +
-                            (ext?.riceSouls ?? 0);
+                            externalRiceSoulsGroup;
                     final totalMoney =
                         rows.fold<int>(0, (s, r) => s + r.moneySouls) +
-                            (ext?.moneySouls ?? 0);
+                            externalMoneySoulsGroup;
 
                     return Container(
                       width: double.infinity,
@@ -1239,14 +1797,14 @@ class _LaporanBodyState extends State<LaporanBody> {
                                     r.moneySouls,
                                   )),
                               // external_breakdown as last data row
-                              if (ext != null)
-                                apiRow(
-                                  'Eksternal',
-                                  ext.riceSouls + ext.moneySouls,
-                                  ext.riceSouls,
-                                  ext.moneySouls,
-                                  isExternal: true,
-                                ),
+                              apiRow(
+                                'Eksternal',
+                                externalRiceSoulsGroup +
+                                    externalMoneySoulsGroup,
+                                externalRiceSoulsGroup,
+                                externalMoneySoulsGroup,
+                                isExternal: true,
+                              ),
                               // Grand total
                               apiRow(
                                   'Total', totalMuzakki, totalRice, totalMoney,
@@ -1262,6 +1820,11 @@ class _LaporanBodyState extends State<LaporanBody> {
 
                 // ── Amil KPI ────────────────────────────────────────
                 _buildAmilKpiCard(),
+
+                const SizedBox(height: 16),
+
+                // ── Rekap Verifikasi Muzakki ───────────────────────
+                _buildVerificationRecapCard(),
 
                 const SizedBox(height: 16),
 
@@ -1337,7 +1900,7 @@ class _LaporanBodyState extends State<LaporanBody> {
 
   TableRow _distSubHeaderRow({
     required double sbPercent,
-    required List<_AmilChildConfig> amilChildren,
+    required List<String> amilChildren,
     required double asnafPercent,
   }) {
     const style = TextStyle(
@@ -1348,18 +1911,12 @@ class _LaporanBodyState extends State<LaporanBody> {
     return TableRow(
       decoration: const BoxDecoration(color: Color(0xFFF8FAFC)),
       children: [
-        _cell('', style: style, align: TextAlign.left),
-        _cell('', style: style),
-        _cell('${asnafPercent.toStringAsFixed(0)}%', style: style),
-        ...amilChildren.map(
-          (c) => _cell('${c.label} ${c.percent.toStringAsFixed(0)}%',
-              style: style),
-        ),
-        _cell('${sbPercent.toStringAsFixed(0)}%', style: style),
-        _cell(
-          '${(sbPercent + amilChildren.fold<double>(0, (s, c) => s + c.percent) + asnafPercent).toStringAsFixed(0)}%',
-          style: style,
-        ),
+        _cell('Komponen', style: style, align: TextAlign.left),
+        _cell('Jumlah', style: style),
+        _cell('Asnaf\n${asnafPercent.toStringAsFixed(0)}%', style: style),
+        ...amilChildren.map((label) => _cell(label, style: style)),
+        _cell('SB\n${sbPercent.toStringAsFixed(0)}%', style: style),
+        _cell('Total', style: style),
       ],
     );
   }
@@ -1372,23 +1929,43 @@ class _LaporanBodyState extends State<LaporanBody> {
     required int asnaf,
     required int total,
     bool isTotal = false,
+    bool signed = false,
+    Color? backgroundColor,
   }) {
+    String fmt(int v) => signed && v > 0 ? '+$v' : '$v';
     final style = TextStyle(
       fontSize: 12,
       fontWeight: isTotal ? FontWeight.w700 : FontWeight.w500,
       color: const Color(0xFF1A1A1A),
     );
+    final bg = backgroundColor ?? (isTotal ? const Color(0xFFDCFCE7) : Colors.white);
     return TableRow(
-      decoration: BoxDecoration(
-        color: isTotal ? const Color(0xFFE2E8F0) : Colors.white,
-      ),
+      decoration: BoxDecoration(color: bg),
       children: [
         _cell(label, style: style, align: TextAlign.left),
-        _cell('$jumlah', style: style),
-        _cell('$asnaf', style: style),
-        ...amilChildren.map((v) => _cell('$v', style: style)),
-        _cell('$sb', style: style),
-        _cell('$total', style: style),
+        _cell(fmt(jumlah), style: style),
+        _cell(fmt(asnaf), style: style),
+        ...amilChildren.map((v) => _cell(fmt(v), style: style)),
+        _cell(fmt(sb), style: style),
+        _cell(fmt(total), style: style),
+      ],
+    );
+  }
+
+  TableRow _distSectionLabelRow({
+    required String label,
+    required int colCount,
+  }) {
+    const style = TextStyle(
+      fontSize: 11,
+      fontWeight: FontWeight.w600,
+      color: Color(0xFF475569),
+    );
+    return TableRow(
+      decoration: const BoxDecoration(color: Color(0xFFF1F5F9)),
+      children: [
+        _cell(label, style: style, align: TextAlign.left),
+        ...List.generate(4 + colCount, (_) => _cell('', style: style)),
       ],
     );
   }
@@ -1402,19 +1979,19 @@ class _LaporanBodyState extends State<LaporanBody> {
     required double total,
   }) {
     const style = TextStyle(
-      fontSize: 12,
-      fontWeight: FontWeight.w600,
-      color: Color(0xFF1A1A1A),
+      fontSize: 11,
+      fontWeight: FontWeight.w500,
+      color: Color(0xFF475569),
     );
     return TableRow(
-      decoration: const BoxDecoration(color: Color(0xFFFFF7ED)),
+      decoration: const BoxDecoration(color: Color(0xFFF0FDF4)),
       children: [
         _cell(label, style: style, align: TextAlign.left),
-        _cell(_formatRupiahFull(jumlah), style: style),
-        _cell(_formatRupiahFull(asnaf), style: style),
-        ...amilChildren.map((v) => _cell(_formatRupiahFull(v), style: style)),
-        _cell(_formatRupiahFull(sb), style: style),
-        _cell(_formatRupiahFull(total), style: style),
+        _cell(_fmtRp(jumlah), style: style),
+        _cell(_fmtRp(asnaf), style: style),
+        ...amilChildren.map((v) => _cell(_fmtRp(v), style: style)),
+        _cell(_fmtRp(sb), style: style),
+        _cell(_fmtRp(total), style: style),
       ],
     );
   }
@@ -1503,9 +2080,17 @@ class _LaporanBodyState extends State<LaporanBody> {
       (sum, item) => sum + item.totalJatahSo,
     );
 
+    const hdrStyle = TextStyle(
+      fontSize: 11,
+      fontWeight: FontWeight.w700,
+      color: Color(0xFF64748B),
+    );
+    const ts = TextStyle(fontSize: 12, color: Color(0xFF1A1A1A));
+    const totalStyle = TextStyle(fontSize: 12, fontWeight: FontWeight.w700);
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -1522,7 +2107,7 @@ class _LaporanBodyState extends State<LaporanBody> {
               color: Color(0xFF1A1A1A),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           if (_isLoadingMustahiqRecap)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 10),
@@ -1543,55 +2128,103 @@ class _LaporanBodyState extends State<LaporanBody> {
               ),
             )
           else
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: DataTable(
-                headingRowHeight: 34,
-                dataRowMinHeight: 36,
-                dataRowMaxHeight: 42,
-                columns: const [
-                  DataColumn(label: Text('Asnaf Type')),
-                  DataColumn(label: Text('Nama')),
-                  DataColumn(numeric: true, label: Text('Jiwa')),
-                  DataColumn(numeric: true, label: Text('Total Jatah So')),
-                ],
-                rows: [
-                  ..._mustahiqRecapRows.map(
-                    (item) => DataRow(
-                      cells: [
-                        DataCell(Text(item.asnafLabel)),
-                        DataCell(Text(item.name)),
-                        DataCell(Text('${item.souls}')),
-                        DataCell(Text(item.totalJatahSo.toStringAsFixed(2))),
-                      ],
+            Table(
+              columnWidths: const {
+                0: FixedColumnWidth(32),
+                1: FlexColumnWidth(3),
+                2: FlexColumnWidth(2),
+                3: FixedColumnWidth(44),
+                4: FixedColumnWidth(72),
+              },
+              border:
+                  TableBorder.all(color: const Color(0xFFE2E8F0), width: 0.8),
+              children: [
+                // Header
+                const TableRow(
+                  decoration: BoxDecoration(color: Color(0xFFF8FAFC)),
+                  children: [
+                    Padding(
+                      padding: EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                      child: Text('No', style: hdrStyle),
                     ),
-                  ),
-                  DataRow(
-                    color: WidgetStateProperty.all(const Color(0xFFF1F5F9)),
-                    cells: [
-                      const DataCell(
-                        Text(
-                          'TOTAL',
-                          style: TextStyle(fontWeight: FontWeight.w700),
-                        ),
+                    Padding(
+                      padding: EdgeInsets.symmetric(vertical: 6, horizontal: 6),
+                      child: Text('Nama', style: hdrStyle),
+                    ),
+                    Padding(
+                      padding: EdgeInsets.symmetric(vertical: 6),
+                      child: Text('Asnaf',
+                          textAlign: TextAlign.center, style: hdrStyle),
+                    ),
+                    Padding(
+                      padding: EdgeInsets.symmetric(vertical: 6),
+                      child: Text('Jiwa',
+                          textAlign: TextAlign.center, style: hdrStyle),
+                    ),
+                    Padding(
+                      padding: EdgeInsets.symmetric(vertical: 6),
+                      child: Text('Jatah So',
+                          textAlign: TextAlign.center, style: hdrStyle),
+                    ),
+                  ],
+                ),
+                // Data rows
+                ..._mustahiqRecapRows.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final item = entry.value;
+                  return TableRow(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 8, horizontal: 8),
+                        child: Text('${index + 1}', style: ts),
                       ),
-                      const DataCell(SizedBox.shrink()),
-                      DataCell(
-                        Text(
-                          '$totalSouls',
-                          style: const TextStyle(fontWeight: FontWeight.w700),
-                        ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 8, horizontal: 6),
+                        child: Text(item.name, style: ts),
                       ),
-                      DataCell(
-                        Text(
-                          totalJatahSo.toStringAsFixed(2),
-                          style: const TextStyle(fontWeight: FontWeight.w700),
-                        ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Text(item.asnafLabel,
+                            textAlign: TextAlign.center, style: ts),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Text('${item.souls}',
+                            textAlign: TextAlign.center, style: ts),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Text(item.totalJatahSo.toStringAsFixed(2),
+                            textAlign: TextAlign.center, style: ts),
                       ),
                     ],
-                  ),
-                ],
-              ),
+                  );
+                }),
+                // Total row
+                TableRow(
+                  decoration: const BoxDecoration(color: Color(0xFFF1F5F9)),
+                  children: [
+                    const SizedBox.shrink(),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+                      child: Text('Total', style: totalStyle),
+                    ),
+                    const SizedBox.shrink(),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Text('$totalSouls',
+                          textAlign: TextAlign.center, style: totalStyle),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Text(totalJatahSo.toStringAsFixed(2),
+                          textAlign: TextAlign.center, style: totalStyle),
+                    ),
+                  ],
+                ),
+              ],
             ),
           if (_mustahiqRecapError != null) ...[
             const SizedBox(height: 6),
@@ -1684,8 +2317,7 @@ class _LaporanBodyState extends State<LaporanBody> {
                 children: [
                   // Header row
                   TableRow(
-                    decoration:
-                        const BoxDecoration(color: Color(0xFFF8FAFC)),
+                    decoration: const BoxDecoration(color: Color(0xFFF8FAFC)),
                     children: [
                       'Amil',
                       'Dicatat',
@@ -1773,12 +2405,11 @@ class _LaporanBodyState extends State<LaporanBody> {
                   // Totals row
                   if (_amilKpiData!.amils.length > 1)
                     TableRow(
-                      decoration:
-                          const BoxDecoration(color: Color(0xFFF0FDF4)),
+                      decoration: const BoxDecoration(color: Color(0xFFF0FDF4)),
                       children: [
                         const Padding(
-                          padding: EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 6),
+                          padding:
+                              EdgeInsets.symmetric(horizontal: 6, vertical: 6),
                           child: Text(
                             'Total',
                             style: TextStyle(
@@ -1803,20 +2434,21 @@ class _LaporanBodyState extends State<LaporanBody> {
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
                           );
-                          return [totRec, totSt, totSouls].map(
-                            (v) => Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 6),
-                              child: Text(
-                                '$v',
-                                textAlign: TextAlign.center,
-                                style: ts,
-                              ),
-                            ),
-                          ).toList()
+                          return [totRec, totSt, totSouls]
+                              .map(
+                                (v) => Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 6),
+                                  child: Text(
+                                    '$v',
+                                    textAlign: TextAlign.center,
+                                    style: ts,
+                                  ),
+                                ),
+                              )
+                              .toList()
                             ..add(Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 6),
+                              padding: const EdgeInsets.symmetric(vertical: 6),
                               child: Text(
                                 totRice % 1 == 0
                                     ? '${totRice.toInt()}'
@@ -1840,6 +2472,293 @@ class _LaporanBodyState extends State<LaporanBody> {
                 ],
               ),
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVerificationRecapCard() {
+    final recap = _verificationRecapData;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Rekap Verifikasi Muzakki',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF1A1A1A),
+                  ),
+                ),
+              ),
+              if (_isLoadingVerificationRecap)
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: _green,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (_isLoadingVerificationRecap && recap == null)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Center(
+                child: CircularProgressIndicator(color: _green),
+              ),
+            )
+          else if (_verificationRecapError != null)
+            Text(
+              _verificationRecapError!,
+              style: const TextStyle(fontSize: 12, color: Color(0xFFDC2626)),
+            )
+          else if (recap == null || recap.total <= 0)
+            const Text(
+              'Belum ada data verifikasi muzakki.',
+              style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+            )
+          else ...[
+            Row(
+              children: [
+                _soSummaryItem(
+                  label: 'Total',
+                  value: '${recap.total}',
+                  sub: 'Muzakki',
+                  color: const Color(0xFF1D4ED8),
+                ),
+                _soSummaryItem(
+                  label: 'Terverifikasi',
+                  value: '${recap.verified}',
+                  sub: '${recap.verifiedPercent.toStringAsFixed(1)}%',
+                  color: const Color(0xFF16A34A),
+                ),
+                _soSummaryItem(
+                  label: 'Belum Verifikasi',
+                  value: '${recap.unverified}',
+                  sub:
+                      '${(100 - recap.verifiedPercent).clamp(0, 100).toStringAsFixed(1)}%',
+                  color: const Color(0xFFD97706),
+                ),
+              ],
+            ),
+            if (recap.verifiedMembers.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              _buildVerificationMemberTable(
+                title: 'Daftar Terverifikasi',
+                members: recap.verifiedMembers,
+                accentColor: const Color(0xFF16A34A),
+              ),
+            ],
+            if (recap.unverifiedMembers.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              _buildVerificationMemberTable(
+                title: 'Daftar Belum Verifikasi',
+                members: recap.unverifiedMembers,
+                accentColor: const Color(0xFFD97706),
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVerificationMemberTable({
+    required String title,
+    required List<_VerificationMemberRow> members,
+    required Color accentColor,
+  }) {
+    final byFamily = <String, List<_VerificationMemberRow>>{};
+    for (final m in members) {
+      final key = m.familyId.isNotEmpty ? m.familyId : m.id;
+      byFamily.putIfAbsent(key, () => <_VerificationMemberRow>[]).add(m);
+    }
+
+    final families = byFamily.entries.map((entry) {
+      final items = [...entry.value]..sort((a, b) {
+          if (a.isHeadOfFamily != b.isHeadOfFamily) {
+            return a.isHeadOfFamily ? -1 : 1;
+          }
+          return a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase());
+        });
+
+      final head = items.firstWhere(
+        (m) => m.isHeadOfFamily,
+        orElse: () => items.first,
+      );
+      final afiliasi = items
+          .map((m) => m.afiliasi.trim())
+          .firstWhere((v) => v.isNotEmpty, orElse: () => '')
+          .trim();
+
+      return _VerificationFamilyGroup(
+        familyId: entry.key,
+        headName: head.fullName,
+        isInternal: head.isInternal,
+        externalGroup: head.externalGroup,
+        afiliasi: afiliasi,
+        memberCount: items.length,
+      );
+    }).toList()
+      ..sort(
+        (a, b) => a.headName.toLowerCase().compareTo(b.headName.toLowerCase()),
+      );
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: accentColor.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: accentColor.withOpacity(0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '$title (${families.length} KK / ${members.length} anggota)',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: accentColor,
+            ),
+          ),
+          const SizedBox(height: 8),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Table(
+              defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+              columnWidths: const {
+                0: FixedColumnWidth(34),
+                1: FixedColumnWidth(170),
+                2: FixedColumnWidth(60),
+                3: FixedColumnWidth(160),
+              },
+              border: TableBorder.all(
+                color: const Color(0xFFE2E8F0),
+                width: 0.8,
+              ),
+              children: [
+                const TableRow(
+                  decoration: BoxDecoration(color: Color(0xFFF8FAFC)),
+                  children: [
+                    Padding(
+                      padding: EdgeInsets.symmetric(vertical: 6),
+                      child: Text(
+                        'No',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                      child: Text(
+                        'Kepala Keluarga',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: EdgeInsets.symmetric(vertical: 6),
+                      child: Text(
+                        'Anggota',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: EdgeInsets.symmetric(vertical: 6),
+                      child: Text(
+                        'Group Name',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                ...families.asMap().entries.map((entry) {
+                  final i = entry.key;
+                  final family = entry.value;
+                  final groupName = family.afiliasi.isNotEmpty
+                      ? family.afiliasi
+                      : (family.isInternal
+                          ? 'Internal'
+                          : (family.externalGroup.isNotEmpty
+                              ? family.externalGroup
+                              : 'Eksternal'));
+                  return TableRow(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Text(
+                          '${i + 1}',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 6),
+                        child: Text(
+                          family.headName,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF1A1A1A),
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Text(
+                          '${family.memberCount}',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Text(
+                          groupName,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  );
+                }),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -1909,4 +2828,66 @@ class _AmilKpiEntry {
   final int totalSouls;
   final double totalRiceQty;
   final double totalMoney;
+}
+
+class _VerificationRecapData {
+  const _VerificationRecapData({
+    required this.yearId,
+    required this.total,
+    required this.verified,
+    required this.unverified,
+    required this.verifiedPercent,
+    required this.verifiedMembers,
+    required this.unverifiedMembers,
+  });
+
+  final String yearId;
+  final int total;
+  final int verified;
+  final int unverified;
+  final double verifiedPercent;
+  final List<_VerificationMemberRow> verifiedMembers;
+  final List<_VerificationMemberRow> unverifiedMembers;
+}
+
+class _VerificationMemberRow {
+  const _VerificationMemberRow({
+    required this.id,
+    required this.fullName,
+    required this.familyId,
+    required this.relationship,
+    required this.isHeadOfFamily,
+    required this.isInternal,
+    required this.externalGroup,
+    required this.afiliasi,
+    required this.isVerified,
+  });
+
+  final String id;
+  final String fullName;
+  final String familyId;
+  final String relationship;
+  final bool isHeadOfFamily;
+  final bool isInternal;
+  final String externalGroup;
+  final String afiliasi;
+  final bool isVerified;
+}
+
+class _VerificationFamilyGroup {
+  const _VerificationFamilyGroup({
+    required this.familyId,
+    required this.headName,
+    required this.isInternal,
+    required this.externalGroup,
+    required this.afiliasi,
+    required this.memberCount,
+  });
+
+  final String familyId;
+  final String headName;
+  final bool isInternal;
+  final String externalGroup;
+  final String afiliasi;
+  final int memberCount;
 }
