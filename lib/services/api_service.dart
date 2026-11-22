@@ -168,6 +168,32 @@ class ApiService {
         .get('/api/m/v1/events', queryParameters: {'month': month});
   }
 
+  /// Endpoint: `GET /api/m/v1/events/access` → `{can_manage}`
+  Future<Response> getEventAccess() async {
+    return await _dio.get('/api/m/v1/events/access');
+  }
+
+  /// Endpoint: `GET /api/m/v1/events/:id` → `{event}`
+  Future<Response> getMobileEvent(String id) async {
+    return await _dio.get('/api/m/v1/events/$id');
+  }
+
+  /// Endpoint: `POST /api/m/v1/events` → `201 {event}`
+  Future<Response> createMobileEvent(Map<String, dynamic> body) async {
+    return await _dio.post('/api/m/v1/events', data: body);
+  }
+
+  /// Endpoint: `PUT /api/m/v1/events/:id` → `200 {event}`
+  Future<Response> updateMobileEvent(
+      String id, Map<String, dynamic> body) async {
+    return await _dio.put('/api/m/v1/events/$id', data: body);
+  }
+
+  /// Endpoint: `DELETE /api/m/v1/events/:id` → `204`
+  Future<Response> deleteMobileEvent(String id) async {
+    return await _dio.delete('/api/m/v1/events/$id');
+  }
+
   /// Endpoint: `GET /api/m/v1/jimpitan?month=YYYY-MM`
   Future<Response> getMobileJimpitan(String month) async {
     return await _dio
@@ -541,6 +567,29 @@ class ApiService {
   /// profile. Endpoint: `PUT /api/m/v1/profile`.
   Future<Response> updateProfile(Map<String, dynamic> data) async {
     return await _dio.put('/api/m/v1/profile', data: data);
+  }
+
+  /// Replaces the profile photo: multipart field `avatar` (jpeg/png/webp,
+  /// at most 2 MB; the server does not resize). Answers the updated profile,
+  /// whose `avatar` is the new path. Endpoint: `PUT /api/m/v1/profile/avatar`.
+  Future<Response> uploadAvatar(List<int> bytes, String name) {
+    return _dio.put(
+      '/api/m/v1/profile/avatar',
+      data: FormData.fromMap({
+        'avatar': MultipartFile.fromBytes(bytes, filename: name),
+      }),
+      options: Options(
+        contentType: 'multipart/form-data',
+        sendTimeout: const Duration(seconds: 60),
+        receiveTimeout: const Duration(seconds: 60),
+      ),
+    );
+  }
+
+  /// Removes the photo; repeatable. Answers the profile with `avatar: ""`.
+  /// Endpoint: `DELETE /api/m/v1/profile/avatar`.
+  Future<Response> deleteAvatar() async {
+    return await _dio.delete('/api/m/v1/profile/avatar');
   }
 
   /// Change own password. Endpoint: `PUT /api/m/v1/password`.

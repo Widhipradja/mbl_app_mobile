@@ -171,45 +171,18 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
         ],
       );
 
-  Widget _actions() => Column(
-        children: [
-          _actionRow(),
-          const SizedBox(height: Lx.s12),
-          OutlinedButton.icon(
-            onPressed: _voice,
-            style: OutlinedButton.styleFrom(
-                minimumSize: const Size.fromHeight(48)),
-            icon: const Icon(Icons.mic_rounded),
-            label: const Text('Catat dengan suara'),
-          ),
-        ],
-      );
-
-  Widget _actionRow() => Row(
-        children: [
-          Expanded(
-            child: FilledButton.icon(
-              onPressed: () => _new(income: true),
-              style: FilledButton.styleFrom(
-                  backgroundColor: Lx.success,
-                  minimumSize: const Size.fromHeight(48)),
-              icon: const Icon(Icons.add_rounded),
-              label: const Text('Pemasukan'),
-            ),
-          ),
-          const SizedBox(width: Lx.s12),
-          Expanded(
-            child: FilledButton.icon(
-              onPressed: () => _new(income: false),
-              style: FilledButton.styleFrom(
-                  backgroundColor: Lx.danger,
-                  minimumSize: const Size.fromHeight(48)),
-              icon: const Icon(Icons.remove_rounded),
-              label: const Text('Pengeluaran'),
-            ),
-          ),
-        ],
-      );
+  Future<void> _add() async {
+    final pick = await showAddEntrySheet(context);
+    if (!mounted || pick == null) return;
+    switch (pick) {
+      case 'voice':
+        await _voice();
+      case 'income':
+        await _new(income: true);
+      default:
+        await _new(income: false);
+    }
+  }
 
   Widget _categories(FinanceMonth d) {
     final rows = d.expenseByCategory;
@@ -283,11 +256,16 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
       data: Lx.theme,
       child: Scaffold(
         appBar: AppBar(title: const Text('Keuangan')),
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: _add,
+          icon: const Icon(Icons.add_rounded),
+          label: const Text('Catat'),
+        ),
         body: RefreshIndicator(
           onRefresh: _load,
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(Lx.s16, 0, Lx.s16, Lx.s24),
+            padding: const EdgeInsets.fromLTRB(Lx.s16, 0, Lx.s16, 96),
             children: [
               MonthSwitcher(month: _month, onChanged: _setMonth),
               if (_error != null)
@@ -308,8 +286,6 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
                 )
               else ...[
                 _balanceCard(d),
-                const SizedBox(height: Lx.s16),
-                _actions(),
                 const SizedBox(height: Lx.s8),
                 _links(),
                 _categories(d),

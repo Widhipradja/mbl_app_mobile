@@ -74,6 +74,7 @@ dependencies:
   path_provider: ^2.1.4
   share_plus: ^10.1.2
   record: 5.1.2
+  image: ^4.3.0
 
 # record_android 1.4+ needs a newer Flutter Gradle plugin than 3.24 provides.
 dependency_overrides:

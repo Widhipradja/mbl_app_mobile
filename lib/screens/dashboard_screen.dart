@@ -40,6 +40,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      context.read<AuthProvider>().refreshAvatar();
       final p = context.read<HomeSummaryProvider>();
       // Also refreshes when coming back from a module after a while.
       if (p.isStale()) p.load();

@@ -228,8 +228,8 @@ class AuthProvider with ChangeNotifier {
       ...sent,
       if (body is Map<String, dynamic>)
         for (final e in body.entries)
-          // avatar and address always come back empty: keep ours.
-          if (e.key != 'avatar' && e.key != 'address') e.key: e.value,
+          // address always comes back empty: keep ours.
+          if (e.key != 'address') e.key: e.value,
     };
     for (final k in ['user_id', 'tenant_id', 'id']) {
       merged[k] = current[k];
@@ -237,6 +237,46 @@ class AuthProvider with ChangeNotifier {
     _user = User.fromJson(merged);
     await StorageService.saveUser(_user!);
     notifyListeners();
+  }
+
+  Future<void> _storeAvatar(String path) async {
+    final current = _user?.toJson() ?? <String, dynamic>{};
+    if ((current['avatar'] ?? '') == path) return;
+    current['avatar'] = path.isEmpty ? null : path;
+    _user = User.fromJson(current);
+    await StorageService.saveUser(_user!);
+    notifyListeners();
+  }
+
+  /// `avatar` of a profile answer: `""` for no photo, else a path on the API
+  /// host whose `?v=` changes with every new photo (so image caches renew).
+  static String _avatarOf(dynamic body) =>
+      body is Map ? (body['avatar']?.toString().trim() ?? '') : '';
+
+  /// Uploads a new photo (already shrunk) and keeps the address the server
+  /// answers. Throws on failure so the screen can show the reason.
+  Future<void> setAvatar(List<int> bytes, String name) async {
+    final resp = await _apiService.uploadAvatar(bytes, name);
+    final path = _avatarOf(resp.data);
+    if (path.isEmpty) throw const FormatException('avatar path missing');
+    await _storeAvatar(path);
+  }
+
+  Future<void> removeAvatar() async {
+    final resp = await _apiService.deleteAvatar();
+    await _storeAvatar(_avatarOf(resp.data));
+  }
+
+  /// Picks up a photo set on another device (or by the web) from
+  /// `GET /profile`. Quiet: a failure leaves what is shown.
+  Future<void> refreshAvatar() async {
+    if (_user == null) return;
+    try {
+      final resp = await _apiService.getProfile();
+      if (resp.data is Map) await _storeAvatar(_avatarOf(resp.data));
+    } catch (e) {
+      debugPrint('refreshAvatar error: $e');
+    }
   }
 
   // Clear error

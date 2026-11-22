@@ -619,12 +619,23 @@ List<LauncherModule> buildModules(HomeSummaryProvider p) {
   return [
     if (p.isModuleVisible('budget'))
       const LauncherModule(
-        label: 'Budget',
-        description: 'Dompet pribadi: pemasukan, pengeluaran, dan anggaran',
+        label: 'Dompet Saya',
+        description: 'Catat uang masuk dan keluar pribadi, atur anggaran bulanan',
         icon: Icons.account_balance_wallet_outlined,
         route: '/budget',
         color: Color(0xFF2563EB),
         tint: Color(0xFFEFF6FF),
+        push: true,
+      ),
+    // Everyone can read; writers (events/access) manage inside the module.
+    if (p.isModuleVisible('events'))
+      const LauncherModule(
+        label: 'Kegiatan',
+        description: 'Jadwal kegiatan, materi, dan pengelolaan oleh pengurus',
+        icon: Icons.event_note_outlined,
+        route: '/events',
+        color: Color(0xFFDB2777),
+        tint: Color(0xFFFDF2F8),
         push: true,
       ),
     // The organisation's cash (finance API), apart from the personal Budget.
@@ -632,7 +643,7 @@ List<LauncherModule> buildModules(HomeSummaryProvider p) {
       const LauncherModule(
         label: 'Keuangan',
         description: 'Saldo, transaksi, pembukuan, dan catat lewat suara',
-        icon: Icons.savings_outlined,
+        icon: Icons.account_balance_outlined,
         route: '/finance',
         color: Color(0xFF0D9488),
         tint: Color(0xFFF0FDFA),
@@ -654,7 +665,6 @@ List<LauncherModule> buildModules(HomeSummaryProvider p) {
         label: 'Tabungan Kurban',
         description: 'Tabungan kurban keluarga atau Anda, per bulan',
         icon: Icons.mosque_outlined,
-        emoji: '🐐',
         route: '/kurban',
         color: Color(0xFFEA580C),
         tint: Color(0xFFFFF7ED),

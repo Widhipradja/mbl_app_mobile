@@ -32,6 +32,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   String? _sex;
   bool _loading = true;
   bool _saving = false;
+
+  /// A photo upload is running: the form is not sent meanwhile, so the two
+  /// requests never overlap.
+  bool _photoBusy = false;
   String? _loadError;
   String? _error;
 
@@ -178,13 +182,23 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     // No `sex` in the profile: the account is not linked to one member, so
     // the server would refuse to save.
     final readOnly = _sex == null;
-    final enabled = !_saving && !readOnly;
+    final enabled = !_saving && !_photoBusy && !readOnly;
     return Form(
       key: _form,
       child: ListView(
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.all(Lx.s16),
         children: [
+          // The server refuses photo changes for an account without a member.
+          ProfilePhotoEditor(
+            enabled: !readOnly && !_saving,
+            onBusyChanged: (b) => setState(() => _photoBusy = b),
+          ),
+          const SizedBox(height: Lx.s4),
+          if (!readOnly)
+            Center(
+                child: Text('Ketuk untuk ganti foto', style: Lx.metadata)),
+          const SizedBox(height: Lx.s16),
           if (readOnly)
             Container(
               margin: const EdgeInsets.only(bottom: Lx.s12),

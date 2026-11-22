@@ -8,6 +8,7 @@ import '../screens/launcher/information_hub_screen.dart';
 import '../screens/savings/amal_jariyah_screen.dart';
 import '../screens/savings/kurban_screen.dart';
 import '../screens/budget/budget_wallet_screen.dart';
+import '../screens/events/events_list_screen.dart';
 import '../screens/finance/finance_dashboard_screen.dart';
 import '../screens/zakatfitrah/add_muzakki_screen.dart';
 import '../screens/zakatfitrah/zakat_transaction_screen.dart';
@@ -93,6 +94,12 @@ class AppRouter {
       GoRoute(
         path: '/amal-jariyah',
         builder: (context, state) => const AmalJariyahScreen(),
+      ),
+
+      // Events: list, detail and (for writers) create/edit/delete.
+      GoRoute(
+        path: '/events',
+        builder: (context, state) => const EventsListScreen(),
       ),
 
       // Finance layout preview (sample data until the API is ready)

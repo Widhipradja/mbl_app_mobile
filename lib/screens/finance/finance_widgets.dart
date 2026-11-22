@@ -134,3 +134,42 @@ class GroupLabel extends StatelessWidget {
 }
 
 const hairline = Divider(height: 1, thickness: 1, color: Lx.border);
+
+
+/// The "Catat" choice shared by Dompet Saya and Keuangan: what happened, or
+/// say it. Returns `expense`, `income` or `voice`; null when dismissed.
+Future<String?> showAddEntrySheet(BuildContext context) {
+  Widget choice(BuildContext ctx, String value, IconData icon, Color color,
+          String title, String hint) =>
+      ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: CircleAvatar(
+          backgroundColor: color.withOpacity(0.12),
+          child: Icon(icon, color: color),
+        ),
+        title: Text(title, style: Lx.cardHeading),
+        subtitle: Text(hint, style: Lx.metadata),
+        onTap: () => Navigator.of(ctx).pop(value),
+      );
+
+  return showModalBottomSheet<String>(
+    context: context,
+    showDragHandle: true,
+    builder: (ctx) => SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(Lx.s16, 0, Lx.s16, Lx.s16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            choice(ctx, 'expense', Icons.north_east_rounded, Lx.danger,
+                'Pengeluaran', 'Belanja, makan, bensin, tagihan'),
+            choice(ctx, 'income', Icons.south_west_rounded, Lx.success,
+                'Pemasukan', 'Gaji, titipan, uang masuk lainnya'),
+            choice(ctx, 'voice', Icons.mic_rounded, Lx.primary, 'Ucapkan',
+                'Contoh: "beli bensin 30 ribu"'),
+          ],
+        ),
+      ),
+    ),
+  );
+}

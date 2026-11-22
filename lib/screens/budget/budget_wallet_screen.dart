@@ -91,6 +91,33 @@ class _BudgetWalletScreenState extends State<BudgetWalletScreen> {
     }
   }
 
+  /// What this screen is for, in a line, for someone opening it first.
+  Widget _intro() => Container(
+        margin: const EdgeInsets.only(bottom: Lx.s16),
+        padding: const EdgeInsets.all(Lx.s12),
+        decoration: BoxDecoration(
+          color: Lx.surface,
+          borderRadius: BorderRadius.circular(Lx.rButton),
+          border: Border.all(color: Lx.border),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.info_outline_rounded,
+                size: 18, color: Lx.primary),
+            const SizedBox(width: Lx.s8),
+            Expanded(
+              child: Text(
+                'Catatan keuangan pribadi Anda: pemasukan dan pengeluaran '
+                'harian (ketik atau rekam suara), anggaran per kategori, dan '
+                'laporan ke mana uang Anda pergi. Hanya Anda yang melihatnya.',
+                style: Lx.metadata.copyWith(height: 1.4),
+              ),
+            ),
+          ],
+        ),
+      );
+
   Widget _card(BudgetSummary s) => Container(
         width: double.infinity,
         padding: const EdgeInsets.all(Lx.s16),
@@ -132,28 +159,19 @@ class _BudgetWalletScreenState extends State<BudgetWalletScreen> {
         ),
       );
 
-  Widget _actions() => Row(
-        children: [
-          Expanded(
-            child: FilledButton.icon(
-              onPressed: () => _go(const BudgetVoiceScreen()),
-              style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(52)),
-              icon: const Icon(Icons.mic_rounded),
-              label: const Text('Rekam'),
-            ),
-          ),
-          const SizedBox(width: Lx.s12),
-          SizedBox(
-            height: 52,
-            child: OutlinedButton.icon(
-              onPressed: () => _go(const BudgetFormScreen()),
-              icon: const Icon(Icons.add_rounded),
-              label: const Text('Manual'),
-            ),
-          ),
-        ],
-      );
+  /// One button, then the choice: what happened, or say it.
+  Future<void> _add() async {
+    final pick = await showAddEntrySheet(context);
+    if (!mounted || pick == null) return;
+    switch (pick) {
+      case 'voice':
+        await _go(const BudgetVoiceScreen());
+      case 'income':
+        await _go(const BudgetFormScreen(initialIncome: true));
+      default:
+        await _go(const BudgetFormScreen());
+    }
+  }
 
   Widget _budgetSection(BudgetSummary s) {
     final lines = s.budgeted;
@@ -223,7 +241,7 @@ class _BudgetWalletScreenState extends State<BudgetWalletScreen> {
       data: Lx.theme,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Budget'),
+          title: const Text('Dompet Saya'),
           actions: [
             IconButton(
               tooltip: 'Laporan',
@@ -237,13 +255,19 @@ class _BudgetWalletScreenState extends State<BudgetWalletScreen> {
             ),
           ],
         ),
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: _add,
+          icon: const Icon(Icons.add_rounded),
+          label: const Text('Catat'),
+        ),
         body: RefreshIndicator(
           onRefresh: _load,
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(Lx.s16, 0, Lx.s16, Lx.s24),
+            padding: const EdgeInsets.fromLTRB(Lx.s16, 0, Lx.s16, 96),
             children: [
               MonthSwitcher(month: _month, onChanged: _setMonth),
+              _intro(),
               if (_error != null)
                 Padding(
                   padding: const EdgeInsets.only(top: Lx.s24),
@@ -263,8 +287,6 @@ class _BudgetWalletScreenState extends State<BudgetWalletScreen> {
                 )
               else ...[
                 _card(s),
-                const SizedBox(height: Lx.s16),
-                _actions(),
                 const SizedBox(height: Lx.s8),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
