@@ -295,7 +295,7 @@ class _HomeSummarySectionState extends State<HomeSummarySection> {
       if (widget.showFinance && p.isModuleVisible('finance'))
         _CardSpec(Icons.account_balance_wallet_outlined, 'Saldo kas', p.finance,
             _financeBody,
-            onTap: () => context.go('/budget')),
+            onTap: () => context.go('/finance')),
     ];
     final failed = cards.where((c) => c.section.error != null).toList();
 

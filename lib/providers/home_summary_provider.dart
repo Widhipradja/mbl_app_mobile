@@ -34,7 +34,7 @@ class HomeSummaryProvider extends ChangeNotifier {
 
   /// Modules this user may open, as the server worked them out from role and
   /// tenant settings (`GET /api/m/v1/bootstrap`): events, shodaqoh, jimpitan,
-  /// fundraising, finance, zakatfitrah, profile. Null until known, or when the
+  /// fundraising, finance, budget, zakatfitrah, profile. Null until known, or when the
   /// call failed. Only for what is shown: the API refuses on its own (403).
   Map<String, bool>? modules;
 
@@ -47,11 +47,13 @@ class HomeSummaryProvider extends ChangeNotifier {
   String orgName = '';
 
   /// Without the bootstrap, the member-facing modules show and the ones that
-  /// need a role (finance, zakat fitrah) stay hidden.
+  /// need a role (finance, budget, zakat fitrah) stay hidden.
   bool isModuleVisible(String name) {
     final m = modules;
     if (m != null) return m[name] == true;
-    if (name == 'finance' || name == 'zakatfitrah') return false;
+    if (name == 'finance' || name == 'zakatfitrah' || name == 'budget') {
+      return false;
+    }
     return !hiddenModules.contains(name);
   }
 

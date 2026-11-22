@@ -7,11 +7,8 @@ import '../screens/info/info_screens.dart';
 import '../screens/launcher/information_hub_screen.dart';
 import '../screens/savings/amal_jariyah_screen.dart';
 import '../screens/savings/kurban_screen.dart';
+import '../screens/budget/budget_wallet_screen.dart';
 import '../screens/finance/finance_dashboard_screen.dart';
-import '../screens/budget/budget_home_screen.dart';
-import '../screens/budget/add_transaction_screen.dart';
-import '../screens/budget/transaction_list_screen.dart';
-import '../screens/budget/search_transaction_screen.dart';
 import '../screens/zakatfitrah/add_muzakki_screen.dart';
 import '../screens/zakatfitrah/zakat_transaction_screen.dart';
 import '../models/muzakki.dart';
@@ -104,29 +101,10 @@ class AppRouter {
         builder: (context, state) => const FinanceDashboardScreen(),
       ),
 
-      // Budget Module Routes
+      // Budget: the personal wallet; its other screens are pushed.
       GoRoute(
         path: '/budget',
-        builder: (context, state) => const BudgetHomeScreen(),
-      ),
-      GoRoute(
-        path: '/budget/add-transaction',
-        builder: (context, state) => const AddTransactionScreen(),
-      ),
-      GoRoute(
-        path: '/budget/edit-transaction',
-        builder: (context, state) {
-          final transaction = state.extra as dynamic;
-          return AddTransactionScreen(transaction: transaction);
-        },
-      ),
-      GoRoute(
-        path: '/budget/transactions',
-        builder: (context, state) => const TransactionListScreen(),
-      ),
-      GoRoute(
-        path: '/budget/search',
-        builder: (context, state) => const SearchTransactionScreen(),
+        builder: (context, state) => const BudgetWalletScreen(),
       ),
 
       // Zakat Fitrah Module Routes
@@ -167,18 +145,10 @@ class AppRouter {
         },
       ),
 
-      // Keep legacy routes for backward compatibility
+      // Old entry point (the splash screen once opened the budget home).
       GoRoute(
         path: '/home',
-        builder: (context, state) => const BudgetHomeScreen(),
-      ),
-      GoRoute(
-        path: '/add-transaction',
-        builder: (context, state) => const AddTransactionScreen(),
-      ),
-      GoRoute(
-        path: '/transactions',
-        builder: (context, state) => const TransactionListScreen(),
+        redirect: (context, state) => '/dashboard',
       ),
     ],
   );

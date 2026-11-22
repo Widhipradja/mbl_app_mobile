@@ -617,17 +617,17 @@ class LauncherModule {
 /// information, not apps: they live in the Information Hub on the home tab.
 List<LauncherModule> buildModules(HomeSummaryProvider p) {
   return [
-    if (p.isModuleVisible('finance'))
+    if (p.isModuleVisible('budget'))
       const LauncherModule(
         label: 'Budget',
-        description: 'Catat pemasukan dan pengeluaran kas',
+        description: 'Dompet pribadi: pemasukan, pengeluaran, dan anggaran',
         icon: Icons.account_balance_wallet_outlined,
         route: '/budget',
         color: Color(0xFF2563EB),
         tint: Color(0xFFEFF6FF),
+        push: true,
       ),
-    // New finance screens on the mobile finance API; Budget above stays until
-    // these are tested.
+    // The organisation's cash (finance API), apart from the personal Budget.
     if (p.isModuleVisible('finance'))
       const LauncherModule(
         label: 'Keuangan',
@@ -636,6 +636,7 @@ List<LauncherModule> buildModules(HomeSummaryProvider p) {
         route: '/finance',
         color: Color(0xFF0D9488),
         tint: Color(0xFFF0FDFA),
+        push: true,
       ),
     if (p.isModuleVisible('zakatfitrah'))
       const LauncherModule(

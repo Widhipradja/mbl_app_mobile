@@ -268,6 +268,57 @@ class ApiService {
     return await _dio.get('/api/m/v1/fundraising');
   }
 
+  // Personal budget (module `budget`): a wallet per user, apart from the
+  // organisation's cash. Amounts are decimal strings.
+
+  /// `month` is `YYYY-MM`; empty means the current month.
+  Future<Response> getBudgetSummary(String month) => _dio
+      .get('/api/m/v1/budget/summary', queryParameters: {'month': month});
+
+  Future<Response> getBudgetTransactions(
+          {String? from, String? to, String? categoryId, int limit = 200}) =>
+      _dio.get('/api/m/v1/budget/transactions', queryParameters: {
+        if (from != null) 'from': from,
+        if (to != null) 'to': to,
+        if (categoryId != null) 'category_id': categoryId,
+        'limit': limit,
+      });
+
+  Future<Response> createBudgetTransaction(Map<String, dynamic> body) =>
+      _dio.post('/api/m/v1/budget/transactions', data: body);
+
+  /// All fields again, not a patch.
+  Future<Response> updateBudgetTransaction(
+          String id, Map<String, dynamic> body) =>
+      _dio.put('/api/m/v1/budget/transactions/$id', data: body);
+
+  Future<Response> deleteBudgetTransaction(String id) =>
+      _dio.delete('/api/m/v1/budget/transactions/$id');
+
+  Future<Response> getBudgetCategories() => _dio.get(
+      '/api/m/v1/budget/categories',
+      queryParameters: {'include_inactive': true});
+
+  Future<Response> createBudgetCategory(String name, String type) => _dio
+      .post('/api/m/v1/budget/categories', data: {'name': name, 'type': type});
+
+  Future<Response> updateBudgetCategory(
+          String id, String name, String type, bool active) =>
+      _dio.put('/api/m/v1/budget/categories/$id',
+          data: {'name': name, 'type': type, 'is_active': active});
+
+  Future<Response> deleteBudgetCategory(String id) =>
+      _dio.delete('/api/m/v1/budget/categories/$id');
+
+  Future<Response> getBudgetLimits(String month) => _dio
+      .get('/api/m/v1/budget/limits', queryParameters: {'month': month});
+
+  /// Upsert: new and existing limits alike; `"0"` clears it.
+  Future<Response> putBudgetLimit(
+          String categoryId, String amount, String month) =>
+      _dio.put('/api/m/v1/budget/limits',
+          data: {'category_id': categoryId, 'amount': amount, 'month': month});
+
   // Finance, through the mobile gateway (docs: baraka-mobile-finance-api.md).
   // Lists come back as bare arrays; amounts are decimal strings.
 
