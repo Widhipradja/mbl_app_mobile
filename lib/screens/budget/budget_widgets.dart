@@ -58,11 +58,22 @@ class BudgetTxnRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    txn.description.isEmpty ? cat : txn.description,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Lx.cardHeading,
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          txn.description.isEmpty ? cat : txn.description,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Lx.cardHeading,
+                        ),
+                      ),
+                      if (txn.isVoice) ...[
+                        const SizedBox(width: 6),
+                        const Icon(Icons.mic_rounded,
+                            size: 14, color: Lx.textMuted),
+                      ],
+                    ],
                   ),
                   Text(showDate ? '$cat · ${dateShort(txn.date)}' : cat,
                       style: Lx.metadata),
@@ -128,4 +139,70 @@ class BudgetProgressRow extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Detail of one transaction: the note a voice entry was made from, and the
+/// ways to change or remove it. Returns `edit`, `delete` or null.
+Future<String?> showBudgetTxnDetail(
+    BuildContext context, BudgetTxn t, bool? isIncome) {
+  final color = isIncome == null
+      ? Lx.textSecondary
+      : isIncome
+          ? Lx.success
+          : Lx.danger;
+  return showModalBottomSheet<String>(
+    context: context,
+    showDragHandle: true,
+    builder: (context) => SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(Lx.s16, 0, Lx.s16, Lx.s16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(t.categoryName.isEmpty ? 'Tanpa kategori' : t.categoryName,
+                style: Lx.metadata),
+            Text(rp(t.amount), style: Lx.greeting.copyWith(color: color)),
+            const SizedBox(height: Lx.s8),
+            if (t.description.isNotEmpty) Text(t.description, style: Lx.body),
+            Text(dateShort(t.date), style: Lx.metadata),
+            if (t.isVoice) ...[
+              const SizedBox(height: Lx.s12),
+              Row(
+                children: [
+                  const Icon(Icons.mic_rounded, size: 14, color: Lx.textMuted),
+                  const SizedBox(width: 4),
+                  Text('Dicatat dengan suara', style: Lx.metadata),
+                ],
+              ),
+              if (t.transcript.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text('"${t.transcript}"', style: Lx.body),
+                ),
+            ],
+            const SizedBox(height: Lx.s16),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton(
+                    onPressed: () => Navigator.pop(context, 'edit'),
+                    child: const Text('Ubah'),
+                  ),
+                ),
+                const SizedBox(width: Lx.s12),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context, 'delete'),
+                    style: OutlinedButton.styleFrom(foregroundColor: Lx.danger),
+                    child: const Text('Hapus'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }

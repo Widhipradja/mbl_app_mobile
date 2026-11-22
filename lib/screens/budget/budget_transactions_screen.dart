@@ -70,6 +70,17 @@ class _BudgetTransactionsScreenState extends State<BudgetTransactionsScreen> {
     if (saved == true && mounted) _load();
   }
 
+  /// Detail first (the voice note shows there), then change or delete.
+  Future<void> _open(BudgetTxn t) async {
+    final act = await showBudgetTxnDetail(context, t, _income[t.categoryId]);
+    if (!mounted || act == null) return;
+    if (act == 'edit') {
+      await _edit(t);
+    } else if (await _confirmDelete(t) && mounted) {
+      _load();
+    }
+  }
+
   Future<bool> _confirmDelete(BudgetTxn t) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -186,7 +197,7 @@ class _BudgetTransactionsScreenState extends State<BudgetTransactionsScreen> {
         child: Container(
           color: Lx.background,
           child: BudgetTxnRow(
-              txn: t, isIncome: _income[t.categoryId], onTap: () => _edit(t)),
+              txn: t, isIncome: _income[t.categoryId], onTap: () => _open(t)),
         ),
       ));
     }

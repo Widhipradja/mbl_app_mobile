@@ -313,6 +313,24 @@ class ApiService {
   Future<Response> getBudgetLimits(String month) => _dio
       .get('/api/m/v1/budget/limits', queryParameters: {'month': month});
 
+  /// Field `audio` (m4a/wav, at most 10 MiB). 200 answers the transaction
+  /// already created; 422 carries the transcript, the amount read and the
+  /// candidate categories.
+  Future<Response> sendBudgetVoice(List<int> bytes, String name) {
+    final form = FormData.fromMap({
+      'audio': MultipartFile.fromBytes(bytes, filename: name),
+    });
+    return _dio.post(
+      '/api/m/v1/budget/voice-transaction',
+      data: form,
+      options: Options(
+        contentType: 'multipart/form-data',
+        sendTimeout: const Duration(seconds: 90),
+        receiveTimeout: const Duration(seconds: 90),
+      ),
+    );
+  }
+
   /// Upsert: new and existing limits alike; `"0"` clears it.
   Future<Response> putBudgetLimit(
           String categoryId, String amount, String month) =>

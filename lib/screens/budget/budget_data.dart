@@ -41,6 +41,8 @@ class BudgetTxn {
     required this.amount,
     required this.date,
     required this.description,
+    this.source = 'app',
+    this.transcript = '',
   });
 
   factory BudgetTxn.fromJson(Map<String, dynamic> j) {
@@ -53,10 +55,17 @@ class BudgetTxn {
       amount: _amt(j['amount']),
       date: d == null ? DateTime.now() : DateTime(d.year, d.month, d.day),
       description: _s(j['description']),
+      source: _s(j['source']).isEmpty ? 'app' : _s(j['source']),
+      transcript: _s(j['transcript']),
     );
   }
 
   final String id, categoryId, categoryName, description;
+
+  /// `app`, `voice` or `web`; [transcript] is only set for `voice`.
+  final String source, transcript;
+
+  bool get isVoice => source == 'voice';
   final int amount;
   final DateTime date;
 }
@@ -122,6 +131,27 @@ class BudgetSummary {
   int get spentInBudget => budgeted.fold(0, (s, c) => s + c.spent);
 }
 
+/// The server heard the recording but found no category (422). The amount
+/// and type were read, so the user only picks a category.
+class BudgetVoiceUnreadable implements Exception {
+  const BudgetVoiceUnreadable({
+    required this.message,
+    required this.transcript,
+    required this.amount,
+    required this.isIncome,
+    required this.candidates,
+  });
+
+  final String message, transcript;
+
+  /// 0 when no amount could be read.
+  final int amount;
+  final bool isIncome;
+
+  /// Category names the server thinks it could be.
+  final List<String> candidates;
+}
+
 /// What the budget screens need from the backend.
 class BudgetRepository {
   Future<BudgetSummary> summary(DateTime month) async {
@@ -173,12 +203,41 @@ class BudgetRepository {
           {required int amount,
           required String categoryId,
           required String description,
-          required DateTime date}) =>
-      ApiService().createBudgetTransaction(_txnBody(
-          amount: amount,
-          categoryId: categoryId,
-          description: description,
-          date: date));
+          required DateTime date,
+          String source = 'app'}) =>
+      ApiService().createBudgetTransaction({
+        ..._txnBody(
+            amount: amount,
+            categoryId: categoryId,
+            description: description,
+            date: date),
+        'source': source,
+      });
+
+  /// The transaction is created by the server on 200. Throws
+  /// [BudgetVoiceUnreadable] on 422.
+  Future<BudgetTxn> voice(List<int> bytes, String name) async {
+    try {
+      final r = await ApiService().sendBudgetVoice(bytes, name);
+      return BudgetTxn.fromJson(
+          r.data is Map<String, dynamic> ? r.data as Map<String, dynamic> : {});
+    } on DioException catch (e) {
+      final d = e.response?.data;
+      if (e.response?.statusCode == 422 && d is Map) {
+        throw BudgetVoiceUnreadable(
+          message: _s(d['error']),
+          transcript: _s(d['transcript']),
+          amount: _amt(d['amount']),
+          isIncome: _s(d['trx_type']) == 'income',
+          candidates: [
+            if (d['candidates'] is List)
+              for (final c in d['candidates'] as List) _s(c),
+          ],
+        );
+      }
+      rethrow;
+    }
+  }
 
   Future<void> updateTransaction(String id,
           {required int amount,
@@ -240,6 +299,13 @@ String budgetError(Object e) {
         return 'Modul budget tidak aktif untuk akun Anda.';
       case 404:
         return 'Data tidak ditemukan. Mungkin sudah dihapus.';
+      case 413:
+        return 'Rekaman terlalu panjang (maksimal 10 MB). Rekam lebih singkat.';
+      case 502:
+      case 504:
+        return 'Layanan transkripsi sedang tidak tersedia. Coba lagi.';
+      case 503:
+        return 'Fitur suara belum dikonfigurasi di server.';
     }
     if (e.response == null) {
       return 'Tidak bisa terhubung ke server. Periksa koneksi Anda.';

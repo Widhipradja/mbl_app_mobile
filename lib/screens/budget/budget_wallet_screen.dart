@@ -8,6 +8,7 @@ import 'budget_data.dart';
 import 'budget_form_screen.dart';
 import 'budget_limits_screen.dart';
 import 'budget_transactions_screen.dart';
+import 'budget_voice_screen.dart';
 import 'budget_widgets.dart';
 
 /// The personal wallet: the month at a glance, budget per category, quick
@@ -69,6 +70,26 @@ class _BudgetWalletScreenState extends State<BudgetWalletScreen> {
     if (mounted) _load();
   }
 
+  /// Detail first (the voice note shows there), then change or delete.
+  Future<void> _open(BudgetTxn t) async {
+    final act = await showBudgetTxnDetail(context, t, _income[t.categoryId]);
+    if (!mounted || act == null) return;
+    if (act == 'edit') {
+      await _go(BudgetFormScreen(txn: t));
+    } else {
+      try {
+        await budgetRepo.deleteTransaction(t.id);
+        if (mounted) _load();
+      } catch (e) {
+        debugPrint('BudgetWallet delete error: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(budgetError(e))));
+        }
+      }
+    }
+  }
+
   Widget _card(BudgetSummary s) => Container(
         width: double.infinity,
         padding: const EdgeInsets.all(Lx.s16),
@@ -114,23 +135,20 @@ class _BudgetWalletScreenState extends State<BudgetWalletScreen> {
         children: [
           Expanded(
             child: FilledButton.icon(
-              onPressed: () => _go(const BudgetFormScreen(initialIncome: true)),
+              onPressed: () => _go(const BudgetVoiceScreen()),
               style: FilledButton.styleFrom(
-                  backgroundColor: Lx.success,
-                  minimumSize: const Size.fromHeight(48)),
-              icon: const Icon(Icons.add_rounded),
-              label: const Text('Pemasukan'),
+                  minimumSize: const Size.fromHeight(52)),
+              icon: const Icon(Icons.mic_rounded),
+              label: const Text('Rekam'),
             ),
           ),
           const SizedBox(width: Lx.s12),
-          Expanded(
-            child: FilledButton.icon(
+          SizedBox(
+            height: 52,
+            child: OutlinedButton.icon(
               onPressed: () => _go(const BudgetFormScreen()),
-              style: FilledButton.styleFrom(
-                  backgroundColor: Lx.danger,
-                  minimumSize: const Size.fromHeight(48)),
-              icon: const Icon(Icons.remove_rounded),
-              label: const Text('Pengeluaran'),
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Manual'),
             ),
           ),
         ],
@@ -191,7 +209,7 @@ class _BudgetWalletScreenState extends State<BudgetWalletScreen> {
               txn: _recent[i],
               isIncome: _income[_recent[i].categoryId],
               showDate: true,
-              onTap: () => _go(BudgetFormScreen(txn: _recent[i])),
+              onTap: () => _open(_recent[i]),
             ),
           ],
         ],
