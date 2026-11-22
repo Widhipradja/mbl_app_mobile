@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../config/launcher_tokens.dart';
+import '../../providers/home_summary_provider.dart';
 import '../../models/user.dart';
 import '../profile/change_password_screen.dart';
 import '../profile/edit_profile_screen.dart';
@@ -370,34 +372,35 @@ class LauncherProfileTab extends StatelessWidget {
             ),
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-          child: Container(
-            decoration: Lx.card(),
-            child: Column(
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.edit_outlined, color: Lx.primary),
-                  title: const Text('Ubah Profil'),
-                  trailing: const Icon(Icons.chevron_right_rounded,
-                      color: Lx.textSecondary),
-                  onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => const EditProfileScreen())),
-                ),
-                const Divider(height: 1, color: Lx.border),
-                ListTile(
-                  leading:
-                      const Icon(Icons.lock_outline_rounded, color: Lx.primary),
-                  title: const Text('Ubah Password'),
-                  trailing: const Icon(Icons.chevron_right_rounded,
-                      color: Lx.textSecondary),
-                  onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => const ChangePasswordScreen())),
-                ),
-              ],
+        if (context.watch<HomeSummaryProvider>().isModuleVisible('profile'))
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+            child: Container(
+              decoration: Lx.card(),
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.edit_outlined, color: Lx.primary),
+                    title: const Text('Ubah Profil'),
+                    trailing: const Icon(Icons.chevron_right_rounded,
+                        color: Lx.textSecondary),
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => const EditProfileScreen())),
+                  ),
+                  const Divider(height: 1, color: Lx.border),
+                  ListTile(
+                    leading: const Icon(Icons.lock_outline_rounded,
+                        color: Lx.primary),
+                    title: const Text('Ubah Password'),
+                    trailing: const Icon(Icons.chevron_right_rounded,
+                        color: Lx.textSecondary),
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => const ChangePasswordScreen())),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
           child: OutlinedButton.icon(

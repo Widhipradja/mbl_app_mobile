@@ -612,12 +612,12 @@ class LauncherModule {
   final bool push;
 }
 
-/// The apps this user may open: Budget and Zakat Fitrah by role, then the
-/// member modules. Events and fundraising are information, not apps: they
-/// live in the Information Hub on the home tab.
-List<LauncherModule> buildModules({required List<String> roles}) {
+/// The apps this user may open, by the modules the server allows for this
+/// user and tenant (`GET /api/m/v1/bootstrap`). Events and fundraising are
+/// information, not apps: they live in the Information Hub on the home tab.
+List<LauncherModule> buildModules(HomeSummaryProvider p) {
   return [
-    if (hasAnyRole(roles, ['Administrator', 'KI', 'KU']))
+    if (p.isModuleVisible('finance'))
       const LauncherModule(
         label: 'Budget',
         description: 'Catat pemasukan dan pengeluaran kas',
@@ -626,7 +626,18 @@ List<LauncherModule> buildModules({required List<String> roles}) {
         color: Color(0xFF2563EB),
         tint: Color(0xFFEFF6FF),
       ),
-    if (hasAnyRole(roles, ['Administrator', 'KI', 'KU', 'Amil']))
+    // New finance screens on the mobile finance API; Budget above stays until
+    // these are tested.
+    if (p.isModuleVisible('finance'))
+      const LauncherModule(
+        label: 'Keuangan',
+        description: 'Saldo, transaksi, pembukuan, dan catat lewat suara',
+        icon: Icons.savings_outlined,
+        route: '/finance',
+        color: Color(0xFF0D9488),
+        tint: Color(0xFFF0FDFA),
+      ),
+    if (p.isModuleVisible('zakatfitrah'))
       const LauncherModule(
         label: 'Zakat Fitrah',
         description: 'Muzakki, mustahiq, dan laporan zakat',
@@ -635,28 +646,29 @@ List<LauncherModule> buildModules({required List<String> roles}) {
         color: Color(0xFF7C3AED),
         tint: Color(0xFFF5F3FF),
       ),
-    // Member-facing: the member is taken from the login token, so every
-    // signed-in user gets these. An account not linked to a member sees that
-    // message inside the screen.
-    const LauncherModule(
-      label: 'Tabungan Kurban',
-      description: 'Tabungan kurban keluarga atau Anda, per bulan',
-      icon: Icons.mosque_outlined,
-      emoji: '🐐',
-      route: '/kurban',
-      color: Color(0xFFEA580C),
-      tint: Color(0xFFFFF7ED),
-      push: true,
-    ),
-    const LauncherModule(
-      label: 'Amal Jariyah',
-      description: 'Buku amal: FR, shodaqoh dan infaq per bulan',
-      icon: Icons.menu_book_outlined,
-      route: '/amal-jariyah',
-      color: Color(0xFF0891B2),
-      tint: Color(0xFFECFEFF),
-      push: true,
-    ),
+    // Member-facing (shodaqoh): the member is taken from the login token. An
+    // account not linked to a member sees that message inside the screen.
+    if (p.isModuleVisible('shodaqoh')) ...[
+      const LauncherModule(
+        label: 'Tabungan Kurban',
+        description: 'Tabungan kurban keluarga atau Anda, per bulan',
+        icon: Icons.mosque_outlined,
+        emoji: '🐐',
+        route: '/kurban',
+        color: Color(0xFFEA580C),
+        tint: Color(0xFFFFF7ED),
+        push: true,
+      ),
+      const LauncherModule(
+        label: 'Amal Jariyah',
+        description: 'Buku amal: FR, shodaqoh dan infaq per bulan',
+        icon: Icons.menu_book_outlined,
+        route: '/amal-jariyah',
+        color: Color(0xFF0891B2),
+        tint: Color(0xFFECFEFF),
+        push: true,
+      ),
+    ],
   ];
 }
 

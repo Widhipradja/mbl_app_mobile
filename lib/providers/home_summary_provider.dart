@@ -32,12 +32,32 @@ class HomeSummaryProvider extends ChangeNotifier {
   HomeSection shodaqoh = HomeSection.busy;
   HomeSection finance = HomeSection.busy;
 
-  /// Modules switched off on the server (`MODULE_<NAME>=false` in
-  /// `GET /api/m/v1/config`): events, shodaqoh, jimpitan, fundraising.
+  /// Modules this user may open, as the server worked them out from role and
+  /// tenant settings (`GET /api/m/v1/bootstrap`): events, shodaqoh, jimpitan,
+  /// fundraising, finance, zakatfitrah, profile. Null until known, or when the
+  /// call failed. Only for what is shown: the API refuses on its own (403).
+  Map<String, bool>? modules;
+
+  /// The roles the server holds now; they can change after login.
+  List<String>? roles;
+
+  /// Fallback while [modules] is unknown: modules switched off in
+  /// `GET /api/m/v1/config` (`MODULE_<NAME>=false`).
   Set<String> hiddenModules = const {};
   String orgName = '';
 
-  bool isModuleVisible(String name) => !hiddenModules.contains(name);
+  /// Without the bootstrap, the member-facing modules show and the ones that
+  /// need a role (finance, zakat fitrah) stay hidden.
+  bool isModuleVisible(String name) {
+    final m = modules;
+    if (m != null) return m[name] == true;
+    if (name == 'finance' || name == 'zakatfitrah') return false;
+    return !hiddenModules.contains(name);
+  }
+
+  /// [loginRoles] are used until the bootstrap has said otherwise.
+  bool hasRole(String role, List<String> loginRoles) =>
+      (roles ?? loginRoles).any((r) => r.toLowerCase() == role.toLowerCase());
 
   bool isLoading = false;
   bool loaded = false;
@@ -64,7 +84,7 @@ class HomeSummaryProvider extends ChangeNotifier {
     return HomeSection(data: raw.isEmpty ? null : raw);
   }
 
-  Future<void> load({bool withFinance = false}) async {
+  Future<void> load() async {
     if (isLoading) return;
     final generation = _generation;
     isLoading = true;
@@ -75,8 +95,23 @@ class HomeSummaryProvider extends ChangeNotifier {
       _loadHome(),
       _loadConfig(),
       _loadUpcomingEvents(),
-      if (withFinance) _loadFinance(),
+      _loadBootstrap(),
     ]);
+    if (generation != _generation) return;
+
+    final boot = results[3] as ({
+      Map<String, bool> modules,
+      List<String> roles,
+      String org
+    })?;
+    if (boot != null) {
+      modules = boot.modules;
+      roles = boot.roles;
+      if (boot.org.isNotEmpty) orgName = boot.org;
+    }
+    // The cash summary is only fetched for those who may see it.
+    final withFinance = isModuleVisible('finance');
+    final financeSection = withFinance ? await _loadFinance() : null;
     if (generation != _generation) return;
 
     final config = results[1] as Map<String, String>?;
@@ -86,7 +121,7 @@ class HomeSummaryProvider extends ChangeNotifier {
           if (e.key.startsWith('MODULE_') && e.value.toLowerCase() == 'false')
             e.key.substring(7).toLowerCase(),
       };
-      orgName = config['ORG_NAME'] ?? '';
+      if (boot == null || boot.org.isEmpty) orgName = config['ORG_NAME'] ?? '';
     }
 
     final home = results[0] as List<HomeSection>;
@@ -95,7 +130,7 @@ class HomeSummaryProvider extends ChangeNotifier {
     fundraising = home[2];
     shodaqoh = home[3];
     upcomingEvents = results[2] as List<Map<String, dynamic>>;
-    if (withFinance) finance = results[3] as HomeSection;
+    if (financeSection != null) finance = financeSection;
 
     isLoading = false;
     loaded = true;
@@ -268,6 +303,30 @@ class HomeSummaryProvider extends ChangeNotifier {
     }
   }
 
+  /// `GET /api/m/v1/bootstrap`, or null when it can't be read.
+  Future<({Map<String, bool> modules, List<String> roles, String org})?>
+      _loadBootstrap() async {
+    try {
+      final d = (await _api.getMobileBootstrap()).data;
+      if (d is! Map<String, dynamic> || d['modules'] is! Map) return null;
+      final user = d['user'];
+      return (
+        modules: {
+          for (final e in (d['modules'] as Map).entries)
+            e.key.toString().toLowerCase(): e.value == true,
+        },
+        roles: [
+          if (user is Map && user['roles'] is List)
+            for (final r in user['roles'] as List) r.toString(),
+        ],
+        org: d['org_name']?.toString().trim() ?? '',
+      );
+    } catch (e) {
+      debugPrint('HomeSummaryProvider._loadBootstrap error: $e');
+      return null;
+    }
+  }
+
   /// Flags as an upper-case `KEY → value` map, or null when the config can't
   /// be read (then every module stays visible). Accepts a flat object, a list
   /// of `{code, value}` rows, or `{modules: {events: false}, org_name}`.
@@ -328,6 +387,8 @@ class HomeSummaryProvider extends ChangeNotifier {
     loaded = false;
     loadedAt = null;
     hiddenModules = const {};
+    modules = null;
+    roles = null;
     orgName = '';
     _generation++;
     notifyListeners();
