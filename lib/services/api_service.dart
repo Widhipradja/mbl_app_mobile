@@ -149,6 +149,13 @@ class ApiService {
     return await _dio.get('/api/m/v1/home');
   }
 
+  /// After login: the user (current roles) and the modules this user may
+  /// open, worked out by the server from role and tenant settings.
+  /// Endpoint: `GET /api/m/v1/bootstrap`
+  Future<Response> getMobileBootstrap() async {
+    return await _dio.get('/api/m/v1/bootstrap');
+  }
+
   /// Mobile feature flags (`MODULE_<NAME>=false` hides a module) and
   /// `ORG_NAME`. Endpoint: `GET /api/m/v1/config`
   Future<Response> getMobileConfig() async {
@@ -259,6 +266,54 @@ class ApiService {
   /// Endpoint: `GET /api/m/v1/fundraising`
   Future<Response> getMobileFundraising() async {
     return await _dio.get('/api/m/v1/fundraising');
+  }
+
+  // Finance, through the mobile gateway (docs: baraka-mobile-finance-api.md).
+  // Lists come back as bare arrays; amounts are decimal strings.
+
+  /// Opening/closing balance and in/outflow of `YYYY-MM`.
+  Future<Response> getFinanceBalances(String month) => _dio
+      .get('/api/m/v1/finance/balances', queryParameters: {'month': month});
+
+  Future<Response> getFinanceTransactions(String month) => _dio.get(
+      '/api/m/v1/finance/transactions',
+      queryParameters: {'month': month});
+
+  Future<Response> getFinanceBookkeeping(String month) => _dio.get(
+      '/api/m/v1/finance/daily-bookkeeping',
+      queryParameters: {'month': month});
+
+  Future<Response> getFinancePending() =>
+      _dio.get('/api/m/v1/finance/submissions/pending');
+
+  Future<Response> getFinanceAccounts() =>
+      _dio.get('/api/m/v1/finance/lookups/accounts');
+
+  /// `action`: approve, reject (needs [reason]) or cancel.
+  Future<Response> decideFinanceSubmission(String id, String action,
+          {String? reason}) =>
+      _dio.post('/api/m/v1/finance/submissions/$id/$action',
+          data: {if (reason != null) 'reason': reason});
+
+  /// A manual submission; resending the same key returns the same one.
+  Future<Response> submitFinanceTransaction(Map<String, dynamic> body) =>
+      _dio.post('/api/m/v1/finance/transactions', data: body);
+
+  /// Field `audio` (m4a/wav, at most 10 MiB); the answer is a pending
+  /// submission, not a finished transaction.
+  Future<Response> sendVoiceTransaction(List<int> bytes, String name) {
+    final form = FormData.fromMap({
+      'audio': MultipartFile.fromBytes(bytes, filename: name),
+    });
+    return _dio.post(
+      '/api/m/v1/finance/voice-transaction',
+      data: form,
+      options: Options(
+        contentType: 'multipart/form-data',
+        sendTimeout: const Duration(seconds: 90),
+        receiveTimeout: const Duration(seconds: 90),
+      ),
+    );
   }
 
   /// The request that donates to a fundraising campaign, apart from the call
