@@ -37,6 +37,14 @@ class _AmalJariyahScreenState extends State<AmalJariyahScreen> {
   /// Oldest year with data, once a yearly report has said so.
   int? _earliestYear;
 
+  /// Furthest month the user may page forward to: the current month, or a
+  /// later one when the backend already generated it (data or pending).
+  DateTime _lastMonth = DateTime(_now.year, _now.month);
+
+  void _extendLast(DateTime m) {
+    if (m.isAfter(_lastMonth)) _lastMonth = DateTime(m.year, m.month);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -59,6 +67,7 @@ class _AmalJariyahScreenState extends State<AmalJariyahScreen> {
             .toList()
           ..sort((a, b) => a.monthNumber!.compareTo(b.monthNumber!));
         if (withData.isNotEmpty) {
+          _extendLast(DateTime(y, withData.last.monthNumber!));
           _month = DateTime(y, withData.last.monthNumber!);
           _year = y;
           break;
@@ -83,7 +92,13 @@ class _AmalJariyahScreenState extends State<AmalJariyahScreen> {
         final m = RegExp(r'^\d{4}-\d{2}').firstMatch(v?.toString() ?? '');
         if (m != null) set.add(m.group(0)!);
       }
-      setState(() => _pending = set);
+      setState(() {
+        _pending = set;
+        for (final p in set) {
+          _extendLast(DateTime(int.parse(p.substring(0, 4)),
+              int.parse(p.substring(5, 7))));
+        }
+      });
     } catch (e) {
       debugPrint('AmalJariyahScreen pending error: $e');
     }
@@ -165,9 +180,8 @@ class _AmalJariyahScreenState extends State<AmalJariyahScreen> {
     final monthly = _mode == _Mode.monthly;
     final earliest = _earliestYear;
     final canGoBackYear = earliest == null || _year > earliest;
-    final canGoForwardYear = _year < _now.year;
-    final canGoForwardMonth = _month.year < _now.year ||
-        (_month.year == _now.year && _month.month < _now.month);
+    final canGoForwardYear = _year < _lastMonth.year;
+    final canGoForwardMonth = _month.isBefore(_lastMonth);
 
     final label = monthly
         ? '${monthNames[_month.month - 1]} ${_month.year}'

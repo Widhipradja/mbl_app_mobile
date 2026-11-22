@@ -31,7 +31,9 @@ class _DepositItem {
     this.sortOrder = 0,
     int? suggested,
   })  : controller = TextEditingController(
-            text: suggested == null || suggested <= 0 ? '' : '$suggested'),
+            text: suggested == null || suggested <= 0
+                ? ''
+                : _RupiahFormatter.format(suggested)),
         nameController = TextEditingController();
 
   final _Kind kind;
@@ -51,17 +53,191 @@ class _DepositItem {
   int get amount =>
       int.tryParse(controller.text.replaceAll(RegExp(r'\D'), '')) ?? 0;
 
-  /// Position of [group]: Pusat, Daerah, Desa, Kelompok (ignoring case and
-  /// surrounding spaces), any other group last.
+  static const _order = ['pusat', 'daerah', 'desa', 'kelompok'];
+
+  /// Position of [group]: Pusat, Daerah, Desa, Kelompok (the first of these
+  /// words the group contains, ignoring case), anything else last.
   int get groupRank {
-    const order = ['pusat', 'daerah', 'desa', 'kelompok'];
-    final i = order.indexOf(group.trim().toLowerCase());
-    return i < 0 ? order.length : i;
+    final g = group.toLowerCase();
+    final i = _order.indexWhere(g.contains);
+    return i < 0 ? _order.length : i;
   }
+
+  /// The one heading this item is listed under.
+  String get groupLabel =>
+      groupRank < _order.length ? _order[groupRank] : 'tambahan';
 
   void dispose() {
     controller.dispose();
     nameController.dispose();
+  }
+}
+
+/// Formats digits as Indonesian thousands ("1.250.000"), keeping the cursor
+/// at the end.
+class _RupiahFormatter extends TextInputFormatter {
+  static String format(int v) => v
+      .toString()
+      .replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => '.');
+
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue old, TextEditingValue v) {
+    final digits = v.text.replaceAll(RegExp(r'\D'), '');
+    if (digits.isEmpty) return const TextEditingValue();
+    final text = format(int.parse(digits));
+    return TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
+}
+
+String _rp(int v) => 'Rp ${_RupiahFormatter.format(v)}';
+
+/// Progress and total, kept outside the rows so typing only rebuilds the
+/// header and the bottom bar, not the list.
+class _Summary {
+  const _Summary(this.filled, this.total, this.sum);
+  final int filled, total, sum;
+}
+
+/// One compact row: name on the left, a 48 px amount field on the right.
+/// Owns its focus node (select all on focus); the amount lives in the item's
+/// controller, so the row can be rebuilt without losing it.
+class _AmountRow extends StatefulWidget {
+  const _AmountRow({
+    super.key,
+    required this.item,
+    required this.enabled,
+    required this.onChanged,
+    this.onRemove,
+  });
+
+  final _DepositItem item;
+  final bool enabled;
+  final VoidCallback onChanged;
+
+  /// Set for free-typed items: shows a name field and a remove button.
+  final VoidCallback? onRemove;
+
+  @override
+  State<_AmountRow> createState() => _AmountRowState();
+}
+
+class _AmountRowState extends State<_AmountRow> {
+  final _focus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _focus.addListener(() {
+      final c = widget.item.controller;
+      if (_focus.hasFocus && c.text.isNotEmpty) {
+        c.selection = TextSelection(baseOffset: 0, extentOffset: c.text.length);
+      }
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _focus.dispose();
+    super.dispose();
+  }
+
+  static OutlineInputBorder _border(Color c, [double w = 1]) =>
+      OutlineInputBorder(
+        borderRadius: BorderRadius.circular(Lx.rButton),
+        borderSide: BorderSide(color: c, width: w),
+      );
+
+  static const _pad = EdgeInsets.symmetric(horizontal: Lx.s12, vertical: 14);
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
+    final free = widget.onRemove != null;
+    final filled = item.amount > 0;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: Lx.s8),
+      child: Row(
+        children: [
+          Expanded(
+            child: free
+                ? SizedBox(
+                    height: 48,
+                    child: TextField(
+                      controller: item.nameController,
+                      enabled: widget.enabled,
+                      textCapitalization: TextCapitalization.sentences,
+                      textInputAction: TextInputAction.next,
+                      scrollPadding: const EdgeInsets.only(bottom: 120),
+                      onChanged: (_) => widget.onChanged(),
+                      style: Lx.cardHeading,
+                      decoration: InputDecoration(
+                        hintText: 'Nama shodaqoh',
+                        isDense: true,
+                        contentPadding: _pad,
+                        border: _border(Lx.border),
+                        enabledBorder: _border(Lx.border),
+                        focusedBorder: _border(Lx.primary, 2),
+                      ),
+                    ),
+                  )
+                : Text(
+                    item.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Lx.cardHeading
+                        .copyWith(color: filled ? Lx.text : Lx.textSecondary),
+                  ),
+          ),
+          const SizedBox(width: Lx.s12),
+          SizedBox(
+            width: 148,
+            height: 48,
+            child: TextField(
+              controller: item.controller,
+              focusNode: _focus,
+              enabled: widget.enabled,
+              keyboardType: TextInputType.number,
+              textInputAction: TextInputAction.next,
+              textAlign: TextAlign.end,
+              scrollPadding: const EdgeInsets.only(bottom: 120),
+              inputFormatters: [_RupiahFormatter()],
+              onChanged: (_) {
+                widget.onChanged();
+                setState(() {});
+              },
+              style: Lx.cardHeading.copyWith(fontWeight: FontWeight.w600),
+              decoration: InputDecoration(
+                hintText: '0',
+                prefixText: 'Rp ',
+                prefixStyle: Lx.metadata,
+                isDense: true,
+                filled: true,
+                fillColor: _focus.hasFocus
+                    ? Lx.surface
+                    : filled
+                        ? Lx.primaryLight
+                        : Lx.background,
+                contentPadding: _pad,
+                border: _border(Lx.border),
+                enabledBorder: _border(filled ? Lx.primaryLight : Lx.border),
+                focusedBorder: _border(Lx.primary, 2),
+              ),
+            ),
+          ),
+          if (free)
+            IconButton(
+              tooltip: 'Hapus',
+              visualDensity: VisualDensity.compact,
+              onPressed: widget.enabled ? widget.onRemove : null,
+              icon: const Icon(Icons.close_rounded, size: 20),
+            ),
+        ],
+      ),
+    );
   }
 }
 
@@ -95,6 +271,19 @@ class _AmalDepositFormScreenState extends State<AmalDepositFormScreen> {
   String? _sendError;
   String? _proofError;
   DonationProof? _proof;
+  final _summary = ValueNotifier(const _Summary(0, 0, 0));
+
+  void _recompute() {
+    final all = [..._items, ..._catalog, ..._free];
+    var filled = 0, sum = 0;
+    for (final i in all) {
+      final a = i.amount;
+      if (a > 0) filled++;
+      sum += a;
+    }
+    _summary.value = _Summary(filled, all.length, sum);
+    if (_amountError != null) setState(() => _amountError = null);
+  }
 
   String get _period => '${widget.month.year}-'
       '${widget.month.month.toString().padLeft(2, '0')}';
@@ -108,6 +297,7 @@ class _AmalDepositFormScreenState extends State<AmalDepositFormScreen> {
   @override
   void dispose() {
     _notes.dispose();
+    _summary.dispose();
     for (final i in [..._items, ..._catalog, ..._free]) {
       i.dispose();
     }
@@ -203,6 +393,7 @@ class _AmalDepositFormScreenState extends State<AmalDepositFormScreen> {
           ..clear()
           ..addAll(_sorted(catalog));
       });
+      _recompute();
     } catch (e) {
       debugPrint('AmalDepositFormScreen load error: $e');
       if (mounted) setState(() => _loadError = _failure(e));
@@ -430,9 +621,14 @@ class _AmalDepositFormScreenState extends State<AmalDepositFormScreen> {
       'collected_at': DateTime.now().toUtc().toIso8601String(),
     };
 
-    // `month` is the current month; the entry's period may not be later.
+    // `month` is the current month, but an entry's period may not be after
+    // it: for a month generated ahead of time (e.g. December in November)
+    // `month` is that month instead.
     final now = DateTime.now();
-    final current = '${now.year}-${now.month.toString().padLeft(2, '0')}';
+    final nowMonth = DateTime(now.year, now.month);
+    final target = DateTime(widget.month.year, widget.month.month);
+    final m = target.isAfter(nowMonth) ? target : nowMonth;
+    final current = '${m.year}-${m.month.toString().padLeft(2, '0')}';
     setState(() => _sending = true);
     try {
       await ApiService().submitCollection(current, [entry],
@@ -491,183 +687,246 @@ class _AmalDepositFormScreenState extends State<AmalDepositFormScreen> {
                     )
                   : _form(title),
         ),
+        bottomNavigationBar:
+            _loading || _loadError != null ? null : _bottomBar(),
       ),
     );
   }
 
-  Widget _amountField(_DepositItem i) => TextField(
-        controller: i.controller,
+  Widget _row(_DepositItem i, {VoidCallback? onRemove}) => _AmountRow(
+        key: ObjectKey(i),
+        item: i,
         enabled: !_sending,
-        keyboardType: TextInputType.number,
-        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-        onChanged: (_) => setState(() => _amountError = null),
-        decoration: _decoration.copyWith(prefixText: 'Rp ', hintText: '0'),
+        onChanged: _recompute,
+        onRemove: onRemove,
       );
 
-  /// The items with a heading each time the group changes.
+  /// Rows under one small heading per group, separated by hairlines. The
+  /// items are already sorted, so each group is one run.
   List<Widget> _section(List<_DepositItem> items) {
     final out = <Widget>[];
     String? group;
     for (final i in items) {
-      final g = i.group.trim();
-      if (g.isNotEmpty && g != group) {
+      final g = i.groupLabel;
+      if (g != group) {
         out.add(Padding(
-          padding: const EdgeInsets.only(bottom: 6),
-          child: Text(g, style: Lx.metadata.copyWith(color: Lx.secondary)),
+          padding: const EdgeInsets.only(top: Lx.s16, bottom: Lx.s4),
+          child: Text(g.toUpperCase(),
+              style: Lx.metadata.copyWith(
+                  color: Lx.secondary,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.8)),
         ));
+      } else {
+        out.add(const Divider(height: 1, thickness: 1, color: Lx.border));
       }
       group = g;
-      out.add(Padding(
-        padding: const EdgeInsets.only(bottom: Lx.s12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(i.name, style: Lx.cardHeading),
-            const SizedBox(height: 6),
-            _amountField(i),
-          ],
-        ),
-      ));
+      out.add(_row(i));
     }
     return out;
   }
 
-  Widget _freeRow(int n) {
-    final i = _free[n];
-    return Padding(
-      padding: const EdgeInsets.only(bottom: Lx.s12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+  /// Required items of Pusat, Daerah, Desa and Kelompok.
+  List<_DepositItem> get _main =>
+      _items.where((i) => i.groupRank < _DepositItem._order.length).toList();
+
+  /// Everything listed under "Tambahan": required items of another group,
+  /// then the catalog, sorted together.
+  List<_DepositItem> get _extra => _sorted([
+        ..._items.where((i) => i.groupRank >= _DepositItem._order.length),
+        ..._catalog,
+      ]);
+
+  Widget _groupHeading(String g) => Padding(
+        padding: const EdgeInsets.only(top: Lx.s16, bottom: Lx.s4),
+        child: Text(g.toUpperCase(),
+            style: Lx.metadata.copyWith(
+                color: Lx.secondary,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.8)),
+      );
+
+  Widget _progressHeader(String title) => Container(
+        color: Lx.surface,
+        padding: const EdgeInsets.fromLTRB(Lx.s16, Lx.s12, Lx.s16, Lx.s12),
+        child: ValueListenableBuilder<_Summary>(
+          valueListenable: _summary,
+          builder: (_, s, __) => Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: TextField(
-                  controller: i.nameController,
-                  enabled: !_sending,
-                  textCapitalization: TextCapitalization.sentences,
-                  onChanged: (_) => setState(() => _amountError = null),
-                  decoration: _decoration.copyWith(hintText: 'Nama shodaqoh'),
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(title, style: Lx.sectionHeading),
+                  ),
+                  Text('${s.filled}/${s.total} terisi',
+                      style: Lx.metadata.copyWith(
+                          color: Lx.primary, fontWeight: FontWeight.w600)),
+                ],
               ),
-              IconButton(
-                tooltip: 'Hapus',
-                onPressed: _sending
-                    ? null
-                    : () => setState(() => _free.removeAt(n).dispose()),
-                icon: const Icon(Icons.close_rounded),
+              const SizedBox(height: Lx.s8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: s.total == 0 ? 0 : s.filled / s.total,
+                  minHeight: 4,
+                  backgroundColor: Lx.border,
+                  color: Lx.primary,
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 6),
-          _amountField(i),
-        ],
+        ),
+      );
+
+  /// Total and the submit button; the scaffold lifts it above the keyboard.
+  Widget _bottomBar() {
+    return Material(
+      color: Lx.surface,
+      elevation: 0,
+      child: DecoratedBox(
+        decoration: const BoxDecoration(
+          border: Border(top: BorderSide(color: Lx.border)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(Lx.s16, Lx.s12, Lx.s16, Lx.s12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_amountError != null || _sendError != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: Lx.s8),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(_sendError ?? _amountError!,
+                          style: Lx.metadata.copyWith(color: Lx.danger)),
+                    ),
+                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ValueListenableBuilder<_Summary>(
+                        valueListenable: _summary,
+                        builder: (_, s, __) => Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Total setoran', style: Lx.metadata),
+                            Text(_rp(s.sum),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Lx.sectionHeading
+                                    .copyWith(fontWeight: FontWeight.w700)),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: Lx.s16),
+                    SizedBox(
+                      height: 48,
+                      child: FilledButton(
+                        onPressed: _sending || _items.isEmpty ? null : _submit,
+                        style: FilledButton.styleFrom(
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: Lx.s24)),
+                        child: _sending
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2, color: Colors.white),
+                              )
+                            : const Text('Kirim Setoran'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
 
   Widget _form(String title) {
-    return ListView(
-      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-      padding: const EdgeInsets.all(Lx.s16),
+    return Column(
       children: [
-        Container(
-          padding: const EdgeInsets.all(Lx.s12),
-          decoration: BoxDecoration(
-            color: Lx.primaryLight,
-            borderRadius: BorderRadius.circular(Lx.rCard),
-          ),
-          child: Row(
+        _progressHeader(title),
+        const Divider(height: 1, thickness: 1, color: Lx.border),
+        Expanded(
+          child: ListView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: const EdgeInsets.symmetric(horizontal: Lx.s16),
             children: [
-              const Icon(Icons.volunteer_activism_rounded, color: Lx.primary),
-              const SizedBox(width: Lx.s12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Setoran untuk', style: Lx.metadata),
-                    Text(title, style: Lx.cardHeading),
-                  ],
+              if (_items.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: Lx.s16),
+                  child: Text(
+                      'Belum ada item yang bisa disetor untuk bulan ini.',
+                      style: Lx.body),
+                ),
+              ..._section(_main),
+              if (_extra.isNotEmpty || _free.isNotEmpty)
+                _groupHeading('tambahan'),
+              for (var n = 0; n < _extra.length; n++) ...[
+                if (n > 0)
+                  const Divider(height: 1, thickness: 1, color: Lx.border),
+                _row(_extra[n]),
+              ],
+              for (var n = 0; n < _free.length; n++) ...[
+                if (n > 0 || _extra.isNotEmpty)
+                  const Divider(height: 1, thickness: 1, color: Lx.border),
+                _row(_free[n], onRemove: () {
+                  setState(() => _free.removeAt(n).dispose());
+                  _recompute();
+                }),
+              ],
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: _sending
+                      ? null
+                      : () {
+                          setState(
+                              () => _free.add(_DepositItem(kind: _Kind.free)));
+                          _recompute();
+                        },
+                  icon: const Icon(Icons.add_rounded),
+                  label: const Text('Tambah shodaqoh lain'),
                 ),
               ),
+              const SizedBox(height: Lx.s16),
+              Text('Catatan (opsional)', style: Lx.cardHeading),
+              const SizedBox(height: 6),
+              TextField(
+                controller: _notes,
+                enabled: !_sending,
+                minLines: 2,
+                maxLines: 3,
+                maxLength: AmalDepositFormScreen.maxNotes,
+                textCapitalization: TextCapitalization.sentences,
+                scrollPadding: const EdgeInsets.only(bottom: 120),
+                decoration: _decoration,
+              ),
+              const SizedBox(height: Lx.s8),
+              Text('Bukti transfer', style: Lx.cardHeading),
+              const SizedBox(height: 2),
+              Text('JPG, PNG atau PDF, maksimal 5 MB.', style: Lx.metadata),
+              const SizedBox(height: 6),
+              _proofField(),
+              if (_proofError != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6, left: 4),
+                  child: Text(_proofError!,
+                      style: Lx.metadata.copyWith(color: Lx.danger)),
+                ),
+              const SizedBox(height: Lx.s12),
+              Text('Setoran menunggu verifikasi bendahara sebelum tercatat.',
+                  style: Lx.metadata),
+              const SizedBox(height: Lx.s24),
             ],
-          ),
-        ),
-        const SizedBox(height: Lx.s16),
-        if (_items.isEmpty)
-          Text('Belum ada item yang bisa disetor untuk bulan ini.',
-              style: Lx.body),
-        ..._section(_items),
-        if (_catalog.isNotEmpty) ...[
-          Text('Shodaqoh tambahan', style: Lx.sectionHeading),
-          const SizedBox(height: Lx.s8),
-          ..._section(_catalog),
-        ],
-        for (var n = 0; n < _free.length; n++) _freeRow(n),
-        TextButton.icon(
-          onPressed: _sending
-              ? null
-              : () => setState(() => _free.add(_DepositItem(kind: _Kind.free))),
-          icon: const Icon(Icons.add_rounded),
-          label: const Text('Tambah shodaqoh lain'),
-        ),
-        const SizedBox(height: Lx.s8),
-        if (_amountError != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: Lx.s12),
-            child: Text(_amountError!,
-                style: Lx.metadata.copyWith(color: Lx.danger)),
-          ),
-        Text('Catatan (opsional)', style: Lx.cardHeading),
-        const SizedBox(height: 6),
-        TextField(
-          controller: _notes,
-          enabled: !_sending,
-          minLines: 2,
-          maxLines: 3,
-          maxLength: AmalDepositFormScreen.maxNotes,
-          textCapitalization: TextCapitalization.sentences,
-          decoration: _decoration,
-        ),
-        const SizedBox(height: Lx.s8),
-        Text('Bukti transfer', style: Lx.cardHeading),
-        const SizedBox(height: 2),
-        Text('JPG, PNG atau PDF, maksimal 5 MB.', style: Lx.metadata),
-        const SizedBox(height: 6),
-        _proofField(),
-        if (_proofError != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 6, left: 4),
-            child: Text(_proofError!,
-                style: Lx.metadata.copyWith(color: Lx.danger)),
-          ),
-        const SizedBox(height: Lx.s12),
-        Text('Setoran menunggu verifikasi bendahara sebelum tercatat.',
-            style: Lx.metadata),
-        const SizedBox(height: Lx.s16),
-        if (_sendError != null)
-          Container(
-            margin: const EdgeInsets.only(bottom: Lx.s12),
-            padding: const EdgeInsets.all(Lx.s12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFEF3F2),
-              borderRadius: BorderRadius.circular(Lx.rButton),
-            ),
-            child: Text(_sendError!,
-                style: Lx.metadata.copyWith(color: Lx.danger)),
-          ),
-        SizedBox(
-          height: 50,
-          child: FilledButton(
-            onPressed: _sending || _items.isEmpty ? null : _submit,
-            child: _sending
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white),
-                  )
-                : const Text('Kirim Setoran'),
           ),
         ),
       ],
