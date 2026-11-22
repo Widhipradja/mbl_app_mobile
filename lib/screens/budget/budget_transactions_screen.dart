@@ -11,9 +11,13 @@ enum _Filter { all, income, expense }
 
 /// Transactions of one month, grouped by day. Tap to edit, swipe to delete.
 class BudgetTransactionsScreen extends StatefulWidget {
-  const BudgetTransactionsScreen({super.key, required this.month});
+  const BudgetTransactionsScreen(
+      {super.key, required this.month, this.categoryId});
 
   final DateTime month;
+
+  /// Opens already filtered on this category (from the report).
+  final String? categoryId;
 
   @override
   State<BudgetTransactionsScreen> createState() =>
@@ -23,7 +27,7 @@ class BudgetTransactionsScreen extends StatefulWidget {
 class _BudgetTransactionsScreenState extends State<BudgetTransactionsScreen> {
   late DateTime _month = DateTime(widget.month.year, widget.month.month);
   _Filter _filter = _Filter.all;
-  BudgetCategory? _category;
+  late String? _categoryId = widget.categoryId;
   List<BudgetTxn>? _txns;
   List<BudgetCategory> _categories = const [];
   String? _error;
@@ -34,6 +38,13 @@ class _BudgetTransactionsScreenState extends State<BudgetTransactionsScreen> {
     _load();
   }
 
+  BudgetCategory? get _category {
+    for (final c in _categories) {
+      if (c.id == _categoryId) return c;
+    }
+    return null;
+  }
+
   Map<String, bool> get _income =>
       {for (final c in _categories) c.id: c.isIncome};
 
@@ -42,7 +53,7 @@ class _BudgetTransactionsScreenState extends State<BudgetTransactionsScreen> {
     setState(() => _error = null);
     try {
       final r = await Future.wait([
-        budgetRepo.transactions(month, categoryId: _category?.id),
+        budgetRepo.transactions(month, categoryId: _categoryId),
         budgetRepo.categories(),
       ]);
       if (!mounted || month != _month) return;
@@ -140,9 +151,9 @@ class _BudgetTransactionsScreenState extends State<BudgetTransactionsScreen> {
     );
     // A dismissed sheet also returns null; only an explicit choice reloads.
     if (!mounted) return;
-    if (picked?.id != _category?.id) {
+    if (picked?.id != _categoryId) {
       setState(() {
-        _category = picked;
+        _categoryId = picked?.id;
         _txns = null;
       });
       _load();

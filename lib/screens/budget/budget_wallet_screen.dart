@@ -7,6 +7,7 @@ import 'budget_categories_screen.dart';
 import 'budget_data.dart';
 import 'budget_form_screen.dart';
 import 'budget_limits_screen.dart';
+import 'budget_report_screen.dart';
 import 'budget_transactions_screen.dart';
 import 'budget_voice_screen.dart';
 import 'budget_widgets.dart';
@@ -225,6 +226,11 @@ class _BudgetWalletScreenState extends State<BudgetWalletScreen> {
           title: const Text('Budget'),
           actions: [
             IconButton(
+              tooltip: 'Laporan',
+              onPressed: () => _go(BudgetReportScreen(month: _month)),
+              icon: const Icon(Icons.bar_chart_rounded),
+            ),
+            IconButton(
               tooltip: 'Kelola kategori',
               onPressed: () => _go(const BudgetCategoriesScreen()),
               icon: const Icon(Icons.category_outlined),
@@ -259,6 +265,18 @@ class _BudgetWalletScreenState extends State<BudgetWalletScreen> {
                 _card(s),
                 const SizedBox(height: Lx.s16),
                 _actions(),
+                const SizedBox(height: Lx.s8),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.pie_chart_outline_rounded,
+                      color: Lx.primary),
+                  title:
+                      const Text('Laporan per kategori', style: Lx.cardHeading),
+                  subtitle: Text('Ke mana uang Anda pergi bulan ini',
+                      style: Lx.metadata),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => _go(BudgetReportScreen(month: _month)),
+                ),
                 _budgetSection(s),
                 _recentSection(),
               ],
