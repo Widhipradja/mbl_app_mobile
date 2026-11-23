@@ -6,6 +6,7 @@ import '../finance/finance_data.dart' show rp;
 import '../finance/finance_widgets.dart' show showAddEntrySheet;
 import 'budget_categories_screen.dart';
 import 'budget_data.dart';
+import 'budget_period_screen.dart';
 import 'budget_form_screen.dart';
 import 'budget_limits_screen.dart';
 import 'budget_report_screen.dart';
@@ -35,6 +36,32 @@ class _BudgetWalletScreenState extends State<BudgetWalletScreen> {
   @override
   void initState() {
     super.initState();
+    _start();
+  }
+
+  /// Opens on the period running today, which depends on the user's payday.
+  /// A server that does not know periods yet (or a failed call) leaves the
+  /// calendar month.
+  Future<void> _start() async {
+    try {
+      await budgetRepo.settings();
+    } catch (e) {
+      debugPrint('BudgetWallet settings error: $e');
+    }
+    if (!mounted) return;
+    setState(() => _month = budgetRepo.currentMonth);
+    _load();
+  }
+
+  Future<void> _changePeriod() async {
+    final changed = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(builder: (_) => const BudgetPeriodScreen()));
+    if (changed != true || !mounted) return;
+    // Every period is counted again, and the running one may have moved.
+    setState(() {
+      _month = budgetRepo.currentMonth;
+      _summary = null;
+    });
     _load();
   }
 
@@ -360,7 +387,16 @@ class _BudgetWalletScreenState extends State<BudgetWalletScreen> {
     return Theme(
       data: Lx.theme,
       child: Scaffold(
-        appBar: AppBar(title: const Text('Dompet Saya')),
+        appBar: AppBar(
+          title: const Text('Dompet Saya'),
+          actions: [
+            IconButton(
+              tooltip: 'Periode anggaran',
+              onPressed: _changePeriod,
+              icon: const Icon(Icons.date_range_rounded),
+            ),
+          ],
+        ),
         floatingActionButton: FloatingActionButton.extended(
           onPressed: _add,
           icon: const Icon(Icons.add_rounded),
@@ -372,7 +408,7 @@ class _BudgetWalletScreenState extends State<BudgetWalletScreen> {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(Lx.s16, 0, Lx.s16, 96),
             children: [
-              MonthPill(month: _month, onChanged: _setMonth),
+              BudgetMonthPill(month: _month, onChanged: _setMonth),
               _intro(),
               if (_error != null)
                 RetryState(_error!, onRetry: _load)

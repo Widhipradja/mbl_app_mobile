@@ -1,6 +1,8 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 
 import '../../services/api_service.dart';
+import '../savings/ledger_widgets.dart' show monthNames;
 
 int _amt(dynamic v) => double.tryParse('${v ?? ''}')?.round() ?? 0;
 String _s(dynamic v) => v?.toString().trim() ?? '';
@@ -12,8 +14,7 @@ List<Map<String, dynamic>> _list(dynamic d) =>
 /// (no date given, e.g. from the web) is read in the phone's own zone.
 DateTime? _calendarDay(DateTime? d) {
   if (d == null) return null;
-  final midnightUtc =
-      d.isUtc && d.hour == 0 && d.minute == 0 && d.second == 0;
+  final midnightUtc = d.isUtc && d.hour == 0 && d.minute == 0 && d.second == 0;
   final day = midnightUtc ? d : d.toLocal();
   return DateTime(day.year, day.month, day.day);
 }
@@ -24,6 +25,76 @@ String budgetPeriod(DateTime m) =>
 
 String budgetDay(DateTime d) =>
     '${budgetPeriod(d)}-${d.day.toString().padLeft(2, '0')}';
+
+/// `YYYY-MM-DD` as a date, or null when it is empty or not a real date.
+DateTime? _day(dynamic v) {
+  final m = RegExp(r'^(\d{4})-(\d{2})-(\d{2})').firstMatch(_s(v));
+  if (m == null) return null;
+  final y = int.parse(m[1]!), mo = int.parse(m[2]!), d = int.parse(m[3]!);
+  final date = DateTime(y, mo, d);
+  return date.year == y && date.month == mo && date.day == d ? date : null;
+}
+
+/// The dates a `month` key covers for this user, as the server says
+/// (`period_start` / `period_end`, both inclusive). With payday on the 25th,
+/// `2026-11` is 25 Oct - 24 Nov. The app never works the dates out itself.
+class BudgetRange {
+  const BudgetRange(this.start, this.end);
+
+  /// The whole calendar month: what every user had before periods.
+  factory BudgetRange.calendar(DateTime month) => BudgetRange(
+      DateTime(month.year, month.month, 1),
+      DateTime(month.year, month.month + 1, 0));
+
+  final DateTime start, end;
+
+  bool get isCalendarMonth =>
+      start.day == 1 &&
+      end.year == start.year &&
+      end.month == start.month &&
+      end.day == DateTime(start.year, start.month + 1, 0).day;
+
+  bool contains(DateTime d) {
+    final day = DateTime(d.year, d.month, d.day);
+    return !day.isBefore(start) && !day.isAfter(end);
+  }
+
+  static int _between(DateTime a, DateTime b) =>
+      DateTime.utc(b.year, b.month, b.day)
+          .difference(DateTime.utc(a.year, a.month, a.day))
+          .inDays;
+
+  /// Days in the period.
+  int get days => _between(start, end) + 1;
+
+  /// Days counted for averages: up to [today] while the period is running.
+  int daysCountedAt(DateTime today) =>
+      contains(today) ? _between(start, today) + 1 : days;
+
+  /// "25 Okt - 24 Nov"; null for a plain calendar month (the title says it).
+  String? get label {
+    if (isCalendarMonth) return null;
+    String short(DateTime d) =>
+        '${d.day} ${monthNames[d.month - 1].substring(0, 3)}';
+    return '${short(start)} – ${short(end)}';
+  }
+}
+
+/// `GET /budget/settings`.
+class BudgetSettings {
+  const BudgetSettings({
+    required this.startDay,
+    required this.currentMonth,
+    this.currentRange,
+  });
+
+  /// 1-28; 1 is every month from its first day.
+  final int startDay;
+
+  /// The `month` key of the period running today: where the screens open.
+  final DateTime currentMonth;
+  final BudgetRange? currentRange;
+}
 
 class BudgetCategory {
   const BudgetCategory({
@@ -194,9 +265,75 @@ class BudgetVoiceUnreadable implements Exception {
 
 /// What the budget screens need from the backend.
 class BudgetRepository {
-  Future<BudgetSummary> summary(DateTime month) async {
+  int _startDay = 1;
+  DateTime? _currentMonth;
+
+  /// Period dates the server has told, by `month` key.
+  final _ranges = <String, BudgetRange>{};
+  final _summaries = <String, Future<BudgetSummary>>{};
+
+  /// Payday of the user as last read; 1 until [settings] has answered (also
+  /// for a server that does not know periods yet).
+  int get startDay => _startDay;
+
+  /// The `month` key of the period running today.
+  DateTime get currentMonth {
+    final now = DateTime.now();
+    return _currentMonth ?? DateTime(now.year, now.month);
+  }
+
+  /// What [month] covers: the server's dates once heard, else the calendar
+  /// month.
+  BudgetRange rangeOf(DateTime month) =>
+      _ranges[budgetPeriod(month)] ?? BudgetRange.calendar(month);
+
+  BudgetSettings _readSettings(dynamic data) {
+    final m = data is Map<String, dynamic> ? data : <String, dynamic>{};
+    final day = m['period_start_day'];
+    final cur = m['current_period'];
+    final curMap =
+        cur is Map<String, dynamic> ? cur : const <String, dynamic>{};
+    final month = RegExp(r'^(\d{4})-(\d{2})$').firstMatch(_s(curMap['month']));
+    final start = _day(curMap['start']);
+    final end = _day(curMap['end']);
+    _startDay = day is int && day >= 1 && day <= 28 ? day : 1;
+    final now = DateTime.now();
+    _currentMonth = month == null
+        ? DateTime(now.year, now.month)
+        : DateTime(int.parse(month[1]!), int.parse(month[2]!));
+    final range = start != null && end != null ? BudgetRange(start, end) : null;
+    if (range != null) _ranges[budgetPeriod(_currentMonth!)] = range;
+    return BudgetSettings(
+        startDay: _startDay, currentMonth: _currentMonth!, currentRange: range);
+  }
+
+  Future<BudgetSettings> settings() async =>
+      _readSettings((await ApiService().getBudgetSettings()).data);
+
+  /// Saves the payday. It applies to every period, so what was known of the
+  /// old ones is dropped.
+  Future<BudgetSettings> setPeriodStartDay(int day) async {
+    final data = (await ApiService().putBudgetSettings(day)).data;
+    _ranges.clear();
+    _summaries.clear();
+    return _readSettings(data);
+  }
+
+  /// One request per month at a time: the screens ask for the summary and
+  /// for the transactions together, and the latter needs the dates.
+  Future<BudgetSummary> summary(DateTime month) {
+    final key = budgetPeriod(month);
+    return _summaries[key] ??=
+        _fetchSummary(month).whenComplete(() => _summaries.remove(key));
+  }
+
+  Future<BudgetSummary> _fetchSummary(DateTime month) async {
     final d = (await ApiService().getBudgetSummary(budgetPeriod(month))).data;
     final m = d is Map<String, dynamic> ? d : <String, dynamic>{};
+    final start = _day(m['period_start']), end = _day(m['period_end']);
+    if (start != null && end != null) {
+      _ranges[budgetPeriod(month)] = BudgetRange(start, end);
+    }
     return BudgetSummary(
       income: _amt(m['income']),
       expense: _amt(m['expense']),
@@ -207,13 +344,22 @@ class BudgetRepository {
     );
   }
 
-  /// Transactions of [month], newest first.
+  /// Transactions of the period [month] stands for, newest first.
   Future<List<BudgetTxn>> transactions(DateTime month,
       {String? categoryId, int limit = 200}) async {
-    final last = DateTime(month.year, month.month + 1, 0);
+    // The dates come from the server; for a payday other than the 1st they
+    // are learnt from the summary of that month first.
+    if (!_ranges.containsKey(budgetPeriod(month)) && _startDay != 1) {
+      try {
+        await summary(month);
+      } catch (e) {
+        debugPrint('budget period lookup error: $e');
+      }
+    }
+    final range = rangeOf(month);
     final r = await ApiService().getBudgetTransactions(
-      from: budgetDay(DateTime(month.year, month.month, 1)),
-      to: budgetDay(last),
+      from: budgetDay(range.start),
+      to: budgetDay(range.end),
       categoryId: categoryId,
       limit: limit,
     );
@@ -349,6 +495,8 @@ String budgetError(Object e) {
         return 'Data tidak ditemukan. Mungkin sudah dihapus.';
       case 413:
         return 'Rekaman terlalu panjang (maksimal 10 MB). Rekam lebih singkat.';
+      case 500:
+        return 'Server sedang bermasalah. Coba lagi.';
       case 502:
       case 504:
         return 'Layanan transkripsi sedang tidak tersedia. Coba lagi.';

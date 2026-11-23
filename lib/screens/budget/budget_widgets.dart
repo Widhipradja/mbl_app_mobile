@@ -81,6 +81,36 @@ class BudgetTxnRow extends StatelessWidget {
   }
 }
 
+// ── Period ──────────────────────────────────────────────────────────────────
+
+/// The month stepper of the budget screens. The month is the period that ends
+/// in it; with a payday other than the 1st the dates the server gave are shown
+/// under it ("25 Okt – 24 Nov"), and it cannot go past the period running
+/// today ([extraMonths] allows that many more, to plan ahead).
+class BudgetMonthPill extends StatelessWidget {
+  const BudgetMonthPill({
+    super.key,
+    required this.month,
+    required this.onChanged,
+    this.extraMonths = 0,
+  });
+
+  final DateTime month;
+  final ValueChanged<DateTime> onChanged;
+  final int extraMonths;
+
+  @override
+  Widget build(BuildContext context) {
+    final current = budgetRepo.currentMonth;
+    return MonthPill(
+      month: month,
+      onChanged: onChanged,
+      last: DateTime(current.year, current.month + extraMonths),
+      subtitle: budgetRepo.rangeOf(month).label,
+    );
+  }
+}
+
 // ── Budget progress ─────────────────────────────────────────────────────────
 
 /// Colour of a budget's use: fine, nearly used up (80%), or over.
