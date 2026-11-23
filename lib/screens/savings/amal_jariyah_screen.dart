@@ -5,6 +5,7 @@ import '../../models/savings_ledgers.dart';
 import '../../services/api_service.dart';
 import '../launcher/launcher_models.dart' show rupiah;
 import 'amal_deposit_form_screen.dart';
+import '../budget/budget_widgets.dart' show InitialsAvatar, SoftTabs;
 import 'ledger_widgets.dart';
 
 enum _Mode { monthly, yearly }
@@ -189,14 +190,13 @@ class _AmalJariyahScreenState extends State<AmalJariyahScreen> {
 
     return LedgerPage(
       title: 'Buku Amal Jariyah',
-      header: SegmentedButton<_Mode>(
-        showSelectedIcon: false,
-        segments: const [
-          ButtonSegment(value: _Mode.monthly, label: Text('Bulanan')),
-          ButtonSegment(value: _Mode.yearly, label: Text('Tahunan')),
+      header: SoftTabs<_Mode>(
+        value: _mode,
+        items: const [
+          (_Mode.monthly, 'Bulanan', Icons.calendar_view_month_rounded),
+          (_Mode.yearly, 'Tahunan', Icons.calendar_today_rounded),
         ],
-        selected: {_mode},
-        onSelectionChanged: (s) => _setMode(s.first),
+        onChanged: _setMode,
       ),
       periodLabel: label,
       previousTooltip: monthly ? 'Bulan sebelumnya' : 'Tahun sebelumnya',
@@ -234,20 +234,95 @@ class _AmalJariyahScreenState extends State<AmalJariyahScreen> {
     _loadPending();
   }
 
-  Widget _depositButton({required bool first}) => SizedBox(
-        width: double.infinity,
-        child: first
-            ? FilledButton.icon(
-                onPressed: _deposit,
-                icon: const Icon(Icons.volunteer_activism_rounded),
-                label: const Text('Setor'),
-              )
-            : OutlinedButton.icon(
-                onPressed: _deposit,
-                icon: const Icon(Icons.add_rounded),
-                label: const Text('Setor'),
-              ),
+  /// "Setoran bulan ini belum dikirim", with the button that sends it.
+  Widget _depositCard(String label) => Container(
+        margin: const EdgeInsets.only(bottom: Lx.s12),
+        padding: const EdgeInsets.all(Lx.s16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFECFEFF),
+          borderRadius: BorderRadius.circular(Lx.rCard),
+          border: Border.all(color: const Color(0xFFA5F3FC)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.volunteer_activism_outlined,
+                    color: _amalAccent),
+                const SizedBox(width: Lx.s12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Setoran $label belum dikirim',
+                          style: Lx.cardHeading.copyWith(fontSize: 14)),
+                      Text('Kirim dengan bukti transfer; bendahara akan '
+                          'memverifikasi.',
+                          style: Lx.metadata),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: Lx.s12),
+            FilledButton.icon(
+              onPressed: _deposit,
+              style: FilledButton.styleFrom(
+                  backgroundColor: _amalAccent,
+                  minimumSize: const Size.fromHeight(46)),
+              icon: const Icon(Icons.send_rounded, size: 18),
+              label: const Text('Setor Sekarang'),
+            ),
+          ],
+        ),
       );
+
+  /// Other months still waiting for a deposit, with a way to the oldest.
+  Widget? _otherPendingBanner() {
+    final pending = _pending;
+    if (pending == null) return null;
+    final others = pending.where((p) => p != _param(_month)).toList()..sort();
+    if (others.isEmpty) return null;
+    final first = others.first;
+    final y = int.parse(first.substring(0, 4));
+    final m = int.parse(first.substring(5, 7));
+    return Padding(
+      padding: const EdgeInsets.only(bottom: Lx.s12),
+      child: Material(
+        color: const Color(0xFFFFF7ED),
+        borderRadius: BorderRadius.circular(Lx.rCard),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(Lx.rCard),
+          onTap: () => _setMonth(DateTime(y, m)),
+          child: Container(
+            padding: const EdgeInsets.all(Lx.s12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(Lx.rCard),
+              border: Border.all(color: const Color(0xFFFED7AA)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.schedule_rounded, color: Color(0xFFEA580C)),
+                const SizedBox(width: Lx.s12),
+                Expanded(
+                  child: Text(
+                      others.length == 1
+                          ? '${monthNames[m - 1]} $y belum disetor'
+                          : '${others.length} bulan lain belum disetor, '
+                              'mulai ${monthNames[m - 1]} $y',
+                      style: Lx.metadata.copyWith(
+                          color: Lx.text, fontWeight: FontWeight.w600)),
+                ),
+                const Icon(Icons.chevron_right_rounded,
+                    color: Lx.textSecondary),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   List<Widget> _monthly(String label) {
     final d = _monthData;
@@ -255,44 +330,59 @@ class _AmalJariyahScreenState extends State<AmalJariyahScreen> {
     final pending = _pending;
     // Only the backend's word counts (month listed as pending), never the amounts.
     final canDeposit = pending != null && pending.contains(_param(_month));
+    final banner = _otherPendingBanner();
     if (d.isEmpty) {
       return [
-        Container(
-          padding: const EdgeInsets.all(Lx.s16),
-          decoration: Lx.card(),
-          child: Column(
-            children: [
-              const Icon(Icons.inbox_outlined, size: 40, color: Lx.border),
-              const SizedBox(height: Lx.s8),
-              Text('Belum ada catatan amal jariyah di $label.',
-                  textAlign: TextAlign.center,
-                  style: Lx.body.copyWith(height: 1.4)),
-              const SizedBox(height: Lx.s12),
-              if (canDeposit) _depositButton(first: true),
-            ],
+        if (banner != null) banner,
+        if (canDeposit)
+          _depositCard(label)
+        else
+          Container(
+            padding: const EdgeInsets.all(Lx.s20),
+            decoration: Lx.card(),
+            child: Column(
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: const BoxDecoration(
+                      color: Color(0xFFECFEFF), shape: BoxShape.circle),
+                  child: const Icon(Icons.menu_book_outlined,
+                      size: 28, color: _amalAccent),
+                ),
+                const SizedBox(height: Lx.s12),
+                Text('Belum ada catatan amal jariyah di $label.',
+                    textAlign: TextAlign.center,
+                    style: Lx.body.copyWith(height: 1.4)),
+              ],
+            ),
           ),
-        ),
       ];
     }
     final family = d.scope.family;
     return [
+      if (banner != null) banner,
       LedgerTotalCard(
         label: 'Total $label',
         total: rupiah(d.total),
         caption:
             family ? '${d.entries.length} anggota keluarga' : 'Catatan Anda',
+        icon: Icons.menu_book_outlined,
+        colors: const [Color(0xFF0E7490), Color(0xFF0891B2)],
         breakdown: [
           ('FR', rupiah(d.fr)),
           ('Shodaqoh', rupiah(d.shodaqoh)),
           ('Infaq', rupiah(d.infaq)),
         ],
       ),
+      if (canDeposit) _depositCard(label),
+      if (family)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(Lx.s4, Lx.s4, Lx.s4, Lx.s8),
+          child: Text('Per anggota keluarga', style: Lx.cardHeading),
+        ),
       for (final e in d.entries)
         AmalEntryCard(entry: e, badge: family && e.isHead),
-      if (canDeposit) ...[
-        const SizedBox(height: Lx.s4),
-        _depositButton(first: false),
-      ],
     ];
   }
 
@@ -308,7 +398,9 @@ class _AmalJariyahScreenState extends State<AmalJariyahScreen> {
       LedgerTotalCard(
         label: 'Total tahun $_year',
         total: rupiah(d.total),
-        caption: '${months.length} bulan tercatat',
+        caption: '${months.length} bulan tercatat · ketuk bulan untuk rincian',
+        icon: Icons.calendar_today_outlined,
+        colors: const [Color(0xFF0E7490), Color(0xFF0891B2)],
         breakdown: [
           ('FR', rupiah(d.fr)),
           ('Shodaqoh', rupiah(d.shodaqoh)),
@@ -319,6 +411,13 @@ class _AmalJariyahScreenState extends State<AmalJariyahScreen> {
     ];
   }
 }
+
+const _amalAccent = Color(0xFF0891B2);
+
+/// Colours of the three kinds, the same on every card.
+const _frColor = Color(0xFF2563EB);
+const _shodaqohColor = Color(0xFF0D9488);
+const _infaqColor = Color(0xFF7C3AED);
 
 /// One month of the yearly list: its total and the three columns. Tapping it
 /// opens that month's per-person detail.
@@ -347,20 +446,38 @@ class _MonthSummaryCard extends StatelessWidget {
         child: InkWell(
           onTap: n == null || year == null ? null : () => onTap(year, n),
           child: Padding(
-            padding: const EdgeInsets.all(Lx.s12),
+            padding: const EdgeInsets.all(Lx.s16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Row(
                   children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFECFEFF),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                          n == null ? '–' : monthNames[n - 1].substring(0, 3),
+                          style: Lx.metadata.copyWith(
+                              color: _amalAccent,
+                              fontWeight: FontWeight.w800)),
+                    ),
+                    const SizedBox(width: Lx.s12),
                     Expanded(child: Text(title, style: Lx.cardHeading)),
                     Text(rupiah(month.total),
-                        style: Lx.cardHeading.copyWith(color: Lx.primary)),
+                        style: Lx.cardHeading.copyWith(
+                            fontFeatures: const [
+                              FontFeature.tabularFigures()
+                            ])),
                     const Icon(Icons.chevron_right_rounded,
                         color: Lx.textSecondary),
                   ],
                 ),
-                const SizedBox(height: Lx.s8),
+                const SizedBox(height: Lx.s12),
                 AmalColumns(
                     fr: month.fr, shodaqoh: month.shodaqoh, infaq: month.infaq),
               ],
@@ -386,14 +503,15 @@ class AmalEntryCard extends StatelessWidget {
     final e = entry;
     return Container(
       margin: const EdgeInsets.only(bottom: Lx.s8),
-      padding: const EdgeInsets.all(Lx.s12),
+      padding: const EdgeInsets.all(Lx.s16),
       decoration: Lx.card(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              InitialsAvatar(e.name),
+              const SizedBox(width: Lx.s12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -401,22 +519,33 @@ class AmalEntryCard extends StatelessWidget {
                     Text(e.name,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: Lx.cardHeading),
+                        style: Lx.cardHeading.copyWith(fontSize: 14)),
                     if (badge)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2),
+                      Container(
+                        margin: const EdgeInsets.only(top: 3),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: Lx.secondaryLight,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
                         child: Text('Kepala keluarga',
-                            style: Lx.metadata.copyWith(color: Lx.secondary)),
+                            style: Lx.metadata.copyWith(
+                                fontSize: 10,
+                                color: Lx.secondary,
+                                fontWeight: FontWeight.w700)),
                       ),
                   ],
                 ),
               ),
               const SizedBox(width: Lx.s8),
               Text(rupiah(e.total),
-                  style: Lx.cardHeading.copyWith(color: Lx.primary)),
+                  style: Lx.cardHeading.copyWith(fontFeatures: const [
+                    FontFeature.tabularFigures()
+                  ])),
             ],
           ),
-          const SizedBox(height: Lx.s8),
+          const SizedBox(height: Lx.s12),
           AmalColumns(fr: e.fr, shodaqoh: e.shodaqoh, infaq: e.infaq),
         ],
       ),
@@ -424,7 +553,8 @@ class AmalEntryCard extends StatelessWidget {
   }
 }
 
-/// The FR, Shodaqoh and Infaq cells.
+/// A bar split in the share of FR, Shodaqoh and Infaq, then the three
+/// amounts, each in its own colour.
 class AmalColumns extends StatelessWidget {
   const AmalColumns({
     super.key,
@@ -439,46 +569,86 @@ class AmalColumns extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    final total = fr + shodaqoh + infaq;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _cell('FR', fr),
-        const SizedBox(width: Lx.s8),
-        _cell('Shodaqoh', shodaqoh),
-        const SizedBox(width: Lx.s8),
-        _cell('Infaq', infaq),
+        if (total > 0) ...[
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: SizedBox(
+              height: 6,
+              child: Row(
+                children: [
+                  if (fr > 0)
+                    Expanded(
+                        flex: (fr * 1000 / total).round().clamp(1, 1000),
+                        child: Container(color: _frColor)),
+                  if (shodaqoh > 0)
+                    Expanded(
+                        flex: (shodaqoh * 1000 / total).round().clamp(1, 1000),
+                        child: Container(color: _shodaqohColor)),
+                  if (infaq > 0)
+                    Expanded(
+                        flex: (infaq * 1000 / total).round().clamp(1, 1000),
+                        child: Container(color: _infaqColor)),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: Lx.s8),
+        ],
+        Row(
+          children: [
+            _cell('FR', fr, _frColor),
+            const SizedBox(width: Lx.s8),
+            _cell('Shodaqoh', shodaqoh, _shodaqohColor),
+            const SizedBox(width: Lx.s8),
+            _cell('Infaq', infaq, _infaqColor),
+          ],
+        ),
       ],
     );
   }
 
-  Widget _cell(String label, double amount) {
+  Widget _cell(String label, double amount, Color color) {
     final filled = amount > 0;
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: Lx.s8, vertical: 6),
-        decoration: BoxDecoration(
-          color: filled ? Lx.primaryLight : Lx.background,
-          borderRadius: BorderRadius.circular(Lx.rSmall),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Lx.metadata),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Text(
-                // Digits only: the card is in rupiah, and equal sizes read better.
-                filled ? rupiah(amount).substring(3) : '—',
-                maxLines: 1,
-                style: Lx.moduleLabel
-                    .copyWith(color: filled ? Lx.primaryDark : Lx.textMuted),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                    color: filled ? color : Lx.border,
+                    borderRadius: BorderRadius.circular(2)),
               ),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Lx.metadata),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              // Digits only: the card is in rupiah, and equal sizes read better.
+              filled ? rupiah(amount).substring(3) : '—',
+              maxLines: 1,
+              style: Lx.moduleLabel.copyWith(
+                  color: filled ? Lx.text : Lx.textMuted,
+                  fontFeatures: const [FontFeature.tabularFigures()]),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

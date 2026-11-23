@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../config/launcher_tokens.dart';
-import '../finance/finance_widgets.dart';
+import '../budget/budget_widgets.dart'
+    show BudgetMonthPill, BudgetEmpty, BudgetRetry;
 import '../launcher/launcher_models.dart'
     show EventLevel, daysShort, monthsShort;
 import 'event_data.dart';
@@ -122,10 +123,13 @@ class _EventsListScreenState extends State<EventsListScreen>
           : null,
       body: Column(
         children: [
-          MonthSwitcher(
-            month: _month,
-            onChanged: _setMonth,
-            last: DateTime(DateTime.now().year + 2, 12),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(Lx.s16, 0, Lx.s16, Lx.s8),
+            child: BudgetMonthPill(
+              month: _month,
+              onChanged: _setMonth,
+              last: DateTime(DateTime.now().year + 2, 12),
+            ),
           ),
           Expanded(
             child: RefreshIndicator(
@@ -145,41 +149,54 @@ class _EventsListScreenState extends State<EventsListScreen>
       return const Center(child: CircularProgressIndicator());
     }
     if (_error != null) {
-      return _message(_error!, retry: true);
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [BudgetRetry(_error!, onRetry: _load)],
+      );
     }
     if (_events.isEmpty) {
-      return _message('Tidak ada kegiatan di bulan ini.');
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(Lx.s24),
+        children: [
+          const SizedBox(height: 32),
+          BudgetEmpty(
+            icon: Icons.event_available_rounded,
+            text: 'Tidak ada kegiatan di bulan ini.',
+            action: _canManage ? 'Tambah kegiatan' : null,
+            onAction: _canManage ? _add : null,
+          ),
+        ],
+      );
     }
+    final today = eventDay(DateTime.now());
+    final upcoming =
+        _events.where((e) => (e.endDate.isEmpty ? e.startDate : e.endDate)
+            .compareTo(today) >= 0).length;
     return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(Lx.s16, 0, Lx.s16, 96),
       children: [
-        for (final entry in groups.entries) ...[
-          GroupLabel(_dayLabel(entry.key)),
-          for (final e in entry.value) _EventCard(event: e, onTap: () => _open(e)),
-        ],
+        Padding(
+          padding: const EdgeInsets.only(top: Lx.s4, bottom: Lx.s4),
+          child: Text(
+              '${_events.length} kegiatan'
+              '${upcoming > 0 ? ' · $upcoming akan datang' : ''}',
+              style: Lx.metadata),
+        ),
+        for (final entry in groups.entries)
+          for (final e in entry.value)
+            _EventCard(
+                event: e,
+                today: e.startDate == today,
+                past: (e.endDate.isEmpty ? e.startDate : e.endDate)
+                        .compareTo(today) <
+                    0,
+                onTap: () => _open(e)),
       ],
     );
   }
 
-  /// Scrollable so pull-to-refresh also works on an empty or failed month.
-  Widget _message(String text, {bool retry = false}) => ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(Lx.s32),
-        children: [
-          const SizedBox(height: 48),
-          const Icon(Icons.event_busy_outlined, size: 40, color: Lx.textMuted),
-          const SizedBox(height: Lx.s12),
-          Text(text, textAlign: TextAlign.center, style: Lx.greeting),
-          if (retry)
-            TextButton(onPressed: _load, child: const Text('Coba lagi')),
-        ],
-      );
-}
-
-String _dayLabel(String day) {
-  final d = parseEventDay(day);
-  if (d == null) return day;
-  return '${daysShort[d.weekday - 1]}, ${d.day} ${monthsShort[d.month - 1]} ${d.year}';
 }
 
 /// "08:00 – 10:00", "Seluruh hari" or "12 Nov – 14 Nov".
@@ -240,9 +257,15 @@ class EventChip extends StatelessWidget {
 }
 
 class _EventCard extends StatelessWidget {
-  const _EventCard({required this.event, required this.onTap});
+  const _EventCard({
+    required this.event,
+    required this.onTap,
+    this.today = false,
+    this.past = false,
+  });
   final MobileEvent event;
   final VoidCallback onTap;
+  final bool today, past;
 
   @override
   Widget build(BuildContext context) {
@@ -250,78 +273,138 @@ class _EventCard extends StatelessWidget {
     final level = e.level.isEmpty ? null : EventLevel.of(e.level);
     final status = eventStatusChip(e.status);
     final cancelled = e.status == 'Cancelled';
+    final d = e.start;
+    final accent = level?.color ?? Lx.primary;
+    final tint = level?.tint ?? Lx.primaryLight;
+    final fg = level?.fg ?? Lx.primary;
 
-    return Padding(
-      padding: const EdgeInsets.only(top: Lx.s8),
-      child: Material(
-        color: Lx.surface,
-        borderRadius: BorderRadius.circular(Lx.rCard),
-        child: InkWell(
+    return Opacity(
+      opacity: past && !today ? 0.6 : 1,
+      child: Padding(
+        padding: const EdgeInsets.only(top: Lx.s8),
+        child: Material(
+          color: Lx.surface,
           borderRadius: BorderRadius.circular(Lx.rCard),
-          onTap: onTap,
-          child: Container(
-            padding: const EdgeInsets.all(Lx.s12),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(Lx.rCard),
-              border: Border.all(color: Lx.border),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: level?.tint ?? Lx.primaryLight,
-                    borderRadius: BorderRadius.circular(Lx.rButton),
-                  ),
-                  child: Icon(
-                    e.isAnnouncement
-                        ? Icons.campaign_outlined
-                        : (level?.icon ?? Icons.event_outlined),
-                    color: level?.fg ?? Lx.primary,
-                    size: 22,
-                  ),
-                ),
-                const SizedBox(width: Lx.s12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        e.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Lx.cardHeading.copyWith(
-                          decoration:
-                              cancelled ? TextDecoration.lineThrough : null,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(Lx.rCard),
+                border: Border.all(
+                    color: today ? accent : Lx.border, width: today ? 1.5 : 1),
+              ),
+              child: IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Calendar block: weekday, day number, month.
+                    Container(
+                      width: 64,
+                      color: tint,
+                      padding: const EdgeInsets.symmetric(vertical: Lx.s12),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(d == null ? '' : daysShort[d.weekday - 1],
+                              style: Lx.metadata.copyWith(
+                                  color: fg, fontWeight: FontWeight.w700)),
+                          Text(d == null ? '–' : '${d.day}',
+                              style: Lx.userName.copyWith(
+                                  color: fg, fontSize: 24, height: 1.1)),
+                          Text(d == null ? '' : monthsShort[d.month - 1],
+                              style: Lx.metadata.copyWith(color: fg)),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.all(Lx.s12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                if (e.isAnnouncement) ...[
+                                  const Icon(Icons.campaign_outlined,
+                                      size: 16, color: Lx.warning),
+                                  const SizedBox(width: 4),
+                                ],
+                                Expanded(
+                                  child: Text(
+                                    e.title,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Lx.cardHeading.copyWith(
+                                      fontSize: 14,
+                                      decoration: cancelled
+                                          ? TextDecoration.lineThrough
+                                          : null,
+                                    ),
+                                  ),
+                                ),
+                                if (today)
+                                  Container(
+                                    margin: const EdgeInsets.only(left: 6),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: accent,
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: Text('Hari ini',
+                                        style: Lx.metadata.copyWith(
+                                            fontSize: 10,
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w700)),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            _info(
+                                e.isAnnouncement
+                                    ? Icons.campaign_outlined
+                                    : Icons.schedule_rounded,
+                                e.isAnnouncement ? 'Pengumuman' : eventWhen(e)),
+                            if (e.location.isNotEmpty)
+                              _info(Icons.location_on_outlined, e.location),
+                            if (level != null || status != null) ...[
+                              const SizedBox(height: 6),
+                              Wrap(spacing: 6, runSpacing: 4, children: [
+                                if (level != null)
+                                  EventChip(level.label, level.fg, level.tint,
+                                      icon: level.icon),
+                                if (status != null)
+                                  EventChip(status.label, status.fg, status.tint),
+                              ]),
+                            ],
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        e.isAnnouncement ? 'Pengumuman' : eventWhen(e),
-                        style: Lx.sectionSubtitle,
-                      ),
-                      if (e.location.isNotEmpty)
-                        Text(e.location,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Lx.sectionSubtitle),
-                      const SizedBox(height: 6),
-                      Wrap(spacing: 6, runSpacing: 4, children: [
-                        if (level != null)
-                          EventChip(level.label, level.fg, level.tint),
-                        if (status != null)
-                          EventChip(status.label, status.fg, status.tint),
-                      ]),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
       ),
     );
   }
+
+  Widget _info(IconData icon, String text) => Padding(
+        padding: const EdgeInsets.only(top: 2),
+        child: Row(
+          children: [
+            Icon(icon, size: 14, color: Lx.textMuted),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Text(text,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Lx.metadata),
+            ),
+          ],
+        ),
+      );
 }

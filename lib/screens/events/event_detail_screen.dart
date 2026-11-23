@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../config/launcher_tokens.dart';
-import '../launcher/launcher_models.dart' show EventLevel, monthsShort;
+import '../launcher/launcher_models.dart'
+    show EventLevel, daysShort, monthsShort;
 import 'event_data.dart';
 import 'event_form_screen.dart';
 import 'events_list_screen.dart' show EventChip, eventStatusChip, eventWhen;
@@ -130,49 +131,164 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.all(Lx.s16),
+        padding: const EdgeInsets.fromLTRB(Lx.s16, 0, Lx.s16, Lx.s24),
         children: [
-          Text(e.title, style: Lx.sectionHeading),
-          const SizedBox(height: Lx.s8),
-          Wrap(spacing: 6, runSpacing: 4, children: [
-            EventChip(e.category, Lx.primary, Lx.primaryLight),
-            if (level != null) EventChip(level.label, level.fg, level.tint),
-            if (status != null)
-              EventChip(status.label, status.fg, status.tint),
+          _hero(e, level, status),
+          const SizedBox(height: Lx.s12),
+          _card([
+            _row(Icons.calendar_today_outlined, _dateText()),
+            if (!e.isAnnouncement) _row(Icons.schedule_outlined, eventWhen(e)),
+            if (e.location.isNotEmpty)
+              _row(Icons.location_on_outlined, e.location),
+            _row(Icons.sell_outlined, 'Kategori ${e.category}'),
           ]),
-          const SizedBox(height: Lx.s16),
-          _row(Icons.calendar_today_outlined, _dateText()),
-          if (!e.isAnnouncement)
-            _row(Icons.schedule_outlined, eventWhen(e)),
-          if (e.location.isNotEmpty)
-            _row(Icons.location_on_outlined, e.location),
-          if (e.description.isNotEmpty) ...[
-            const SizedBox(height: Lx.s16),
-            Text('Keterangan', style: Lx.cardHeading),
-            const SizedBox(height: 4),
-            Text(e.description, style: Lx.greeting.copyWith(height: 1.5)),
-          ],
-          if (e.materials.isNotEmpty) ...[
-            const SizedBox(height: Lx.s16),
-            Text('Materi', style: Lx.cardHeading),
-            const SizedBox(height: 4),
-            for (var i = 0; i < e.materials.length; i++)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Text(
-                  '${i + 1}. ${e.materials[i].title}'
-                  '${e.materials[i].speaker.isEmpty ? '' : ' — ${e.materials[i].speaker}'}',
-                  style: Lx.greeting.copyWith(color: Lx.text, height: 1.4),
-                ),
+          if (e.description.isNotEmpty)
+            _card([
+              Text('Keterangan', style: Lx.cardHeading),
+              const SizedBox(height: Lx.s8),
+              Text(e.description,
+                  style: Lx.body.copyWith(color: Lx.text, height: 1.55)),
+            ]),
+          if (e.materials.isNotEmpty)
+            _card([
+              Row(
+                children: [
+                  Expanded(child: Text('Materi', style: Lx.cardHeading)),
+                  Text('${e.materials.length} materi', style: Lx.metadata),
+                ],
               ),
-          ],
+              const SizedBox(height: Lx.s4),
+              for (var i = 0; i < e.materials.length; i++)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: Lx.s8),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 26,
+                        height: 26,
+                        alignment: Alignment.center,
+                        decoration: const BoxDecoration(
+                            color: Lx.primaryLight, shape: BoxShape.circle),
+                        child: Text('${i + 1}',
+                            style: Lx.metadata.copyWith(
+                                color: Lx.primary,
+                                fontWeight: FontWeight.w800)),
+                      ),
+                      const SizedBox(width: Lx.s12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(e.materials[i].title,
+                                style: Lx.cardHeading.copyWith(fontSize: 14)),
+                            if (e.materials[i].speaker.isNotEmpty)
+                              Row(
+                                children: [
+                                  const Icon(Icons.person_outline_rounded,
+                                      size: 13, color: Lx.textMuted),
+                                  const SizedBox(width: 3),
+                                  Expanded(
+                                    child: Text(e.materials[i].speaker,
+                                        style: Lx.metadata),
+                                  ),
+                                ],
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ]),
+        ],
+      ),
+    );
+  }
+
+  Widget _card(List<Widget> children) => Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: Lx.s12),
+        padding: const EdgeInsets.all(Lx.s16),
+        decoration: Lx.card(),
+        child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start, children: children),
+      );
+
+  /// Title on the level's colour, with the date block and the chips.
+  Widget _hero(MobileEvent e, EventLevel? level,
+      ({String label, Color fg, Color tint})? status) {
+    final d = e.start;
+    final tint = level?.tint ?? Lx.primaryLight;
+    final fg = level?.fg ?? Lx.primary;
+    return Container(
+      padding: const EdgeInsets.all(Lx.s16),
+      decoration: BoxDecoration(
+        color: tint,
+        borderRadius: BorderRadius.circular(Lx.rSection),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 60,
+            padding: const EdgeInsets.symmetric(vertical: Lx.s8),
+            decoration: BoxDecoration(
+              color: Lx.surface,
+              borderRadius: BorderRadius.circular(Lx.rButton + 2),
+            ),
+            child: Column(
+              children: [
+                Text(d == null ? '' : daysShort[d.weekday - 1],
+                    style: Lx.metadata
+                        .copyWith(color: fg, fontWeight: FontWeight.w700)),
+                Text(d == null ? '–' : '${d.day}',
+                    style: Lx.userName
+                        .copyWith(color: fg, fontSize: 24, height: 1.1)),
+                Text(d == null ? '' : monthsShort[d.month - 1],
+                    style: Lx.metadata.copyWith(color: fg)),
+              ],
+            ),
+          ),
+          const SizedBox(width: Lx.s16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (e.isAnnouncement)
+                  Row(
+                    children: [
+                      Icon(Icons.campaign_outlined, size: 16, color: fg),
+                      const SizedBox(width: 4),
+                      Text('Pengumuman',
+                          style: Lx.metadata.copyWith(
+                              color: fg, fontWeight: FontWeight.w700)),
+                    ],
+                  ),
+                Text(e.title,
+                    style: Lx.sectionHeading.copyWith(
+                        decoration: e.status == 'Cancelled'
+                            ? TextDecoration.lineThrough
+                            : null)),
+                const SizedBox(height: Lx.s8),
+                Wrap(spacing: 6, runSpacing: 4, children: [
+                  if (level != null)
+                    EventChip(level.label, level.fg, Lx.surface,
+                        icon: level.icon),
+                  EventChip(e.category, Lx.primary, Lx.surface),
+                  if (status != null)
+                    EventChip(status.label, status.fg, status.tint),
+                ]),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
   Widget _row(IconData icon, String text) => Padding(
-        padding: const EdgeInsets.only(bottom: Lx.s8),
+        padding: const EdgeInsets.symmetric(vertical: 6),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

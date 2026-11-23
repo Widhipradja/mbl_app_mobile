@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../config/launcher_tokens.dart';
+import '../budget/budget_widgets.dart';
 import 'finance_data.dart';
 
-/// A transaction as one compact row (no card): title and category on the
-/// left, signed amount on the right.
+/// A transaction as one row, in the same look as Dompet Saya: category
+/// icon, what it was, the category (and date), and the signed amount.
 class TxnRow extends StatelessWidget {
   const TxnRow({super.key, required this.txn, this.showDate = false});
 
@@ -13,60 +14,49 @@ class TxnRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = txn.isIncome ? Lx.success : Lx.danger;
+    final sub = [
+      if (txn.title != txn.category) txn.category,
+      if (showDate) dateShort(txn.date),
+    ].where((e) => e.isNotEmpty).join(' · ');
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: Lx.s12),
+      padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
         children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(Lx.rButton),
-            ),
-            child: Icon(
-              txn.isIncome
-                  ? Icons.south_west_rounded
-                  : Icons.north_east_rounded,
-              size: 18,
-              color: color,
-            ),
-          ),
+          CategoryAvatar(txn.category, income: txn.isIncome),
           const SizedBox(width: Lx.s12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(txn.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Lx.cardHeading),
-                    ),
-                    if (txn.isVoice) ...[
-                      const SizedBox(width: 6),
-                      const Icon(Icons.mic_rounded,
-                          size: 14, color: Lx.textMuted),
+                Text(txn.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Lx.cardHeading.copyWith(fontSize: 14)),
+                if (sub.isNotEmpty || txn.isVoice)
+                  Row(
+                    children: [
+                      if (txn.isVoice) ...[
+                        const Icon(Icons.mic_rounded,
+                            size: 12, color: Lx.textMuted),
+                        const SizedBox(width: 3),
+                      ],
+                      Flexible(
+                        child: Text(sub.isEmpty ? 'Dicatat dengan suara' : sub,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Lx.metadata),
+                      ),
                     ],
-                  ],
-                ),
-                Text(
-                  showDate
-                      ? '${txn.category} · ${dateShort(txn.date)}'
-                      : txn.category,
-                  style: Lx.metadata,
-                ),
+                  ),
               ],
             ),
           ),
           const SizedBox(width: Lx.s8),
-          Text(
-            '${txn.isIncome ? '+' : '−'}${thousands(txn.amount)}',
-            style: Lx.cardHeading.copyWith(color: color),
-          ),
+          Text(signedRp(txn.amount, txn.isIncome),
+              style: Lx.cardHeading.copyWith(
+                  fontSize: 14,
+                  color: moneyColor(txn.isIncome),
+                  fontFeatures: tabular)),
         ],
       ),
     );

@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../config/launcher_tokens.dart';
+import '../budget/budget_widgets.dart';
 import 'finance_data.dart';
-import 'finance_widgets.dart';
 
 /// New transaction: type, amount, account (category), date and a description.
 /// It is sent as a submission that waits for the treasurer (KU) to approve.
@@ -131,67 +131,164 @@ class _FinanceNewScreenState extends State<FinanceNewScreen> {
     }
   }
 
-  Widget _typeSwitch() => SegmentedButton<bool>(
-        showSelectedIcon: false,
-        segments: const [
-          ButtonSegment(value: false, label: Text('Pengeluaran')),
-          ButtonSegment(value: true, label: Text('Pemasukan')),
-        ],
-        selected: {_income},
-        onSelectionChanged: _saving
-            ? null
-            : (s) {
-                setState(() {
-                  _income = s.first;
-                  _account = null;
-                });
-              },
+  static bool _sameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  Widget _label(String t, {Widget? trailing}) => Padding(
+        padding: const EdgeInsets.only(top: Lx.s20, bottom: Lx.s8),
+        child: Row(
+          children: [
+            Expanded(child: Text(t, style: Lx.cardHeading)),
+            if (trailing != null) trailing,
+          ],
+        ),
       );
 
-  Widget _amountField() {
-    final color = _income ? Lx.success : Lx.danger;
-    return Column(
+  Widget _amountCard() => Container(
+        margin: const EdgeInsets.only(top: Lx.s16),
+        padding: const EdgeInsets.fromLTRB(Lx.s16, Lx.s16, Lx.s16, Lx.s8),
+        decoration: Lx.card(),
+        child: Column(
+          children: [
+            Text(_income ? 'Uang masuk kas' : 'Uang keluar kas',
+                style: Lx.metadata),
+            TextField(
+              controller: _amount,
+              enabled: !_saving,
+              autofocus: true,
+              textAlign: TextAlign.center,
+              keyboardType: TextInputType.number,
+              inputFormatters: [RupiahInputFormatter()],
+              onChanged: (_) => setState(() => _error = null),
+              style: Lx.userName.copyWith(
+                  fontSize: 32,
+                  color: _income ? Lx.success : Lx.text,
+                  fontFeatures: tabular),
+              decoration: InputDecoration(
+                hintText: '0',
+                hintStyle: Lx.userName.copyWith(
+                    fontSize: 32, color: Lx.textMuted.withOpacity(0.6)),
+                prefixText: 'Rp ',
+                prefixStyle: Lx.sectionHeading.copyWith(color: Lx.textMuted),
+                filled: false,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                disabledBorder: InputBorder.none,
+              ),
+            ),
+          ],
+        ),
+      );
+
+  Widget _accountGrid() {
+    final candidates = widget.candidates.map((e) => e.toLowerCase()).toSet();
+    final color = _income ? Lx.success : Lx.primary;
+    return GridView.count(
+      crossAxisCount: 4,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: Lx.s8,
+      crossAxisSpacing: Lx.s8,
+      childAspectRatio: 0.78,
       children: [
-        Text('Nominal', style: Lx.metadata),
-        TextField(
-          controller: _amount,
-          enabled: !_saving,
-          autofocus: true,
-          textAlign: TextAlign.center,
-          keyboardType: TextInputType.number,
-          inputFormatters: [RupiahInputFormatter()],
-          onChanged: (_) => setState(() => _error = null),
-          style: Lx.greeting.copyWith(color: color),
-          decoration: InputDecoration(
-            hintText: '0',
-            prefixText: 'Rp ',
-            prefixStyle: Lx.greeting.copyWith(color: Lx.textMuted),
-            filled: false,
-            border: InputBorder.none,
-            enabledBorder: InputBorder.none,
-            focusedBorder: InputBorder.none,
-          ),
+        for (final a in _shown)
+          Builder(builder: (_) {
+            final selected = _account?.id == a.id;
+            final suggested = candidates.contains(a.name.toLowerCase());
+            return InkWell(
+              onTap: _saving
+                  ? null
+                  : () => setState(() {
+                        _account = a;
+                        _error = null;
+                      }),
+              borderRadius: BorderRadius.circular(Lx.rButton),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                padding:
+                    const EdgeInsets.symmetric(vertical: Lx.s8, horizontal: 4),
+                decoration: BoxDecoration(
+                  color: selected ? color.withOpacity(0.08) : Lx.surface,
+                  borderRadius: BorderRadius.circular(Lx.rButton),
+                  border: Border.all(
+                      color: selected
+                          ? color
+                          : suggested
+                              ? Lx.launcherBorder
+                              : Lx.border,
+                      width: selected ? 2 : 1),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CategoryAvatar(a.name, income: a.isIncome, size: 36),
+                    const SizedBox(height: 6),
+                    Text(a.name,
+                        maxLines: 2,
+                        textAlign: TextAlign.center,
+                        overflow: TextOverflow.ellipsis,
+                        style: Lx.metadata.copyWith(
+                            color: selected ? Lx.text : Lx.textSecondary,
+                            fontWeight:
+                                selected ? FontWeight.w700 : FontWeight.w500)),
+                    if (suggested)
+                      Text('Saran',
+                          style: Lx.metadata.copyWith(
+                              fontSize: 10,
+                              color: Lx.primary,
+                              fontWeight: FontWeight.w700)),
+                  ],
+                ),
+              ),
+            );
+          }),
+      ],
+    );
+  }
+
+  Widget _dateChoices() {
+    final now = DateTime.now();
+    final yesterday = now.subtract(const Duration(days: 1));
+    final isToday = _sameDay(_date, now);
+    final isYesterday = _sameDay(_date, yesterday);
+    Widget chip(String label, bool selected, VoidCallback onTap) => ChoiceChip(
+          label: Text(label),
+          selected: selected,
+          showCheckmark: false,
+          onSelected: _saving ? null : (_) => onTap(),
+        );
+    return Wrap(
+      spacing: Lx.s8,
+      runSpacing: Lx.s8,
+      children: [
+        chip('Hari ini', isToday, () => setState(() => _date = now)),
+        chip('Kemarin', isYesterday, () => setState(() => _date = yesterday)),
+        ActionChip(
+          avatar: const Icon(Icons.calendar_today_outlined, size: 16),
+          label: Text(
+              isToday || isYesterday ? 'Pilih tanggal' : dateLabel(_date)),
+          side: isToday || isYesterday
+              ? null
+              : const BorderSide(color: Lx.primary, width: 1.5),
+          onPressed: _saving ? null : _pickDate,
         ),
       ],
     );
   }
 
-  Widget _label(String t) => Padding(
-        padding: const EdgeInsets.only(top: Lx.s20, bottom: Lx.s8),
-        child: Text(t, style: Lx.cardHeading),
-      );
-
   @override
   Widget build(BuildContext context) {
+    final accent = _income ? Lx.success : Lx.primary;
     return Theme(
       data: Lx.theme,
       child: Scaffold(
-        appBar: AppBar(title: const Text('Transaksi Baru')),
+        appBar: AppBar(title: const Text('Catat Transaksi Kas')),
         body: ListView(
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: const EdgeInsets.fromLTRB(Lx.s16, 0, Lx.s16, Lx.s24),
           children: [
-            if (widget.transcript.isNotEmpty) ...[
+            if (widget.transcript.isNotEmpty)
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(Lx.s12),
@@ -200,20 +297,40 @@ class _FinanceNewScreenState extends State<FinanceNewScreen> {
                   color: Lx.primaryLight,
                   borderRadius: BorderRadius.circular(Lx.rButton),
                 ),
-                child: Column(
+                child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Yang terdengar', style: Lx.metadata),
-                    Text('"${widget.transcript}"', style: Lx.body),
+                    const Icon(Icons.mic_rounded, size: 18, color: Lx.primary),
+                    const SizedBox(width: Lx.s8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Yang terdengar', style: Lx.metadata),
+                          Text('"${widget.transcript}"',
+                              style: Lx.body.copyWith(color: Lx.text)),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
-            ],
-            _typeSwitch(),
-            const SizedBox(height: Lx.s16),
-            _amountField(),
-            hairline,
-            _label('Kategori'),
+            BudgetTypeToggle(
+              income: _income,
+              onChanged: _saving
+                  ? null
+                  : (v) => setState(() {
+                        if (v == _income) return;
+                        _income = v;
+                        _account = null;
+                      }),
+            ),
+            _amountCard(),
+            _label('Kategori',
+                trailing: _account == null
+                    ? Text('Pilih satu',
+                        style: Lx.metadata.copyWith(color: Lx.textMuted))
+                    : null),
             if (_loadingAccounts)
               const Padding(
                 padding: EdgeInsets.all(Lx.s12),
@@ -230,55 +347,28 @@ class _FinanceNewScreenState extends State<FinanceNewScreen> {
                       child: const Text('Coba lagi')),
                 ],
               )
+            else if (_shown.isEmpty)
+              Text(
+                  'Belum ada kategori ${_income ? 'pemasukan' : 'pengeluaran'} '
+                  'kas. Minta bendahara menambahkannya.',
+                  style: Lx.body)
             else
-              Wrap(
-                spacing: Lx.s8,
-                runSpacing: Lx.s8,
-                children: [
-                  for (final a in _shown)
-                    ChoiceChip(
-                      label: Text(a.name),
-                      selected: _account?.id == a.id,
-                      showCheckmark: false,
-                      onSelected: _saving
-                          ? null
-                          : (_) => setState(() {
-                                _account = a;
-                                _error = null;
-                              }),
-                    ),
-                ],
-              ),
+              _accountGrid(),
             _label('Tanggal'),
-            InkWell(
-              onTap: _saving ? null : _pickDate,
-              borderRadius: BorderRadius.circular(Lx.rButton),
-              child: Container(
-                height: 48,
-                padding: const EdgeInsets.symmetric(horizontal: Lx.s12),
-                decoration: BoxDecoration(
-                  color: Lx.surface,
-                  borderRadius: BorderRadius.circular(Lx.rButton),
-                  border: Border.all(color: Lx.border),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(child: Text(dateLabel(_date), style: Lx.body)),
-                    const Icon(Icons.calendar_today_outlined,
-                        size: 18, color: Lx.textSecondary),
-                  ],
-                ),
-              ),
-            ),
-            _label('Keterangan (opsional)'),
+            _dateChoices(),
+            _label('Keterangan',
+                trailing: Text('Opsional',
+                    style: Lx.metadata.copyWith(color: Lx.textMuted))),
             TextField(
               controller: _title,
               enabled: !_saving,
               textCapitalization: TextCapitalization.sentences,
-              textInputAction: TextInputAction.next,
+              textInputAction: TextInputAction.done,
               inputFormatters: [LengthLimitingTextInputFormatter(80)],
-              decoration:
-                  const InputDecoration(hintText: 'Mis. Listrik masjid'),
+              decoration: const InputDecoration(
+                hintText: 'Mis. Listrik masjid',
+                prefixIcon: Icon(Icons.notes_rounded, color: Lx.textMuted),
+              ),
             ),
           ],
         ),
@@ -297,17 +387,41 @@ class _FinanceNewScreenState extends State<FinanceNewScreen> {
                     if (_error != null)
                       Padding(
                         padding: const EdgeInsets.only(bottom: Lx.s8),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(_error!,
-                              style: Lx.metadata.copyWith(color: Lx.danger)),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.error_outline_rounded,
+                                size: 16, color: Lx.danger),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(_error!,
+                                  style:
+                                      Lx.metadata.copyWith(color: Lx.danger)),
+                            ),
+                          ],
+                        ),
+                      )
+                    else
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: Lx.s8),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.info_outline_rounded,
+                                size: 14, color: Lx.textSecondary),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                  'Masuk saldo setelah disetujui bendahara.',
+                                  style: Lx.metadata),
+                            ),
+                          ],
                         ),
                       ),
                     SizedBox(
                       width: double.infinity,
-                      height: 48,
+                      height: 50,
                       child: FilledButton(
                         onPressed: _saving ? null : _save,
+                        style: FilledButton.styleFrom(backgroundColor: accent),
                         child: _saving
                             ? const SizedBox(
                                 width: 20,
@@ -315,7 +429,7 @@ class _FinanceNewScreenState extends State<FinanceNewScreen> {
                                 child: CircularProgressIndicator(
                                     strokeWidth: 2, color: Colors.white),
                               )
-                            : const Text('Simpan Transaksi'),
+                            : const Text('Kirim untuk Disetujui'),
                       ),
                     ),
                   ],

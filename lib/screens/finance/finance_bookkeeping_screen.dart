@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../config/launcher_tokens.dart';
+import '../budget/budget_widgets.dart';
 import 'finance_data.dart';
-import 'finance_widgets.dart';
 
 /// Daily bookkeeping of one month: lines per report group with the running
 /// balance (`finance/daily-bookkeeping`).
@@ -47,29 +47,74 @@ class _FinanceBookkeepingScreenState extends State<FinanceBookkeepingScreen> {
     _load();
   }
 
-  Widget _group(BookGroup g) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          GroupLabel(g.label),
-          Text(
-              'Awal ${rp(g.opening)} · Masuk ${rp(g.income)} · '
-              'Keluar ${rp(g.expense)} · Akhir ${rp(g.closing)}',
-              style: Lx.metadata),
-          const SizedBox(height: Lx.s8),
-          for (var i = 0; i < g.lines.length; i++) ...[
-            if (i > 0) hairline,
-            _line(g.lines[i]),
+  Widget _stat(String label, int v, {Color color = Lx.text}) => Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: Lx.metadata),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(rp(v),
+                  style: Lx.cardHeading.copyWith(
+                      fontSize: 13, color: color, fontFeatures: tabular)),
+            ),
           ],
-          if (g.lines.isEmpty) Text('Tidak ada baris.', style: Lx.body),
-        ],
+        ),
+      );
+
+  Widget _group(BookGroup g) => BudgetCard(
+        padding: const EdgeInsets.fromLTRB(Lx.s16, Lx.s16, Lx.s16, Lx.s8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CategoryAvatar(g.label, size: 32),
+                const SizedBox(width: Lx.s8),
+                Expanded(child: Text(g.label, style: Lx.cardHeading)),
+              ],
+            ),
+            const SizedBox(height: Lx.s12),
+            Container(
+              padding: const EdgeInsets.all(Lx.s12),
+              decoration: BoxDecoration(
+                color: Lx.background,
+                borderRadius: BorderRadius.circular(Lx.rButton),
+              ),
+              child: Column(
+                children: [
+                  Row(children: [
+                    _stat('Saldo awal', g.opening),
+                    _stat('Saldo akhir', g.closing, color: Lx.primary),
+                  ]),
+                  const SizedBox(height: Lx.s8),
+                  Row(children: [
+                    _stat('Masuk', g.income, color: Lx.success),
+                    _stat('Keluar', g.expense),
+                  ]),
+                ],
+              ),
+            ),
+            const SizedBox(height: Lx.s4),
+            if (g.lines.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: Lx.s12),
+                child: Text('Tidak ada transaksi.', style: Lx.body),
+              ),
+            for (var i = 0; i < g.lines.length; i++) ...[
+              if (i > 0) const Divider(height: 1, color: Lx.border),
+              _line(g.lines[i]),
+            ],
+          ],
+        ),
       );
 
   Widget _line(BookLine l) {
     final income = l.income > 0;
     final amount = income ? l.income : l.expense;
-    final color = income ? Lx.success : Lx.danger;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: Lx.s8),
+      padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
         children: [
           Expanded(
@@ -79,7 +124,7 @@ class _FinanceBookkeepingScreenState extends State<FinanceBookkeepingScreen> {
                 Text(l.description.isEmpty ? l.category : l.description,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: Lx.cardHeading),
+                    style: Lx.cardHeading.copyWith(fontSize: 14)),
                 Text('${dateShort(l.date)} · ${l.category}',
                     style: Lx.metadata),
               ],
@@ -89,9 +134,13 @@ class _FinanceBookkeepingScreenState extends State<FinanceBookkeepingScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text('${income ? '+' : '−'}${thousands(amount)}',
-                  style: Lx.cardHeading.copyWith(color: color)),
-              Text('Saldo ${thousands(l.balance)}', style: Lx.metadata),
+              Text(signedRp(amount, income),
+                  style: Lx.cardHeading.copyWith(
+                      fontSize: 14,
+                      color: moneyColor(income),
+                      fontFeatures: tabular)),
+              Text('Saldo ${rp(l.balance)}',
+                  style: Lx.metadata.copyWith(fontFeatures: tabular)),
             ],
           ),
         ],
@@ -109,22 +158,12 @@ class _FinanceBookkeepingScreenState extends State<FinanceBookkeepingScreen> {
         body: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: Lx.s8),
-              child: MonthSwitcher(month: _month, onChanged: _setMonth),
+              padding: const EdgeInsets.fromLTRB(Lx.s16, 0, Lx.s16, Lx.s8),
+              child: BudgetMonthPill(month: _month, onChanged: _setMonth),
             ),
-            const Divider(height: 1, thickness: 1, color: Lx.border),
             Expanded(
               child: _error != null
-                  ? Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(_error!, style: Lx.body),
-                          TextButton(
-                              onPressed: _load, child: const Text('Coba lagi')),
-                        ],
-                      ),
-                    )
+                  ? Center(child: BudgetRetry(_error!, onRetry: _load))
                   : d == null
                       ? const Center(child: CircularProgressIndicator())
                       : RefreshIndicator(
@@ -132,25 +171,51 @@ class _FinanceBookkeepingScreenState extends State<FinanceBookkeepingScreen> {
                           child: ListView(
                             physics: const AlwaysScrollableScrollPhysics(),
                             padding: const EdgeInsets.fromLTRB(
-                                Lx.s16, Lx.s12, Lx.s16, Lx.s24),
+                                Lx.s16, Lx.s4, Lx.s16, Lx.s24),
                             children: [
-                              Text(
-                                  'Saldo awal ${rp(d.totalOpening)} → '
-                                  'akhir ${rp(d.totalClosing)}',
-                                  style: Lx.cardHeading),
-                              if (d.difference != 0)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 4),
-                                  child: Text('Selisih ${rp(d.difference)}',
-                                      style: Lx.metadata
-                                          .copyWith(color: Lx.warning)),
+                              BudgetCard(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Total semua kelompok',
+                                        style: Lx.metadata),
+                                    const SizedBox(height: 4),
+                                    Row(
+                                      children: [
+                                        _stat('Saldo awal', d.totalOpening),
+                                        const Icon(Icons.arrow_forward_rounded,
+                                            size: 18, color: Lx.textMuted),
+                                        const SizedBox(width: Lx.s12),
+                                        _stat('Saldo akhir', d.totalClosing,
+                                            color: Lx.primary),
+                                      ],
+                                    ),
+                                    if (d.difference != 0) ...[
+                                      const SizedBox(height: Lx.s8),
+                                      Row(
+                                        children: [
+                                          const Icon(Icons.warning_amber_rounded,
+                                              size: 16, color: Lx.warning),
+                                          const SizedBox(width: 6),
+                                          Expanded(
+                                            child: Text(
+                                                'Selisih ${rp(d.difference)} '
+                                                'belum dijelaskan.',
+                                                style: Lx.metadata.copyWith(
+                                                    color: Lx.warning)),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ],
                                 ),
+                              ),
                               if (d.groups.isEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 64),
-                                  child: Center(
-                                      child: Text('Belum ada pembukuan.',
-                                          style: Lx.body)),
+                                const BudgetCard(
+                                  child: BudgetEmpty(
+                                    icon: Icons.menu_book_rounded,
+                                    text: 'Belum ada pembukuan bulan ini.',
+                                  ),
                                 ),
                               for (final g in d.groups) _group(g),
                             ],

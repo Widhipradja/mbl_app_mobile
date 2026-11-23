@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../config/launcher_tokens.dart';
+import '../budget/budget_widgets.dart' show SoftTabs;
 import 'event_data.dart';
 
 const _statuses = {
@@ -282,16 +283,16 @@ class _EventFormScreenState extends State<EventFormScreen> {
                     style: const TextStyle(color: Color(0xFFB91C1C))),
               ),
             // Type is fixed once saved: event-reminder refuses a change.
-            SegmentedButton<bool>(
-              segments: const [
-                ButtonSegment(value: false, label: Text('Kegiatan')),
-                ButtonSegment(value: true, label: Text('Pengumuman')),
+            SoftTabs<bool>(
+              value: _announcement,
+              items: const [
+                (false, 'Kegiatan', Icons.event_outlined),
+                (true, 'Pengumuman', Icons.campaign_outlined),
               ],
-              selected: {_announcement},
-              onSelectionChanged: _editing
+              onChanged: _editing
                   ? null
-                  : (s) => setState(() {
-                        _announcement = s.first;
+                  : (v) => setState(() {
+                        _announcement = v;
                         if (_announcement) {
                           _from = _to = null;
                           _materials
@@ -358,14 +359,14 @@ class _EventFormScreenState extends State<EventFormScreen> {
             _gap(Lx.s20),
             Text('Waktu', style: Lx.cardHeading),
             _gap(Lx.s8),
-            SegmentedButton<bool>(
-              segments: const [
-                ButtonSegment(value: false, label: Text('Satu hari')),
-                ButtonSegment(value: true, label: Text('Beberapa hari')),
+            SoftTabs<bool>(
+              value: _multiDay,
+              items: const [
+                (false, 'Satu hari', Icons.today_outlined),
+                (true, 'Beberapa hari', Icons.date_range_outlined),
               ],
-              selected: {_multiDay},
-              onSelectionChanged: (s) => setState(() {
-                _multiDay = s.first;
+              onChanged: (v) => setState(() {
+                _multiDay = v;
                 if (_multiDay) {
                   _from = _to = null;
                   _end ??= _start;

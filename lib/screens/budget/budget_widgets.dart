@@ -647,3 +647,95 @@ Future<String?> showBudgetTxnDetail(
     ),
   );
 }
+
+// ── Generic pieces shared with other modules ────────────────────────────────
+
+/// Two or more soft tabs in a tinted track (e.g. Bulanan | Tahunan).
+class SoftTabs<T> extends StatelessWidget {
+  const SoftTabs({
+    super.key,
+    required this.value,
+    required this.items,
+    required this.onChanged,
+  });
+
+  final T value;
+
+  /// (value, label, icon).
+  final List<(T, String, IconData?)> items;
+  final ValueChanged<T>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEAF0FB),
+        borderRadius: BorderRadius.circular(Lx.rButton),
+      ),
+      child: Row(
+        children: [
+          for (final (v, label, icon) in items)
+            Expanded(
+              child: GestureDetector(
+                onTap: onChanged == null ? null : () => onChanged!(v),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: v == value ? Lx.surface : Colors.transparent,
+                    borderRadius: BorderRadius.circular(Lx.rButton - 2),
+                    boxShadow: v == value ? Lx.shadowSoft : null,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      if (icon != null) ...[
+                        Icon(icon,
+                            size: 17,
+                            color: v == value ? Lx.primary : Lx.textMuted),
+                        const SizedBox(width: 6),
+                      ],
+                      Text(label,
+                          style: Lx.button.copyWith(
+                              color: v == value ? Lx.primary : Lx.textSecondary,
+                              fontWeight: v == value
+                                  ? FontWeight.w700
+                                  : FontWeight.w600)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A person's initials on a colour taken from their name.
+class InitialsAvatar extends StatelessWidget {
+  const InitialsAvatar(this.name, {super.key, this.size = 40});
+  final String name;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final words =
+        name.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+    final initials = words.isEmpty
+        ? '?'
+        : (words.first[0] + (words.length > 1 ? words[1][0] : ''))
+            .toUpperCase();
+    final look = categoryLook(name);
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(color: look.tint, shape: BoxShape.circle),
+      child: Text(initials,
+          style: Lx.cardHeading
+              .copyWith(fontSize: size * 0.36, color: look.color)),
+    );
+  }
+}

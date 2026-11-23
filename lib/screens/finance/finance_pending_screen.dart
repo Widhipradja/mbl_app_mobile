@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../config/launcher_tokens.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/home_summary_provider.dart';
+import '../budget/budget_widgets.dart';
 import 'finance_data.dart';
 
 /// Submissions waiting for approval. KU can approve or reject; whoever
@@ -89,11 +90,10 @@ class _FinancePendingScreenState extends State<FinancePendingScreen> {
   }
 
   Widget _card(FinanceSubmission s, {required bool ku, required String me}) {
-    final color = s.isIncome ? Lx.success : Lx.danger;
     final busy = _busy == s.id;
     final mine = me.isNotEmpty && s.submittedBy == me;
     return Container(
-      padding: const EdgeInsets.all(Lx.s12),
+      padding: const EdgeInsets.all(Lx.s16),
       margin: const EdgeInsets.only(bottom: Lx.s12),
       decoration: Lx.card(),
       child: Column(
@@ -101,28 +101,84 @@ class _FinancePendingScreenState extends State<FinancePendingScreen> {
         children: [
           Row(
             children: [
+              CategoryAvatar(s.accountName, income: s.isIncome),
+              const SizedBox(width: Lx.s12),
               Expanded(
-                  child: Text(s.accountName,
-                      style: Lx.cardHeading.copyWith(color: Lx.secondary))),
-              Text('${s.isIncome ? '+' : '−'}${rp(s.amount)}',
-                  style: Lx.cardHeading.copyWith(color: color)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(s.accountName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Lx.cardHeading.copyWith(fontSize: 14)),
+                    Text(s.isIncome ? 'Pemasukan' : 'Pengeluaran',
+                        style: Lx.metadata),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(signedRp(s.amount, s.isIncome),
+                      style: Lx.cardHeading.copyWith(
+                          color: moneyColor(s.isIncome),
+                          fontFeatures: tabular)),
+                  const SizedBox(height: 2),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFEDD5),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text('Menunggu',
+                        style: Lx.metadata.copyWith(
+                            fontSize: 10,
+                            color: const Color(0xFFC2410C),
+                            fontWeight: FontWeight.w700)),
+                  ),
+                ],
+              ),
             ],
           ),
-          const SizedBox(height: 4),
-          Text(s.description, style: Lx.body),
+          if (s.description.isNotEmpty && s.description != s.accountName) ...[
+            const SizedBox(height: Lx.s12),
+            Text(s.description, style: Lx.body.copyWith(color: Lx.text)),
+          ],
           if (s.transcript.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.mic_rounded, size: 14, color: Lx.textMuted),
-                const SizedBox(width: 4),
-                Expanded(child: Text('"${s.transcript}"', style: Lx.metadata)),
-              ],
+            const SizedBox(height: Lx.s8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(Lx.s8),
+              decoration: BoxDecoration(
+                color: Lx.background,
+                borderRadius: BorderRadius.circular(Lx.rSmall),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.mic_rounded, size: 14, color: Lx.textMuted),
+                  const SizedBox(width: 4),
+                  Expanded(
+                      child: Text('"${s.transcript}"', style: Lx.metadata)),
+                ],
+              ),
             ),
           ],
-          const SizedBox(height: 6),
-          Text('${s.submittedBy} · ${dateShort(s.date)}', style: Lx.metadata),
+          const SizedBox(height: Lx.s8),
+          Row(
+            children: [
+              const Icon(Icons.person_outline_rounded,
+                  size: 14, color: Lx.textMuted),
+              const SizedBox(width: 4),
+              Text(mine ? 'Anda' : s.submittedBy, style: Lx.metadata),
+              const SizedBox(width: Lx.s12),
+              const Icon(Icons.calendar_today_outlined,
+                  size: 13, color: Lx.textMuted),
+              const SizedBox(width: 4),
+              Text(dateShort(s.date), style: Lx.metadata),
+            ],
+          ),
           if (ku || mine) ...[
             const SizedBox(height: Lx.s12),
             if (busy)
@@ -136,21 +192,28 @@ class _FinancePendingScreenState extends State<FinancePendingScreen> {
                 children: [
                   if (ku) ...[
                     Expanded(
-                      child: FilledButton(
-                        onPressed: () => _decide(s, 'approve'),
-                        child: const Text('Setujui'),
+                      child: OutlinedButton.icon(
+                        onPressed: () => _decide(s, 'reject'),
+                        style: OutlinedButton.styleFrom(
+                            foregroundColor: Lx.danger),
+                        icon: const Icon(Icons.close_rounded, size: 18),
+                        label: const Text('Tolak'),
                       ),
                     ),
                     const SizedBox(width: Lx.s8),
                     Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => _decide(s, 'reject'),
-                        child: const Text('Tolak'),
+                      child: FilledButton.icon(
+                        onPressed: () => _decide(s, 'approve'),
+                        style: FilledButton.styleFrom(
+                            backgroundColor: Lx.success),
+                        icon: const Icon(Icons.check_rounded, size: 18),
+                        label: const Text('Setujui'),
                       ),
                     ),
                   ],
                   if (mine) ...[
                     if (ku) const SizedBox(width: Lx.s8),
+                    if (!ku) const Spacer(),
                     TextButton(
                       onPressed: () => _decide(s, 'cancel'),
                       child: const Text('Batalkan'),
@@ -172,37 +235,55 @@ class _FinancePendingScreenState extends State<FinancePendingScreen> {
         .hasRole('KU', user?.roleNames ?? const []);
     final me = user?.userId ?? '';
     final items = _items;
+    final total = (items ?? const <FinanceSubmission>[])
+        .fold<int>(0, (a, s) => a + (s.isIncome ? s.amount : -s.amount));
     return Theme(
       data: Lx.theme,
       child: Scaffold(
         appBar: AppBar(title: const Text('Menunggu Persetujuan')),
         body: _error != null
-            ? Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(_error!, style: Lx.body),
-                    TextButton(
-                        onPressed: _load, child: const Text('Coba lagi')),
-                  ],
-                ),
-              )
+            ? Center(child: BudgetRetry(_error!, onRetry: _load))
             : items == null
                 ? const Center(child: CircularProgressIndicator())
                 : RefreshIndicator(
                     onRefresh: _load,
                     child: ListView(
                       physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.all(Lx.s16),
+                      padding: const EdgeInsets.fromLTRB(
+                          Lx.s16, 0, Lx.s16, Lx.s24),
                       children: [
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: Lx.s12),
+                          child: Text(
+                              ku
+                                  ? 'Sebagai bendahara, Anda bisa menyetujui '
+                                      'atau menolak. Yang disetujui langsung '
+                                      'masuk saldo kas.'
+                                  : 'Pengajuan Anda masuk saldo setelah '
+                                      'disetujui bendahara. Anda bisa '
+                                      'membatalkan selama masih menunggu.',
+                              style: Lx.body),
+                        ),
                         if (items.isEmpty)
+                          const BudgetCard(
+                            child: BudgetEmpty(
+                              icon: Icons.task_alt_rounded,
+                              text: 'Tidak ada yang menunggu. Semua sudah '
+                                  'diputuskan.',
+                            ),
+                          )
+                        else ...[
                           Padding(
-                            padding: const EdgeInsets.only(top: 64),
-                            child: Center(
-                                child: Text('Tidak ada yang menunggu.',
-                                    style: Lx.body)),
+                            padding: const EdgeInsets.only(bottom: Lx.s8),
+                            child: Text(
+                                '${items.length} pengajuan · '
+                                'pengaruh ke saldo ${total < 0 ? '−' : '+'}${rp(total.abs())}',
+                                style: Lx.metadata.copyWith(
+                                    color: Lx.text,
+                                    fontWeight: FontWeight.w600)),
                           ),
-                        for (final s in items) _card(s, ku: ku, me: me),
+                          for (final s in items) _card(s, ku: ku, me: me),
+                        ],
                       ],
                     ),
                   ),
