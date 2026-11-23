@@ -32,7 +32,7 @@ class _SplashScreenState extends State<SplashScreen> {
         await StorageService.clearAll();
         context.go('/login');
       } else {
-        context.go('/home');
+        context.go('/dashboard');
       }
     } else {
       context.go('/login');
@@ -61,7 +61,7 @@ class _SplashScreenState extends State<SplashScreen> {
               ),
               SizedBox(height: 24),
               Text(
-                'Manage Budget & Log',
+                'Manage Balance & Log',
                 style: TextStyle(
                   fontSize: 32,
                   fontWeight: FontWeight.bold,

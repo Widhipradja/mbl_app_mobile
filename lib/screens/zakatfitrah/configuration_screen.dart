@@ -1,0 +1,2460 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../models/app_configuration.dart';
+import '../../models/zakat_external_master.dart';
+import '../../models/zakat_year.dart';
+import '../../providers/zakat_provider.dart';
+import '../../providers/configuration_provider.dart';
+import '../../services/api_service.dart';
+import '../../services/storage_service.dart';
+import 'distribution_config_screen.dart';
+import 'year_sync_dialog.dart';
+
+class ConfigurationScreen extends StatefulWidget {
+  const ConfigurationScreen({super.key});
+
+  @override
+  State<ConfigurationScreen> createState() => _ConfigurationScreenState();
+}
+
+class _ConfigurationScreenState extends State<ConfigurationScreen> {
+  static const _green = Color(0xFF066046);
+
+  final ApiService _api = ApiService();
+  final _distributionKey = GlobalKey<DistributionConfigSectionState>();
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+  bool _isLoadingAsnaf = false;
+  String? _asnafError;
+  String _lastObservedYearId = '';
+  List<_AsnafBobotItem> _asnafBobot = const [];
+
+  // Amil state
+  bool _isLoadingAmil = false;
+  String? _amilError;
+  List<_AmilItem> _amilList = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final zakat = context.read<ZakatProvider>();
+      if (zakat.externals.isEmpty && !zakat.isLoadingExternals) {
+        zakat.fetchExternals();
+      }
+      final provider = context.read<ConfigurationProvider>();
+      if (provider.configurations.isEmpty && !provider.isLoading) {
+        provider.fetchConfigurations(
+          module: ConfigurationProvider.moduleZakatFitrah,
+          yearId: _pickYearIdFromProvider(context.read<ZakatProvider>()),
+        );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  String? _pickYearIdFromProvider(ZakatProvider provider) {
+    final selectedId = provider.selectedYear?.id;
+    if (selectedId != null && selectedId.isNotEmpty) return selectedId;
+
+    if (provider.years.isEmpty) return null;
+
+    final active = provider.years.where((y) => y.isActive).toList();
+    final fallback = active.isNotEmpty ? active.first : provider.years.first;
+    return fallback.id;
+  }
+
+  Future<void> _openYearDialog({ZakatYear? initial}) async {
+    final zakatProvider = context.read<ZakatProvider>();
+    final isEdit = initial != null;
+
+    final hijriYearCtrl = TextEditingController(
+      text: initial != null ? initial.hijriYear.toString() : '1447',
+    );
+    final labelCtrl = TextEditingController(
+      text: initial?.label ?? 'Ramadhan 1447H',
+    );
+    final riceRateCtrl = TextEditingController(
+      text: initial != null
+          ? initial.riceRatePerSo
+              .toStringAsFixed(initial.riceRatePerSo % 1 == 0 ? 0 : 2)
+          : '45000',
+    );
+
+    // Parse initial dates if editing
+    DateTime? ramadhanStart = initial?.ramadhanStart.isNotEmpty == true
+        ? DateTime.tryParse(initial!.ramadhanStart)
+        : null;
+    DateTime? ramadhanEnd = initial?.ramadhanEnd.isNotEmpty == true
+        ? DateTime.tryParse(initial!.ramadhanEnd)
+        : null;
+    bool isActive = initial?.isActive ?? true;
+
+    // Fetch group lookup before opening dialog
+    List<Map<String, String>> groupOptions = [];
+    try {
+      final resp = await _api.getLookups('GROUP');
+      final raw = resp.data;
+      final list = raw is List
+          ? raw
+          : (raw is Map<String, dynamic>
+              ? (raw['data'] as List<dynamic>? ?? [])
+              : []);
+      groupOptions = list
+          .whereType<Map<String, dynamic>>()
+          .map((e) => {
+                'value': e['value']?.toString() ?? '',
+                'order': e['order']?.toString() ?? '99',
+              })
+          .where((e) => e['value']!.isNotEmpty)
+          .toList()
+        ..sort(
+            (a, b) => int.parse(a['order']!).compareTo(int.parse(b['order']!)));
+    } catch (_) {
+      // fallback: empty list, user can still proceed
+    }
+
+    final defaultGroup =
+        initial?.groupName ?? StorageService.getUser()?.groupName ?? '';
+    String? selectedGroupName =
+        groupOptions.any((g) => g['value'] == defaultGroup)
+            ? defaultGroup
+            : null;
+
+    String fmt(DateTime? d) => d != null
+        ? '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}'
+        : '';
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) {
+          // ignore: prefer_function_declarations_over_variables
+          final setActive = (bool v) => setLocal(() => isActive = v);
+          Widget datePicker({
+            required String label,
+            required DateTime? value,
+            required void Function(DateTime) onPicked,
+          }) {
+            return GestureDetector(
+              onTap: () async {
+                final picked = await showDatePicker(
+                  context: ctx,
+                  initialDate: value ?? DateTime(2025, 3, 1),
+                  firstDate: DateTime(2020),
+                  lastDate: DateTime(2035),
+                  builder: (ctx, child) => Theme(
+                    data: Theme.of(ctx).copyWith(
+                      colorScheme: const ColorScheme.light(
+                        primary: _green,
+                        onPrimary: Colors.white,
+                      ),
+                    ),
+                    child: child!,
+                  ),
+                );
+                if (picked != null) setLocal(() => onPicked(picked));
+              },
+              child: Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                decoration: BoxDecoration(
+                  border: Border.all(color: const Color(0xFFBDBDBD)),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        value != null ? fmt(value) : 'Pilih tanggal',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: value != null
+                              ? const Color(0xFF1A1A1A)
+                              : const Color(0xFF9E9E9E),
+                        ),
+                      ),
+                    ),
+                    const Icon(Icons.calendar_today, size: 18, color: _green),
+                  ],
+                ),
+              ),
+            );
+          }
+
+          return AlertDialog(
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            title:
+                Text(isEdit ? 'Edit Tahun Ramadhan' : 'Tambah Tahun Ramadhan'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _InputField(label: 'Hijri Year', controller: hijriYearCtrl),
+                  const SizedBox(height: 8),
+                  _InputField(label: 'Label', controller: labelCtrl),
+                  const SizedBox(height: 8),
+                  const Text('Ramadhan Start',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                  const SizedBox(height: 4),
+                  datePicker(
+                    label: 'Ramadhan Start',
+                    value: ramadhanStart,
+                    onPicked: (d) => ramadhanStart = d,
+                  ),
+                  const SizedBox(height: 8),
+                  const Text('Ramadhan End',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                  const SizedBox(height: 4),
+                  datePicker(
+                    label: 'Ramadhan End',
+                    value: ramadhanEnd,
+                    onPicked: (d) => ramadhanEnd = d,
+                  ),
+                  const SizedBox(height: 8),
+                  _InputField(
+                      label: 'Rice Rate per So (IDR)',
+                      controller: riceRateCtrl),
+                  const SizedBox(height: 8),
+                  // Group Name dropdown
+                  DropdownButtonFormField<String>(
+                    value: selectedGroupName,
+                    decoration: InputDecoration(
+                      labelText: 'Group Name',
+                      isDense: true,
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
+                    hint: const Text('Pilih group'),
+                    isExpanded: true,
+                    items: groupOptions
+                        .map((g) => DropdownMenuItem<String>(
+                              value: g['value'],
+                              child: Text(g['value']!),
+                            ))
+                        .toList(),
+                    onChanged: (v) => setLocal(() => selectedGroupName = v),
+                  ),
+                  const SizedBox(height: 4),
+                  // Is Active toggle
+                  SwitchListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Aktif', style: TextStyle(fontSize: 13)),
+                    value: isActive,
+                    activeColor: _green,
+                    onChanged: setActive,
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Batal'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  final hijriYear = int.tryParse(hijriYearCtrl.text.trim());
+                  if (hijriYear == null || labelCtrl.text.trim().isEmpty) {
+                    return;
+                  }
+
+                  final payload = <String, dynamic>{
+                    'hijri_year': hijriYear,
+                    'label': labelCtrl.text.trim(),
+                    'ramadhan_start':
+                        ramadhanStart != null ? fmt(ramadhanStart) : null,
+                    'ramadhan_end':
+                        ramadhanEnd != null ? fmt(ramadhanEnd) : null,
+                    'rice_rate_per_so': riceRateCtrl.text.trim(),
+                    'group_name': selectedGroupName ?? '',
+                    'is_active': isActive,
+                  };
+
+                  final ok = isEdit
+                      ? await zakatProvider.updateYear(initial.id, payload)
+                      : await zakatProvider.createYear(payload);
+
+                  if (ctx.mounted) Navigator.pop(ctx, ok);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _green,
+                  foregroundColor: Colors.white,
+                ),
+                child: Text(isEdit ? 'Simpan' : 'Tambah'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    if (saved == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isEdit
+                ? 'Tahun Ramadhan berhasil diubah'
+                : 'Tahun Ramadhan berhasil ditambah',
+          ),
+          backgroundColor: _green,
+        ),
+      );
+    }
+  }
+
+  Future<void> _loadAsnafBobot() async {
+    final yearId = _pickYearIdFromProvider(context.read<ZakatProvider>());
+    if (yearId == null || yearId.isEmpty) {
+      setState(() {
+        _asnafBobot = const [];
+        _asnafError = 'Tahun zakat belum dipilih.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoadingAsnaf = true;
+      _asnafError = null;
+    });
+
+    try {
+      final response = await _api.getZakatAsnafBobot(yearId: yearId);
+      final rows = _extractList(response.data)
+          .map(
+            (raw) => _AsnafBobotItem(
+              id: raw['id']?.toString() ?? raw['oid']?.toString() ?? '',
+              yearId: raw['year_id']?.toString() ?? yearId,
+              asnafType:
+                  _normalizeAsnafType(raw['asnaf_type']?.toString() ?? ''),
+              bobot: _parseDouble(raw['bobot'], fallback: 1),
+              notes: raw['notes']?.toString() ?? '',
+            ),
+          )
+          .where((item) => item.id.isNotEmpty && item.asnafType.isNotEmpty)
+          .toList()
+        ..sort((a, b) => a.label.compareTo(b.label));
+
+      if (!mounted) return;
+      setState(() {
+        _asnafBobot = rows;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _asnafError = 'Gagal memuat data Asnaf & Bobot.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingAsnaf = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadAmil() async {
+    final yearId = _pickYearIdFromProvider(context.read<ZakatProvider>());
+    setState(() {
+      // Drop the previous year's amil so they never show under the new year.
+      _amilList = [];
+      _isLoadingAmil = true;
+      _amilError = null;
+    });
+    try {
+      final response = await _api.getZakatAmilList(
+        yearId: (yearId != null && yearId.isNotEmpty) ? yearId : null,
+      );
+      final rows = _extractList(response.data)
+          .map(
+            (raw) => _AmilItem(
+              id: raw['id']?.toString() ?? '',
+              yearId: raw['year_id']?.toString() ?? '',
+              name: raw['name']?.toString() ?? '',
+              groupName: raw['group_name']?.toString() ?? '',
+              notes: raw['notes']?.toString() ?? '',
+              isActive: raw['is_active'] == true,
+            ),
+          )
+          // Safety net in case the API ignores `year_id`.
+          .where((item) =>
+              item.id.isNotEmpty &&
+              (yearId == null || item.yearId.isEmpty || item.yearId == yearId))
+          .toList()
+        ..sort((a, b) => a.name.compareTo(b.name));
+      if (!mounted) return;
+      // Ignore a slow response if the selected year changed meanwhile.
+      if (yearId != _pickYearIdFromProvider(context.read<ZakatProvider>())) {
+        return;
+      }
+      setState(() => _amilList = rows);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _amilError = 'Gagal memuat data Amil.');
+    } finally {
+      if (mounted) setState(() => _isLoadingAmil = false);
+    }
+  }
+
+  Future<void> _openYearSync(ZakatProvider zp) async {
+    final target = zp.selectedYear;
+    if (target == null) return;
+    final ran = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => YearSyncDialog(
+        target: target,
+        years: zp.years,
+        primaryColor: _green,
+      ),
+    );
+    if (ran != true || !mounted) return;
+    // Everything copied is year-scoped, so refresh what this screen shows.
+    await zp.fetchYears();
+    if (!mounted) return;
+    await Future.wait([
+      zp.fetchMuzakki(),
+      zp.fetchMustahiqAsnafSummary(),
+      _loadAsnafBobot(),
+      _loadAmil(),
+      _distributionKey.currentState?.reload() ?? Future.value(),
+    ]);
+  }
+
+  Future<void> _openExternalDialog({ExternalMaster? initial}) async {
+    final provider = context.read<ZakatProvider>();
+    final isEdit = initial != null;
+    final payload = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (ctx) => _ExternalDialog(
+        initial: initial,
+        primaryButtonStyle: ElevatedButton.styleFrom(
+          backgroundColor: _green,
+          foregroundColor: Colors.white,
+        ),
+      ),
+    );
+    if (payload == null) return;
+
+    final ok = await provider.saveExternal(payload, id: initial?.id);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          ok
+              ? (isEdit
+                  ? 'Eksternal berhasil diubah'
+                  : 'Eksternal berhasil ditambah')
+              : (provider.externalActionError ?? 'Gagal menyimpan Eksternal.'),
+        ),
+        backgroundColor: ok ? _green : null,
+      ),
+    );
+  }
+
+  Future<void> _confirmDeleteExternal(ExternalMaster item) async {
+    final provider = context.read<ZakatProvider>();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Hapus Eksternal'),
+        content: Text(
+          'Hapus "${item.name}"? Jika sudah dipakai muzakki, lebih aman '
+          'dinonaktifkan lewat Edit.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final deleted = await provider.deleteExternal(item.id);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(deleted
+            ? 'Eksternal berhasil dihapus'
+            : (provider.externalActionError ?? 'Gagal menghapus Eksternal.')),
+      ),
+    );
+  }
+
+  Future<void> _openAmilDialog({_AmilItem? initial}) async {
+    final yearId = _pickYearIdFromProvider(context.read<ZakatProvider>());
+    if (yearId == null || yearId.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tahun zakat belum dipilih.')),
+      );
+      return;
+    }
+
+    final isEdit = initial != null;
+    final payload = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (ctx) => _AmilDialog(
+        initial: initial,
+        yearId: yearId,
+        primaryButtonStyle: ElevatedButton.styleFrom(
+          backgroundColor: _green,
+          foregroundColor: Colors.white,
+        ),
+      ),
+    );
+
+    if (payload == null) return;
+
+    try {
+      if (isEdit) {
+        await _api.updateZakatAmil(initial.id, payload);
+      } else {
+        await _api.createZakatAmil(payload);
+      }
+      await _loadAmil();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content:
+              Text(isEdit ? 'Amil berhasil diubah' : 'Amil berhasil ditambah'),
+          backgroundColor: _green,
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Gagal menyimpan Amil.')),
+      );
+    }
+  }
+
+  Future<bool> _confirmDeleteAmil(_AmilItem item) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Hapus Amil'),
+        content: Text('Hapus amil "${item.name}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return false;
+    try {
+      await _api.deleteZakatAmil(item.id);
+      await _loadAmil();
+      if (!mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Amil berhasil dihapus')),
+      );
+      return true;
+    } catch (_) {
+      if (!mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Gagal menghapus Amil.')),
+      );
+      return false;
+    }
+  }
+
+  Future<void> _openConfigDialog({AppConfiguration? initial}) async {
+    final provider = context.read<ConfigurationProvider>();
+    final year = context.read<ZakatProvider>().selectedYear;
+    final yearId = year?.id ?? '';
+
+    // A global value of a per-year code is never edited in place: saving it
+    // creates this year's own value and leaves the other years untouched.
+    final isOverride = initial != null &&
+        initial.isGlobal &&
+        ConfigurationProvider.perYearCodes.contains(initial.code) &&
+        yearId.isNotEmpty;
+    final isEdit = initial != null && !isOverride;
+    final codeCtrl = TextEditingController(text: initial?.code ?? '');
+    final descCtrl = TextEditingController(text: initial?.description ?? '');
+    final valueCtrl = TextEditingController(text: initial?.value ?? '');
+    final dataTypeCtrl =
+        TextEditingController(text: initial?.dataType ?? 'string');
+    bool isActive = initial?.isActive ?? true;
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setLocal) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+              title:
+                  Text(isEdit ? 'Edit Configuration' : 'Tambah Configuration'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Module: ZAKATFITRAH',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF334155),
+                            ),
+                          ),
+                          if (ConfigurationProvider.perYearCodes
+                                  .contains(codeCtrl.text.trim()) &&
+                              year != null)
+                            Text(
+                              'Berlaku untuk: ${year.label}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF066046),
+                              ),
+                            )
+                          else
+                            const Text(
+                              'Berlaku untuk semua tahun',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF64748B),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _InputField(
+                      label: 'Code',
+                      controller: codeCtrl,
+                      onChanged: (_) => setLocal(() {}),
+                    ),
+                    const SizedBox(height: 8),
+                    _InputField(label: 'Description', controller: descCtrl),
+                    const SizedBox(height: 8),
+                    _InputField(label: 'Value', controller: valueCtrl),
+                    const SizedBox(height: 8),
+                    _InputField(label: 'Data Type', controller: dataTypeCtrl),
+                    const SizedBox(height: 8),
+                    SwitchListTile.adaptive(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      value: isActive,
+                      activeColor: _green,
+                      onChanged: (v) => setLocal(() => isActive = v),
+                      title: const Text('Is Active'),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Batal'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    if (codeCtrl.text.trim().isEmpty ||
+                        dataTypeCtrl.text.trim().isEmpty) {
+                      return;
+                    }
+
+                    final code = codeCtrl.text.trim();
+                    final perYear =
+                        ConfigurationProvider.perYearCodes.contains(code) &&
+                            yearId.isNotEmpty;
+                    final payload = AppConfiguration(
+                      oid: isEdit ? initial.oid : '',
+                      module: ConfigurationProvider.moduleZakatFitrah,
+                      code: code,
+                      // Per-year codes always belong to the selected year;
+                      // an existing row keeps the year it has.
+                      yearId: isEdit ? initial.yearId : (perYear ? yearId : ''),
+                      description: descCtrl.text.trim(),
+                      value: valueCtrl.text,
+                      dataType: dataTypeCtrl.text.trim(),
+                      isActive: isActive,
+                    );
+
+                    final ok = isEdit
+                        ? await provider.updateConfiguration(payload)
+                        : await provider.createConfiguration(payload);
+                    if (ctx.mounted) Navigator.pop(ctx, ok);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _green,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: Text(isEdit ? 'Simpan' : 'Tambah'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (saved == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isEdit
+                ? 'Configuration berhasil diubah'
+                : 'Configuration berhasil ditambah',
+          ),
+          backgroundColor: _green,
+        ),
+      );
+    }
+  }
+
+  Future<void> _openAsnafDialog({_AsnafBobotItem? initial}) async {
+    final yearId = _pickYearIdFromProvider(context.read<ZakatProvider>());
+    if (yearId == null || yearId.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tahun zakat belum dipilih.')),
+      );
+      return;
+    }
+
+    final isEdit = initial != null;
+    var asnafType = initial?.asnafType ?? '';
+    var bobotText = (initial?.bobot ?? 1)
+        .toStringAsFixed(((initial?.bobot ?? 1) % 1 == 0) ? 0 : 2);
+    var notes = initial?.notes ?? '';
+
+    final payload = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(isEdit ? 'Edit Asnaf & Bobot' : 'Tambah Asnaf & Bobot'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextFormField(
+              initialValue: asnafType,
+              enabled: !isEdit,
+              onChanged: (value) => asnafType = value,
+              decoration: const InputDecoration(
+                labelText: 'Asnaf Type',
+                hintText: 'Contoh: fakir',
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextFormField(
+              initialValue: bobotText,
+              onChanged: (value) => bobotText = value,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(labelText: 'Bobot'),
+            ),
+            const SizedBox(height: 10),
+            TextFormField(
+              initialValue: notes,
+              onChanged: (value) => notes = value,
+              decoration: const InputDecoration(labelText: 'Notes'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Batal'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final normalizedType = _normalizeAsnafType(asnafType);
+              final bobot = double.tryParse(bobotText.trim());
+              if (normalizedType.isEmpty ||
+                  bobot == null ||
+                  bobot < 0 ||
+                  bobot > 100) {
+                return;
+              }
+
+              final exists = _asnafBobot.any(
+                (row) =>
+                    row.asnafType == normalizedType && row.id != initial?.id,
+              );
+              if (exists) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Asnaf type sudah ada.')),
+                );
+                return;
+              }
+
+              Navigator.pop(ctx, {
+                'year_id': yearId,
+                'asnaf_type': normalizedType,
+                'bobot': bobot,
+                'notes': notes.trim(),
+              });
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _green,
+              foregroundColor: Colors.white,
+            ),
+            child: Text(isEdit ? 'Simpan' : 'Tambah'),
+          ),
+        ],
+      ),
+    );
+
+    if (payload == null) return;
+
+    try {
+      if (isEdit) {
+        await _api.updateZakatAsnafBobot(initial.id, payload);
+      } else {
+        await _api.createZakatAsnafBobot(payload);
+      }
+      await _loadAsnafBobot();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isEdit
+                ? 'Asnaf & Bobot berhasil diubah'
+                : 'Asnaf & Bobot berhasil ditambah',
+          ),
+          backgroundColor: _green,
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Gagal menyimpan Asnaf & Bobot.')),
+      );
+    }
+  }
+
+  Future<bool> _confirmDelete(AppConfiguration item) async {
+    final provider = context.read<ConfigurationProvider>();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Hapus Configuration'),
+        content: Text('Hapus ${item.module}.${item.code}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok != true) return false;
+
+    final deleted = await provider.deleteConfiguration(item.oid);
+    if (mounted && deleted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Configuration berhasil dihapus')),
+      );
+    }
+    return deleted;
+  }
+
+  Future<bool> _confirmDeleteAsnaf(_AsnafBobotItem item) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Hapus Asnaf & Bobot'),
+        content: Text('Hapus ${item.label}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok != true) return false;
+
+    try {
+      await _api.deleteZakatAsnafBobot(item.id);
+      await _loadAsnafBobot();
+      if (!mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Asnaf & Bobot berhasil dihapus')),
+      );
+      return true;
+    } catch (_) {
+      if (!mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Gagal menghapus Asnaf & Bobot.')),
+      );
+      return false;
+    }
+  }
+
+  List<Map<String, dynamic>> _extractList(dynamic raw) {
+    dynamic source = raw;
+    if (raw is Map<String, dynamic> && raw['data'] != null) {
+      source = raw['data'];
+    }
+
+    if (source is List) {
+      return source.whereType<Map<String, dynamic>>().toList();
+    }
+    if (source is Map<String, dynamic>) return [source];
+    return const [];
+  }
+
+  double _parseDouble(dynamic raw, {required double fallback}) {
+    final parsed = double.tryParse(raw?.toString() ?? '');
+    return parsed ?? fallback;
+  }
+
+  String _normalizeAsnafType(String value) => value.trim().toLowerCase();
+
+  Widget _swipeBackground({
+    required Alignment alignment,
+    required Color color,
+    required IconData icon,
+    required String label,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      alignment: alignment,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisAlignment: alignment == Alignment.centerLeft
+            ? MainAxisAlignment.start
+            : MainAxisAlignment.end,
+        children: [
+          if (alignment == Alignment.centerRight)
+            Text(label,
+                style: const TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.w600)),
+          const SizedBox(width: 8),
+          Icon(icon, color: Colors.white, size: 18),
+          if (alignment == Alignment.centerLeft) const SizedBox(width: 8),
+          if (alignment == Alignment.centerLeft)
+            Text(label,
+                style: const TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionBadge(String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE8F5F0),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          color: Color(0xFF066046),
+          letterSpacing: 0.4,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<ConfigurationProvider>(
+      builder: (context, provider, _) {
+        final selectedYearId =
+            context.watch<ZakatProvider>().selectedYear?.id ?? '';
+        if (selectedYearId != _lastObservedYearId) {
+          _lastObservedYearId = selectedYearId;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            _loadAsnafBobot();
+            _loadAmil();
+            context.read<ConfigurationProvider>().fetchConfigurations(
+                  module: ConfigurationProvider.moduleZakatFitrah,
+                  yearId: selectedYearId,
+                );
+          });
+        }
+
+        final query = _searchQuery.toLowerCase();
+        final items = provider.configurations.where((c) {
+          if (query.isEmpty) return true;
+          return c.module.toLowerCase().contains(query) ||
+              c.code.toLowerCase().contains(query) ||
+              c.description.toLowerCase().contains(query) ||
+              c.value.toLowerCase().contains(query);
+        }).toList();
+
+        // Build the config list slivers depending on state
+        final Widget listSliver;
+        if (provider.isLoading) {
+          listSliver = const SliverFillRemaining(
+            hasScrollBody: false,
+            child: Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 48),
+                child: CircularProgressIndicator(color: _green),
+              ),
+            ),
+          );
+        } else if (items.isEmpty) {
+          listSliver = const SliverFillRemaining(
+            hasScrollBody: false,
+            child: Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 48),
+                child: Text(
+                  'Belum ada data configuration',
+                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                ),
+              ),
+            ),
+          );
+        } else {
+          listSliver = SliverPadding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 84),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final item = items[index];
+                  return Padding(
+                    padding: EdgeInsets.only(
+                        bottom: index < items.length - 1 ? 6 : 0),
+                    child: Dismissible(
+                      key: ValueKey('cfg-${item.oid}'),
+                      background: _swipeBackground(
+                        alignment: Alignment.centerLeft,
+                        color: const Color(0xFF059669),
+                        icon: Icons.edit_outlined,
+                        label: 'Edit',
+                      ),
+                      secondaryBackground: _swipeBackground(
+                        alignment: Alignment.centerRight,
+                        color: const Color(0xFFDC2626),
+                        icon: Icons.delete_outline,
+                        label: 'Hapus',
+                      ),
+                      confirmDismiss: (direction) async {
+                        if (direction == DismissDirection.startToEnd) {
+                          await _openConfigDialog(initial: item);
+                          return false;
+                        }
+                        return _confirmDelete(item);
+                      },
+                      child: _ConfigurationTile(item: item),
+                    ),
+                  );
+                },
+                childCount: items.length,
+              ),
+            ),
+          );
+        }
+
+        return RefreshIndicator(
+          color: _green,
+          onRefresh: () async {
+            await Future.wait([
+              provider.fetchConfigurations(
+                module: ConfigurationProvider.moduleZakatFitrah,
+                yearId: selectedYearId,
+              ),
+              _loadAsnafBobot(),
+              _loadAmil(),
+              context.read<ZakatProvider>().fetchExternals(),
+              _distributionKey.currentState?.reload() ?? Future.value(),
+            ]);
+          },
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              // ── Header sections ──────────────────────────────────────────
+              SliverToBoxAdapter(
+                child: Container(
+                  color: Colors.white,
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
+                  child: Column(
+                    children: [
+                      // TAHUN RAMADHAN section
+                      Consumer<ZakatProvider>(
+                        builder: (context, zakatProvider, _) {
+                          final selectedYear = zakatProvider.selectedYear;
+                          return Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(12),
+                              border:
+                                  Border.all(color: const Color(0xFFE2E8F0)),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _sectionBadge('TAHUN RAMADHAN'),
+                                const SizedBox(height: 6),
+                                Row(
+                                  children: [
+                                    const Expanded(
+                                      child: Text(
+                                        'Konfigurasi Tahun Zakat Fitrah',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFF1A1A1A),
+                                        ),
+                                      ),
+                                    ),
+                                    ElevatedButton.icon(
+                                      onPressed: _openYearDialog,
+                                      icon: const Icon(Icons.add, size: 16),
+                                      label: const Text('Tambah Tahun'),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: _green,
+                                        foregroundColor: Colors.white,
+                                        visualDensity: VisualDensity.compact,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                const Text(
+                                  'Menampilkan tahun yang dipilih di pojok kanan atas.',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Color(0xFF64748B),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                if (zakatProvider.isLoadingYears)
+                                  const Center(
+                                    child: Padding(
+                                      padding:
+                                          EdgeInsets.symmetric(vertical: 6),
+                                      child: SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                            strokeWidth: 2),
+                                      ),
+                                    ),
+                                  )
+                                else if (selectedYear == null)
+                                  const Text(
+                                    'Belum ada tahun zakat yang dipilih',
+                                    style: TextStyle(
+                                      color: Color(0xFF94A3B8),
+                                      fontSize: 12,
+                                    ),
+                                  )
+                                else
+                                  _YearDetailCard(
+                                    year: selectedYear,
+                                    onEdit: () =>
+                                        _openYearDialog(initial: selectedYear),
+                                  ),
+                                if (zakatProvider.yearsError != null) ...[
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    zakatProvider.yearsError!,
+                                    style: const TextStyle(
+                                      color: Color(0xFFDC2626),
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      // SYNC FROM PREVIOUS YEAR
+                      Consumer<ZakatProvider>(
+                        builder: (context, zp, _) => Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Salin dari Tahun Sebelumnya',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF1A1A1A),
+                                      ),
+                                    ),
+                                    SizedBox(height: 2),
+                                    Text(
+                                      'Muzakki, mustahiq, asnaf & bobot, amil, '
+                                      'distribusi, dan konfigurasi — tinggal revisi.',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Color(0xFF64748B),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              OutlinedButton.icon(
+                                onPressed: zp.selectedYear == null
+                                    ? null
+                                    : () => _openYearSync(zp),
+                                icon: const Icon(Icons.content_copy, size: 16),
+                                label: const Text('Salin'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: _green,
+                                  minimumSize: const Size(0, 44),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _sectionBadge('MASTER ASNAF & BOBOT'),
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                const Expanded(
+                                  child: Text(
+                                    'Asnaf & Bobot',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF1A1A1A),
+                                    ),
+                                  ),
+                                ),
+                                ElevatedButton.icon(
+                                  onPressed: _openAsnafDialog,
+                                  icon: const Icon(Icons.add, size: 16),
+                                  label: const Text('Tambah Asnaf'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: _green,
+                                    foregroundColor: Colors.white,
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'Swipe kanan untuk Edit, swipe kiri untuk Hapus.',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF64748B),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            if (_isLoadingAsnaf)
+                              const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 6),
+                                  child: SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
+                                  ),
+                                ),
+                              )
+                            else if (_asnafBobot.isEmpty)
+                              const Text(
+                                'Belum ada data Asnaf & Bobot',
+                                style: TextStyle(
+                                  color: Color(0xFF94A3B8),
+                                  fontSize: 12,
+                                ),
+                              )
+                            else
+                              Column(
+                                children: _asnafBobot.map((item) {
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 6),
+                                    child: _AsnafBobotTile(
+                                      item: item,
+                                      onEdit: () =>
+                                          _openAsnafDialog(initial: item),
+                                      onDelete: () => _confirmDeleteAsnaf(item),
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            if (_asnafError != null) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                _asnafError!,
+                                style: const TextStyle(
+                                  color: Color(0xFFDC2626),
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      // MASTER AMIL section
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _sectionBadge('MASTER AMIL'),
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                const Expanded(
+                                  child: Text(
+                                    'Daftar Amil',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF1A1A1A),
+                                    ),
+                                  ),
+                                ),
+                                ElevatedButton.icon(
+                                  onPressed: _openAmilDialog,
+                                  icon: const Icon(Icons.add, size: 16),
+                                  label: const Text('Tambah Amil'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: _green,
+                                    foregroundColor: Colors.white,
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Amil untuk ${context.watch<ZakatProvider>().selectedYear?.label ?? 'tahun terpilih'}. '
+                              'Swipe kanan untuk Edit, swipe kiri untuk Hapus.',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF64748B),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            if (_isLoadingAmil)
+                              const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 6),
+                                  child: SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
+                                  ),
+                                ),
+                              )
+                            else if (_amilList.isEmpty)
+                              const Text(
+                                'Belum ada data Amil',
+                                style: TextStyle(
+                                  color: Color(0xFF94A3B8),
+                                  fontSize: 12,
+                                ),
+                              )
+                            else
+                              Column(
+                                children: _amilList.map((item) {
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 6),
+                                    child: _AmilTile(
+                                      item: item,
+                                      onEdit: () =>
+                                          _openAmilDialog(initial: item),
+                                      onDelete: () => _confirmDeleteAmil(item),
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            if (_amilError != null) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                _amilError!,
+                                style: const TextStyle(
+                                  color: Color(0xFFDC2626),
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      // MASTER EKSTERNAL section (global, not per year)
+                      Consumer<ZakatProvider>(
+                        builder: (context, zakat, _) => Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _sectionBadge('MASTER EKSTERNAL'),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  const Expanded(
+                                    child: Text(
+                                      'Daftar Eksternal / Afiliasi',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF1A1A1A),
+                                      ),
+                                    ),
+                                  ),
+                                  ElevatedButton.icon(
+                                    onPressed: _openExternalDialog,
+                                    icon: const Icon(Icons.add, size: 16),
+                                    label: const Text('Tambah'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: _green,
+                                      foregroundColor: Colors.white,
+                                      visualDensity: VisualDensity.compact,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              const Text(
+                                'Berlaku untuk semua tahun. Dipilih di data muzakki '
+                                'dan pembayaran jiwa non-terdaftar.',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Color(0xFF64748B),
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              if (zakat.isLoadingExternals)
+                                const Center(
+                                  child: Padding(
+                                    padding: EdgeInsets.symmetric(vertical: 6),
+                                    child: SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2),
+                                    ),
+                                  ),
+                                )
+                              else if (zakat.externals.isEmpty)
+                                const Text(
+                                  'Belum ada data Eksternal',
+                                  style: TextStyle(
+                                    color: Color(0xFF94A3B8),
+                                    fontSize: 12,
+                                  ),
+                                )
+                              else
+                                Column(
+                                  children: zakat.externals.map((item) {
+                                    return Padding(
+                                      padding: const EdgeInsets.only(bottom: 6),
+                                      child: _ExternalTile(
+                                        item: item,
+                                        onEdit: () =>
+                                            _openExternalDialog(initial: item),
+                                        onDelete: () =>
+                                            _confirmDeleteExternal(item),
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                              if (zakat.externalsError != null) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  zakat.externalsError!,
+                                  style: const TextStyle(
+                                    color: Color(0xFFDC2626),
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      // DISTRIBUTION section
+                      DistributionConfigSection(key: _distributionKey),
+                      const SizedBox(height: 8),
+                      // MODULE CONFIGURATION section
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _sectionBadge('MODULE CONFIGURATION'),
+                            const SizedBox(height: 6),
+                            const Text(
+                              'Configuration ZAKATFITRAH',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF1A1A1A),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'Swipe kanan untuk Edit, swipe kiri untuk Hapus.',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF64748B),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    controller: _searchController,
+                                    onChanged: (v) =>
+                                        setState(() => _searchQuery = v),
+                                    decoration: InputDecoration(
+                                      hintText: 'Cari module, code, value…',
+                                      isDense: true,
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 10,
+                                      ),
+                                      prefixIcon: const Icon(Icons.search),
+                                      filled: true,
+                                      fillColor: const Color(0xFFF4F7F6),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                        borderSide: BorderSide.none,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                ElevatedButton.icon(
+                                  onPressed: () => _openConfigDialog(),
+                                  icon: const Icon(Icons.add, size: 18),
+                                  label: const Text('Tambah'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: _green,
+                                    foregroundColor: Colors.white,
+                                    minimumSize: const Size(0, 48),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (provider.errorMessage != null) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                provider.errorMessage!,
+                                style: const TextStyle(
+                                  color: Color(0xFFDC2626),
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                    ],
+                  ),
+                ),
+              ),
+              // ── Config list / loading / empty ─────────────────────────────
+              listSliver,
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+typedef ConfigurationBody = ConfigurationScreen;
+
+class _ConfigurationTile extends StatelessWidget {
+  const _ConfigurationTile({required this.item});
+
+  final AppConfiguration item;
+
+  @override
+  Widget build(BuildContext context) {
+    final activeColor =
+        item.isActive ? const Color(0xFF16A34A) : const Color(0xFFDC2626);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: ListTile(
+        dense: true,
+        visualDensity: const VisualDensity(vertical: -2),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+        title: Text(
+          item.code,
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+        ),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (item.description.isNotEmpty)
+                Text(
+                  item.description,
+                  style:
+                      const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              const SizedBox(height: 4),
+              Text(
+                'Value: ${item.value.isEmpty ? '-' : item.value}',
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: Color(0xFF0F172A),
+                  fontWeight: FontWeight.w600,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Type: ${item.dataType}',
+                style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+              ),
+              if (ConfigurationProvider.perYearCodes.contains(item.code)) ...[
+                const SizedBox(height: 4),
+                Text(
+                  item.isGlobal
+                      ? 'Belum diatur untuk tahun ini — memakai nilai umum. '
+                          'Geser kanan untuk membuat nilai tahun ini.'
+                      : 'Khusus tahun ini',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: item.isGlobal
+                        ? const Color(0xFF8A5A0B)
+                        : const Color(0xFF066046),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        trailing: Wrap(
+          spacing: 4,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+              decoration: BoxDecoration(
+                color: activeColor.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                item.isActive ? 'Active' : 'Inactive',
+                style: TextStyle(
+                  color: activeColor,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AsnafBobotTile extends StatelessWidget {
+  const _AsnafBobotTile({
+    required this.item,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final _AsnafBobotItem item;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.label,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                ),
+                if (item.notes.trim().isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      item.notes,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF64748B),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              'Bobot ${item.bobot.toStringAsFixed(item.bobot % 1 == 0 ? 0 : 2)}',
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF0F172A),
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+          // ── Action buttons
+          Tooltip(
+            message: 'Edit',
+            child: InkWell(
+              onTap: onEdit,
+              borderRadius: BorderRadius.circular(6),
+              child: const Padding(
+                padding: EdgeInsets.all(5),
+                child: Icon(Icons.edit_outlined,
+                    size: 16, color: Color(0xFF0EA5E9)),
+              ),
+            ),
+          ),
+          Tooltip(
+            message: 'Hapus',
+            child: InkWell(
+              onTap: onDelete,
+              borderRadius: BorderRadius.circular(6),
+              child: const Padding(
+                padding: EdgeInsets.all(5),
+                child: Icon(Icons.delete_outline,
+                    size: 16, color: Color(0xFFDC2626)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _YearDetailCard extends StatelessWidget {
+  const _YearDetailCard({required this.year, required this.onEdit});
+
+  final ZakatYear year;
+  final VoidCallback onEdit;
+
+  static const _green = Color(0xFF066046);
+
+  Widget _row(String label, String value, {Widget? trailing}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value.isNotEmpty ? value : '-',
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1A1A1A),
+              ),
+            ),
+          ),
+          if (trailing != null) trailing,
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final activeColor =
+        year.isActive ? const Color(0xFF16A34A) : const Color(0xFFDC2626);
+    final riceRate =
+        year.riceRatePerSo.toStringAsFixed(year.riceRatePerSo % 1 == 0 ? 0 : 2);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _row('Hijri Year', year.hijriYear.toString()),
+          _row('Label', year.label),
+          _row('Ramadhan Start', year.ramadhanStart),
+          _row('Ramadhan End', year.ramadhanEnd),
+          _row('Rice Rate per So', 'Rp $riceRate'),
+          _row('Group Name', year.groupName),
+          _row(
+            'Status',
+            '',
+            trailing: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: activeColor.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                year.isActive ? 'Aktif' : 'Tidak aktif',
+                style: TextStyle(
+                  color: activeColor,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: onEdit,
+              icon: const Icon(Icons.edit_outlined, size: 16),
+              label: const Text('Edit Tahun'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _green,
+                side: const BorderSide(color: _green),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InputField extends StatelessWidget {
+  const _InputField({
+    required this.label,
+    required this.controller,
+    this.onChanged,
+  });
+
+  final String label;
+  final TextEditingController controller;
+  final ValueChanged<String>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      onChanged: onChanged,
+      decoration: InputDecoration(
+        labelText: label,
+        isDense: true,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+}
+
+class _AsnafBobotItem {
+  const _AsnafBobotItem({
+    required this.id,
+    required this.yearId,
+    required this.asnafType,
+    required this.bobot,
+    required this.notes,
+  });
+
+  final String id;
+  final String yearId;
+  final String asnafType;
+  final double bobot;
+  final String notes;
+
+  String get label {
+    return asnafType
+        .split('_')
+        .where((part) => part.trim().isNotEmpty)
+        .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
+        .join(' ');
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Amil model
+// ─────────────────────────────────────────────────────────────────────────────
+class _AmilItem {
+  const _AmilItem({
+    required this.id,
+    required this.yearId,
+    required this.name,
+    required this.groupName,
+    required this.notes,
+    required this.isActive,
+  });
+
+  final String id;
+  final String yearId;
+  final String name;
+  final String groupName;
+  final String notes;
+  final bool isActive;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Amil Tile
+// ─────────────────────────────────────────────────────────────────────────────
+class _AmilTile extends StatelessWidget {
+  const _AmilTile({
+    required this.item,
+    required this.onEdit,
+    required this.onDelete,
+  });
+  final _AmilItem item;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: item.isActive
+                  ? const Color(0xFFE8F5F0)
+                  : const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Icon(
+              Icons.person_rounded,
+              size: 20,
+              color: item.isActive
+                  ? const Color(0xFF066046)
+                  : const Color(0xFF94A3B8),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        item.name,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1A1A1A),
+                        ),
+                      ),
+                    ),
+                    if (!item.isActive)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF3C7),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Text(
+                          'Nonaktif',
+                          style:
+                              TextStyle(fontSize: 10, color: Color(0xFF92400E)),
+                        ),
+                      ),
+                  ],
+                ),
+                if (item.groupName.isNotEmpty)
+                  Text(
+                    item.groupName,
+                    style:
+                        const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                  ),
+                if (item.notes.isNotEmpty)
+                  Text(
+                    item.notes,
+                    style:
+                        const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                  ),
+              ],
+            ),
+          ),
+          // ── Action buttons ──────────────────────────────────────────────
+          Tooltip(
+            message: 'Edit',
+            child: InkWell(
+              onTap: onEdit,
+              borderRadius: BorderRadius.circular(6),
+              child: const Padding(
+                padding: EdgeInsets.all(6),
+                child: Icon(Icons.edit_outlined,
+                    size: 16, color: Color(0xFF0EA5E9)),
+              ),
+            ),
+          ),
+          Tooltip(
+            message: 'Hapus',
+            child: InkWell(
+              onTap: onDelete,
+              borderRadius: BorderRadius.circular(6),
+              child: const Padding(
+                padding: EdgeInsets.all(6),
+                child: Icon(Icons.delete_outline,
+                    size: 16, color: Color(0xFFDC2626)),
+              ),
+            ),
+          ),
+          const SizedBox(width: 2),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Amil Dialog (StatefulWidget — owns controllers, disposes them via lifecycle)
+// ─────────────────────────────────────────────────────────────────────────────
+class _AmilDialog extends StatefulWidget {
+  const _AmilDialog({
+    required this.yearId,
+    required this.primaryButtonStyle,
+    this.initial,
+  });
+
+  final _AmilItem? initial;
+  final String yearId;
+  final ButtonStyle primaryButtonStyle;
+
+  @override
+  State<_AmilDialog> createState() => _AmilDialogState();
+}
+
+class _AmilDialogState extends State<_AmilDialog> {
+  late final TextEditingController _nameCtrl;
+  // late final TextEditingController _groupNameCtrl;
+  late final TextEditingController _notesCtrl;
+  late bool _isActive;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameCtrl = TextEditingController(text: widget.initial?.name ?? '');
+    // _groupNameCtrl = TextEditingController(text: widget.initial?.groupName ?? '');
+    _notesCtrl = TextEditingController(text: widget.initial?.notes ?? '');
+    _isActive = widget.initial?.isActive ?? true;
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    // _groupNameCtrl.dispose();
+    _notesCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEdit = widget.initial != null;
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      title: Text(isEdit ? 'Edit Amil' : 'Tambah Amil'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _nameCtrl,
+              maxLength: 50,
+              decoration: const InputDecoration(
+                labelText: 'Nama',
+                hintText: 'Nama amil',
+              ),
+            ),
+            // const SizedBox(height: 10),
+            // TextField(
+            //   controller: _groupNameCtrl,
+            //   decoration: const InputDecoration(
+            //     labelText: 'Group Name',
+            //     hintText: 'Nama group',
+            //   ),
+            // ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _notesCtrl,
+              decoration: const InputDecoration(labelText: 'Notes'),
+            ),
+            const SizedBox(height: 4),
+            SwitchListTile.adaptive(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Aktif', style: TextStyle(fontSize: 13)),
+              value: _isActive,
+              activeColor: const Color(0xFF066046),
+              onChanged: (v) => setState(() => _isActive = v),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Batal'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            final name = _nameCtrl.text.trim();
+            if (name.isEmpty) return;
+            Navigator.pop(context, {
+              'year_id': widget.yearId,
+              'name': name,
+              // 'group_name': _groupNameCtrl.text.trim(),
+              'is_active': _isActive,
+              'notes': _notesCtrl.text.trim(),
+            });
+          },
+          style: widget.primaryButtonStyle,
+          child: Text(isEdit ? 'Simpan' : 'Tambah'),
+        ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Master Eksternal tile
+// ─────────────────────────────────────────────────────────────────────────────
+class _ExternalTile extends StatelessWidget {
+  const _ExternalTile({
+    required this.item,
+    required this.onEdit,
+    required this.onDelete,
+  });
+  final ExternalMaster item;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: item.isActive
+                  ? const Color(0xFFF3E8FF)
+                  : const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Icon(
+              Icons.public_rounded,
+              size: 20,
+              color: item.isActive
+                  ? const Color(0xFF7E22CE)
+                  : const Color(0xFF94A3B8),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        item.name,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1A1A1A),
+                        ),
+                      ),
+                    ),
+                    if (!item.isActive)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF3C7),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Text(
+                          'Nonaktif',
+                          style:
+                              TextStyle(fontSize: 10, color: Color(0xFF92400E)),
+                        ),
+                      ),
+                  ],
+                ),
+                if (item.notes.isNotEmpty)
+                  Text(
+                    item.notes,
+                    style:
+                        const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                  ),
+              ],
+            ),
+          ),
+          Tooltip(
+            message: 'Edit',
+            child: InkWell(
+              onTap: onEdit,
+              borderRadius: BorderRadius.circular(6),
+              child: const Padding(
+                padding: EdgeInsets.all(6),
+                child: Icon(Icons.edit_outlined,
+                    size: 16, color: Color(0xFF0EA5E9)),
+              ),
+            ),
+          ),
+          Tooltip(
+            message: 'Hapus',
+            child: InkWell(
+              onTap: onDelete,
+              borderRadius: BorderRadius.circular(6),
+              child: const Padding(
+                padding: EdgeInsets.all(6),
+                child: Icon(Icons.delete_outline,
+                    size: 16, color: Color(0xFFDC2626)),
+              ),
+            ),
+          ),
+          const SizedBox(width: 2),
+        ],
+      ),
+    );
+  }
+}
+
+class _ExternalDialog extends StatefulWidget {
+  const _ExternalDialog({required this.primaryButtonStyle, this.initial});
+
+  final ExternalMaster? initial;
+  final ButtonStyle primaryButtonStyle;
+
+  @override
+  State<_ExternalDialog> createState() => _ExternalDialogState();
+}
+
+class _ExternalDialogState extends State<_ExternalDialog> {
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _notesCtrl;
+  late bool _isActive;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameCtrl = TextEditingController(text: widget.initial?.name ?? '');
+    _notesCtrl = TextEditingController(text: widget.initial?.notes ?? '');
+    _isActive = widget.initial?.isActive ?? true;
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _notesCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEdit = widget.initial != null;
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      title: Text(isEdit ? 'Edit Eksternal' : 'Tambah Eksternal'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _nameCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Nama',
+                hintText: 'Contoh: HUM, PPM',
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _notesCtrl,
+              decoration: const InputDecoration(labelText: 'Notes'),
+            ),
+            const SizedBox(height: 4),
+            SwitchListTile.adaptive(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Aktif', style: TextStyle(fontSize: 13)),
+              value: _isActive,
+              activeColor: const Color(0xFF066046),
+              onChanged: (v) => setState(() => _isActive = v),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Batal'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            final name = _nameCtrl.text.trim();
+            if (name.isEmpty) return;
+            Navigator.pop(context, {
+              'name': name,
+              'notes': _notesCtrl.text.trim(),
+              'is_active': _isActive,
+            });
+          },
+          style: widget.primaryButtonStyle,
+          child: Text(isEdit ? 'Simpan' : 'Tambah'),
+        ),
+      ],
+    );
+  }
+}

@@ -25,6 +25,41 @@ class TransactionProvider with ChangeNotifier {
 
   final ApiService _apiService = ApiService();
 
+  // Search/inquiry transactions with filters
+  Future<List<Transaction>> inquiryTransactions({
+    String? category,
+    String? pic,
+    String? trxType,
+    String? description,
+    String? startDate,
+    String? endDate,
+  }) async {
+    try {
+      final response = await _apiService.inquiryTransactions(
+        category: category,
+        pic: pic,
+        trxType: trxType,
+        description: description,
+        startDate: startDate,
+        endDate: endDate,
+      );
+
+      if (response.statusCode == 200) {
+        final data = response.data;
+        // Handle response with 'transactions' array
+        final List<dynamic> transactionsData = data['transactions'] ?? [];
+        final transactions =
+            transactionsData.map((json) => Transaction.fromJson(json)).toList();
+        return transactions;
+      } else {
+        throw Exception('Failed to inquiry transactions');
+      }
+    } catch (e) {
+      debugPrint('Error inquiring transactions: $e');
+      rethrow;
+    }
+  }
+
   // Fetch transaction summary
   Future<void> fetchSummary() async {
     try {
@@ -58,6 +93,12 @@ class TransactionProvider with ChangeNotifier {
                       ? double.parse(cat['net'])
                       : (cat['net'] as num).toDouble(),
                   'cnt': cat['cnt'] ?? 0,
+                  'realloc_in': (cat['realloc_in'] is String)
+                      ? double.parse(cat['realloc_in'])
+                      : (cat['realloc_in'] as num?)?.toDouble() ?? 0.0,
+                  'realloc_out': (cat['realloc_out'] is String)
+                      ? double.parse(cat['realloc_out'])
+                      : (cat['realloc_out'] as num?)?.toDouble() ?? 0.0,
                 },
               )
               .toList();
@@ -65,17 +106,17 @@ class TransactionProvider with ChangeNotifier {
           // Sort by absolute net value (highest first)
           _categories.sort(
             (a, b) => (b['net'] as double).abs().compareTo(
-              (a['net'] as double).abs(),
-            ),
+                  (a['net'] as double).abs(),
+                ),
           );
         }
 
         notifyListeners();
       }
     } on DioException catch (e) {
-      print('Error fetching summary: ${e.response?.data}');
+      debugPrint('Error fetching summary: ${e.response?.data}');
     } catch (e) {
-      print('Error fetching summary: $e');
+      debugPrint('Error fetching summary: $e');
     }
   }
 
@@ -88,15 +129,14 @@ class TransactionProvider with ChangeNotifier {
         final List<dynamic> data = response.data is List
             ? response.data
             : response.data['transactions'] ?? [];
-        _recentTransactions = data
-            .map((json) => Transaction.fromJson(json))
-            .toList();
+        _recentTransactions =
+            data.map((json) => Transaction.fromJson(json)).toList();
         notifyListeners();
       }
     } on DioException catch (e) {
-      print('Error fetching recent transactions: ${e.response?.data}');
+      debugPrint('Error fetching recent transactions: ${e.response?.data}');
     } catch (e) {
-      print('Error fetching recent transactions: $e');
+      debugPrint('Error fetching recent transactions: $e');
     }
   }
 
@@ -118,8 +158,7 @@ class TransactionProvider with ChangeNotifier {
     } on DioException catch (e) {
       // Handle Dio-specific errors and extract error message from gin.H
       if (e.response?.data != null) {
-        _error =
-            e.response?.data['error'] ??
+        _error = e.response?.data['error'] ??
             e.response?.data['message'] ??
             'Failed to load transactions';
       } else {
@@ -149,8 +188,7 @@ class TransactionProvider with ChangeNotifier {
     } on DioException catch (e) {
       // Handle Dio-specific errors and extract error message from gin.H
       if (e.response?.data != null) {
-        _error =
-            e.response?.data['error'] ??
+        _error = e.response?.data['error'] ??
             e.response?.data['message'] ??
             'Failed to load transactions';
       } else {
@@ -176,10 +214,37 @@ class TransactionProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        final newTransaction = Transaction.fromJson(
-          response.data['transaction'],
-        );
-        _transactions.insert(0, newTransaction);
+        // Handle different response formats
+        if (response.data != null) {
+          // If response contains transaction data, use it
+          if (response.data is Map && response.data['transaction'] != null) {
+            final newTransaction = Transaction.fromJson(
+              response.data['transaction'],
+            );
+            _transactions.insert(0, newTransaction);
+          } else if (response.data is Map) {
+            // Response data itself might be the transaction
+            try {
+              final newTransaction = Transaction.fromJson(response.data);
+              _transactions.insert(0, newTransaction);
+            } catch (e) {
+              // If parsing fails, just refresh the transactions list
+              debugPrint(
+                'Could not parse transaction from response, refreshing list',
+              );
+              await fetchMonthlyTransactions(
+                DateTime.now().month,
+                DateTime.now().year,
+              );
+            }
+          }
+        } else {
+          // No response data, refresh transactions list
+          await fetchMonthlyTransactions(
+            DateTime.now().month,
+            DateTime.now().year,
+          );
+        }
         _isLoading = false;
         notifyListeners();
         return true;
@@ -187,8 +252,7 @@ class TransactionProvider with ChangeNotifier {
     } on DioException catch (e) {
       // Handle Dio-specific errors and extract error message from gin.H
       if (e.response?.data != null) {
-        _error =
-            e.response?.data['error'] ??
+        _error = e.response?.data['error'] ??
             e.response?.data['message'] ??
             'Failed to add transaction';
       } else {
@@ -196,6 +260,46 @@ class TransactionProvider with ChangeNotifier {
       }
     } catch (e) {
       _error = 'Failed to add transaction: ${e.toString()}';
+    }
+
+    _isLoading = false;
+    notifyListeners();
+    return false;
+  }
+
+  // Update transaction
+  Future<bool> updateTransaction(String id, Transaction transaction) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final response = await _apiService.updateTransaction(
+        id,
+        transaction.toJson(),
+      );
+
+      if (response.statusCode == 200) {
+        // Find and update the transaction in the list
+        final index = _transactions.indexWhere((t) => t.id == id);
+        if (index != -1) {
+          _transactions[index] = transaction.copyWith(id: id);
+        }
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      }
+    } on DioException catch (e) {
+      // Handle Dio-specific errors
+      if (e.response?.data != null) {
+        _error = e.response?.data['error'] ??
+            e.response?.data['message'] ??
+            'Failed to update transaction';
+      } else {
+        _error = 'Failed to update transaction: ${e.message}';
+      }
+    } catch (e) {
+      _error = 'Failed to update transaction: ${e.toString()}';
     }
 
     _isLoading = false;
@@ -216,8 +320,7 @@ class TransactionProvider with ChangeNotifier {
     } on DioException catch (e) {
       // Handle Dio-specific errors and extract error message from gin.H
       if (e.response?.data != null) {
-        _error =
-            e.response?.data['error'] ??
+        _error = e.response?.data['error'] ??
             e.response?.data['message'] ??
             'Failed to delete transaction';
       } else {

@@ -12,6 +12,7 @@ class Transaction {
   final String? pic;
   final String? remarks;
   final String? requestedBy;
+  final List<String>? tags;
 
   Transaction({
     this.id,
@@ -25,6 +26,7 @@ class Transaction {
     this.pic,
     this.remarks,
     this.requestedBy,
+    this.tags,
   });
 
   factory Transaction.fromJson(Map<String, dynamic> json) {
@@ -42,12 +44,21 @@ class Transaction {
       date: json['requested_date'] != null
           ? DateTime.parse(json['requested_date'])
           : (json['date'] != null
-                ? DateTime.parse(json['date'])
-                : DateTime.now()),
+              ? DateTime.parse(json['date'])
+              : DateTime.now()),
       description: json['description'],
       pic: json['pic'],
       remarks: json['remarks'],
       requestedBy: json['requested_by'],
+      tags: json['tags'] != null
+          ? (json['tags'] is List
+              ? List<String>.from(json['tags'] as List)
+              : (json['tags'] as String)
+                  .split(',')
+                  .map((e) => e.trim())
+                  .where((e) => e.isNotEmpty)
+                  .toList())
+          : null,
     );
   }
 
@@ -61,6 +72,37 @@ class Transaction {
       'category': category,
       'sub_category': subCategory ?? '',
       if (pic != null && pic!.isNotEmpty) 'pic': pic,
+      if (tags != null && tags!.isNotEmpty) 'tags': tags!.join(','),
     };
+  }
+
+  Transaction copyWith({
+    String? id,
+    String? title,
+    double? amount,
+    TransactionType? type,
+    String? category,
+    String? subCategory,
+    DateTime? date,
+    String? description,
+    String? pic,
+    String? remarks,
+    String? requestedBy,
+    List<String>? tags,
+  }) {
+    return Transaction(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      amount: amount ?? this.amount,
+      type: type ?? this.type,
+      category: category ?? this.category,
+      subCategory: subCategory ?? this.subCategory,
+      date: date ?? this.date,
+      description: description ?? this.description,
+      pic: pic ?? this.pic,
+      remarks: remarks ?? this.remarks,
+      requestedBy: requestedBy ?? this.requestedBy,
+      tags: tags ?? this.tags,
+    );
   }
 }
