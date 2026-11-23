@@ -5,8 +5,11 @@ import 'package:flutter/services.dart';
 
 import '../../config/launcher_tokens.dart';
 import '../../services/api_service.dart';
+import '../../widgets/app_ui.dart';
+import '../launcher/launcher_models.dart' show EventLevel;
 import '../info/donation_form_screen.dart' show DonationProof, ProofKind;
-import 'ledger_widgets.dart' show monthNames;
+import 'ledger_widgets.dart'
+    show monthNames, isUpstreamUnauthorized, upstreamUnauthorizedText;
 
 enum _Kind {
   /// A required item of the month (`allocations`): sent in `items`.
@@ -93,6 +96,10 @@ class _RupiahFormatter extends TextInputFormatter {
 }
 
 String _rp(int v) => 'Rp ${_RupiahFormatter.format(v)}';
+
+/// The Amal Jariyah colour (its launcher tile).
+const _accent = Color(0xFF0891B2);
+const _accentTint = Color(0xFFECFEFF);
 
 /// Progress and total, kept outside the rows so typing only rebuilds the
 /// header and the bottom bar, not the list.
@@ -209,7 +216,9 @@ class _AmountRowState extends State<_AmountRow> {
                 widget.onChanged();
                 setState(() {});
               },
-              style: Lx.cardHeading.copyWith(fontWeight: FontWeight.w600),
+              style: Lx.cardHeading.copyWith(
+                  fontWeight: FontWeight.w600,
+                  fontFeatures: const [FontFeature.tabularFigures()]),
               decoration: InputDecoration(
                 hintText: '0',
                 prefixText: 'Rp ',
@@ -219,12 +228,12 @@ class _AmountRowState extends State<_AmountRow> {
                 fillColor: _focus.hasFocus
                     ? Lx.surface
                     : filled
-                        ? Lx.primaryLight
+                        ? _accentTint
                         : Lx.background,
                 contentPadding: _pad,
                 border: _border(Lx.border),
-                enabledBorder: _border(filled ? Lx.primaryLight : Lx.border),
-                focusedBorder: _border(Lx.primary, 2),
+                enabledBorder: _border(filled ? const Color(0xFFA5F3FC) : Lx.border),
+                focusedBorder: _border(_accent, 2),
               ),
             ),
           ),
@@ -420,7 +429,9 @@ class _AmalDepositFormScreenState extends State<AmalDepositFormScreen> {
         case 401:
           return 'Sesi Anda berakhir. Silakan masuk lagi.';
         case 403:
-          return 'Anda tidak punya akses untuk menyetor.';
+          return isUpstreamUnauthorized(e)
+              ? upstreamUnauthorizedText
+              : 'Anda tidak punya akses untuk menyetor.';
         case 404:
           return 'Akun Anda belum terhubung ke data jamaah.';
         case 502:
@@ -500,22 +511,34 @@ class _AmalDepositFormScreenState extends State<AmalDepositFormScreen> {
     final proof = _proof;
     if (proof == null) {
       return Material(
-        color: Lx.surface,
+        color: _accentTint,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(Lx.rButton),
-          side: BorderSide(color: _proofError != null ? Lx.danger : Lx.border),
+          side: BorderSide(
+              color: _proofError != null ? Lx.danger : const Color(0xFFA5F3FC),
+              width: 1.5),
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: _sending ? null : _pickProof,
-          child: const Padding(
-            padding: EdgeInsets.symmetric(vertical: 22),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20),
             child: Center(
               child: Column(
                 children: [
-                  Icon(Icons.upload_file_outlined, size: 30, color: Lx.primary),
-                  SizedBox(height: 6),
-                  Text('Pilih bukti transfer', style: Lx.cardHeading),
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: const BoxDecoration(
+                        color: Lx.surface, shape: BoxShape.circle),
+                    child: const Icon(Icons.upload_file_outlined,
+                        size: 24, color: _accent),
+                  ),
+                  const SizedBox(height: Lx.s8),
+                  const Text('Pilih bukti transfer', style: Lx.cardHeading),
+                  const SizedBox(height: 2),
+                  Text('Foto atau file dari bank / e-wallet',
+                      style: Lx.metadata),
                 ],
               ),
             ),
@@ -527,7 +550,11 @@ class _AmalDepositFormScreenState extends State<AmalDepositFormScreen> {
     final size = kb >= 1024 ? '${(kb / 1024).toStringAsFixed(1)} MB' : '$kb KB';
     return Container(
       padding: const EdgeInsets.all(10),
-      decoration: Lx.card(),
+      decoration: BoxDecoration(
+        color: Lx.surface,
+        borderRadius: BorderRadius.circular(Lx.rButton),
+        border: Border.all(color: Lx.success.withOpacity(0.5), width: 1.5),
+      ),
       child: Row(
         children: [
           ClipRRect(
@@ -563,7 +590,14 @@ class _AmalDepositFormScreenState extends State<AmalDepositFormScreen> {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: Lx.cardHeading),
-                Text(size, style: Lx.metadata),
+                Row(
+                  children: [
+                    const Icon(Icons.check_circle_rounded,
+                        size: 13, color: Lx.success),
+                    const SizedBox(width: 3),
+                    Text('Siap dikirim · $size', style: Lx.metadata),
+                  ],
+                ),
               ],
             ),
           ),
@@ -670,21 +704,7 @@ class _AmalDepositFormScreenState extends State<AmalDepositFormScreen> {
           child: _loading
               ? const Center(child: CircularProgressIndicator())
               : _loadError != null
-                  ? Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(Lx.s24),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(_loadError!,
-                                textAlign: TextAlign.center, style: Lx.body),
-                            TextButton(
-                                onPressed: _load,
-                                child: const Text('Coba lagi')),
-                          ],
-                        ),
-                      ),
-                    )
+                  ? Center(child: RetryState(_loadError!, onRetry: _load))
                   : _form(title),
         ),
         bottomNavigationBar:
@@ -701,31 +721,6 @@ class _AmalDepositFormScreenState extends State<AmalDepositFormScreen> {
         onRemove: onRemove,
       );
 
-  /// Rows under one small heading per group, separated by hairlines. The
-  /// items are already sorted, so each group is one run.
-  List<Widget> _section(List<_DepositItem> items) {
-    final out = <Widget>[];
-    String? group;
-    for (final i in items) {
-      final g = i.groupLabel;
-      if (g != group) {
-        out.add(Padding(
-          padding: const EdgeInsets.only(top: Lx.s16, bottom: Lx.s4),
-          child: Text(g.toUpperCase(),
-              style: Lx.metadata.copyWith(
-                  color: Lx.secondary,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.8)),
-        ));
-      } else {
-        out.add(const Divider(height: 1, thickness: 1, color: Lx.border));
-      }
-      group = g;
-      out.add(_row(i));
-    }
-    return out;
-  }
-
   /// Required items of Pusat, Daerah, Desa and Kelompok.
   List<_DepositItem> get _main =>
       _items.where((i) => i.groupRank < _DepositItem._order.length).toList();
@@ -737,18 +732,119 @@ class _AmalDepositFormScreenState extends State<AmalDepositFormScreen> {
         ..._catalog,
       ]);
 
-  Widget _groupHeading(String g) => Padding(
-        padding: const EdgeInsets.only(top: Lx.s16, bottom: Lx.s4),
-        child: Text(g.toUpperCase(),
-            style: Lx.metadata.copyWith(
-                color: Lx.secondary,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.8)),
+  static const _divider = Divider(height: 1, thickness: 1, color: Lx.border);
+
+  /// A numbered step heading: 1 Jumlah, 2 Bukti, 3 Catatan.
+  Widget _step(int n, String title, [String? hint]) => Padding(
+        padding: const EdgeInsets.only(top: Lx.s20, bottom: Lx.s8),
+        child: Row(
+          children: [
+            Container(
+              width: 24,
+              height: 24,
+              alignment: Alignment.center,
+              decoration:
+                  const BoxDecoration(color: _accent, shape: BoxShape.circle),
+              child: Text('$n',
+                  style: Lx.metadata.copyWith(
+                      color: Colors.white, fontWeight: FontWeight.w800)),
+            ),
+            const SizedBox(width: Lx.s8),
+            Expanded(child: Text(title, style: Lx.cardHeading)),
+            if (hint != null) Text(hint, style: Lx.metadata),
+          ],
+        ),
+      );
+
+  /// One card per level (Pusat, Daerah, Desa, Kelompok), with its colour.
+  Widget _groupCard(String label, List<Widget> rows, {Widget? footer}) {
+    final known = label != 'tambahan';
+    final level = known ? EventLevel.of(label) : null;
+    final title = label[0].toUpperCase() + label.substring(1);
+    return Container(
+      margin: const EdgeInsets.only(bottom: Lx.s12),
+      padding: const EdgeInsets.fromLTRB(Lx.s16, Lx.s12, Lx.s16, Lx.s4),
+      decoration: Lx.card(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: level?.tint ?? const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(level?.icon ?? Icons.add_circle_outline_rounded,
+                    size: 16, color: level?.fg ?? Lx.textSecondary),
+              ),
+              const SizedBox(width: Lx.s8),
+              Text(title, style: Lx.cardHeading.copyWith(fontSize: 14)),
+            ],
+          ),
+          const SizedBox(height: Lx.s4),
+          for (var i = 0; i < rows.length; i++) ...[
+            if (i > 0) _divider,
+            rows[i],
+          ],
+          if (footer != null) footer,
+        ],
+      ),
+    );
+  }
+
+  /// The required items in one card per level; the items are already
+  /// sorted, so each level is one run.
+  List<Widget> _mainCards() {
+    final runs = <String, List<_DepositItem>>{};
+    for (final i in _main) {
+      runs.putIfAbsent(i.groupLabel, () => []).add(i);
+    }
+    return [
+      for (final e in runs.entries)
+        _groupCard(e.key, [for (final i in e.value) _row(i)]),
+    ];
+  }
+
+  Widget _extraCard() => _groupCard(
+        'tambahan',
+        [
+          for (final i in _extra) _row(i),
+          for (var n = 0; n < _free.length; n++)
+            _row(_free[n], onRemove: () {
+              setState(() => _free.removeAt(n).dispose());
+              _recompute();
+            }),
+        ],
+        footer: Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: _sending
+                ? null
+                : () {
+                    setState(() => _free.add(_DepositItem(kind: _Kind.free)));
+                    _recompute();
+                  },
+            style: TextButton.styleFrom(foregroundColor: _accent),
+            icon: const Icon(Icons.add_rounded),
+            label: const Text('Tambah shodaqoh lain'),
+          ),
+        ),
       );
 
   Widget _progressHeader(String title) => Container(
-        color: Lx.surface,
-        padding: const EdgeInsets.fromLTRB(Lx.s16, Lx.s12, Lx.s16, Lx.s12),
+        margin: const EdgeInsets.fromLTRB(Lx.s16, 0, Lx.s16, 0),
+        padding: const EdgeInsets.all(Lx.s16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(Lx.rSection),
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF0E7490), _accent],
+          ),
+        ),
         child: ValueListenableBuilder<_Summary>(
           valueListenable: _summary,
           builder: (_, s, __) => Column(
@@ -757,23 +853,46 @@ class _AmalDepositFormScreenState extends State<AmalDepositFormScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: Text(title, style: Lx.sectionHeading),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Setoran bulan',
+                            style:
+                                Lx.metadata.copyWith(color: Colors.white70)),
+                        Text(title,
+                            style: Lx.sectionHeading
+                                .copyWith(color: Colors.white)),
+                      ],
+                    ),
                   ),
-                  Text('${s.filled}/${s.total} terisi',
-                      style: Lx.metadata.copyWith(
-                          color: Lx.primary, fontWeight: FontWeight.w600)),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.18),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text('${s.filled}/${s.total} terisi',
+                        style: Lx.metadata.copyWith(
+                            color: Colors.white, fontWeight: FontWeight.w700)),
+                  ),
                 ],
               ),
-              const SizedBox(height: Lx.s8),
+              const SizedBox(height: Lx.s12),
               ClipRRect(
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: BorderRadius.circular(6),
                 child: LinearProgressIndicator(
                   value: s.total == 0 ? 0 : s.filled / s.total,
-                  minHeight: 4,
-                  backgroundColor: Lx.border,
-                  color: Lx.primary,
+                  minHeight: 6,
+                  backgroundColor: Colors.white24,
+                  color: Colors.white,
                 ),
               ),
+              const SizedBox(height: Lx.s8),
+              Text(
+                  'Jumlah sudah terisi sesuai anjuran. Ubah bila perlu, '
+                  'kosongkan yang tidak disetor.',
+                  style: Lx.metadata.copyWith(color: Colors.white70)),
             ],
           ),
         ),
@@ -798,10 +917,16 @@ class _AmalDepositFormScreenState extends State<AmalDepositFormScreen> {
                 if (_amountError != null || _sendError != null)
                   Padding(
                     padding: const EdgeInsets.only(bottom: Lx.s8),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(_sendError ?? _amountError!,
-                          style: Lx.metadata.copyWith(color: Lx.danger)),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.error_outline_rounded,
+                            size: 16, color: Lx.danger),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(_sendError ?? _amountError!,
+                              style: Lx.metadata.copyWith(color: Lx.danger)),
+                        ),
+                      ],
                     ),
                   ),
                 Row(
@@ -813,11 +938,18 @@ class _AmalDepositFormScreenState extends State<AmalDepositFormScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text('Total setoran', style: Lx.metadata),
-                            Text(_rp(s.sum),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Lx.sectionHeading
-                                    .copyWith(fontWeight: FontWeight.w700)),
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(_rp(s.sum),
+                                  maxLines: 1,
+                                  style: Lx.sectionHeading.copyWith(
+                                      fontWeight: FontWeight.w800,
+                                      color: _accent,
+                                      fontFeatures: const [
+                                        FontFeature.tabularFigures()
+                                      ])),
+                            ),
                           ],
                         ),
                       ),
@@ -828,6 +960,7 @@ class _AmalDepositFormScreenState extends State<AmalDepositFormScreen> {
                       child: FilledButton(
                         onPressed: _sending || _items.isEmpty ? null : _submit,
                         style: FilledButton.styleFrom(
+                            backgroundColor: _accent,
                             padding:
                                 const EdgeInsets.symmetric(horizontal: Lx.s24)),
                         child: _sending
@@ -837,7 +970,14 @@ class _AmalDepositFormScreenState extends State<AmalDepositFormScreen> {
                                 child: CircularProgressIndicator(
                                     strokeWidth: 2, color: Colors.white),
                               )
-                            : const Text('Kirim Setoran'),
+                            : const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.send_rounded, size: 18),
+                                  SizedBox(width: 6),
+                                  Text('Kirim Setoran'),
+                                ],
+                              ),
                       ),
                     ),
                   ],
@@ -851,55 +991,37 @@ class _AmalDepositFormScreenState extends State<AmalDepositFormScreen> {
   }
 
   Widget _form(String title) {
-    return Column(
+    return ListView(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      padding: const EdgeInsets.only(bottom: Lx.s24),
       children: [
         _progressHeader(title),
-        const Divider(height: 1, thickness: 1, color: Lx.border),
-        Expanded(
-          child: ListView(
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: const EdgeInsets.symmetric(horizontal: Lx.s16),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: Lx.s16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              _step(1, 'Jumlah per item', 'dalam rupiah'),
               if (_items.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: Lx.s16),
+                Container(
+                  margin: const EdgeInsets.only(bottom: Lx.s12),
+                  padding: const EdgeInsets.all(Lx.s16),
+                  decoration: Lx.card(),
                   child: Text(
                       'Belum ada item yang bisa disetor untuk bulan ini.',
                       style: Lx.body),
                 ),
-              ..._section(_main),
-              if (_extra.isNotEmpty || _free.isNotEmpty)
-                _groupHeading('tambahan'),
-              for (var n = 0; n < _extra.length; n++) ...[
-                if (n > 0)
-                  const Divider(height: 1, thickness: 1, color: Lx.border),
-                _row(_extra[n]),
-              ],
-              for (var n = 0; n < _free.length; n++) ...[
-                if (n > 0 || _extra.isNotEmpty)
-                  const Divider(height: 1, thickness: 1, color: Lx.border),
-                _row(_free[n], onRemove: () {
-                  setState(() => _free.removeAt(n).dispose());
-                  _recompute();
-                }),
-              ],
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: _sending
-                      ? null
-                      : () {
-                          setState(
-                              () => _free.add(_DepositItem(kind: _Kind.free)));
-                          _recompute();
-                        },
-                  icon: const Icon(Icons.add_rounded),
-                  label: const Text('Tambah shodaqoh lain'),
+              ..._mainCards(),
+              _extraCard(),
+              _step(2, 'Bukti transfer', 'JPG, PNG, PDF · maks 5 MB'),
+              _proofField(),
+              if (_proofError != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6, left: 4),
+                  child: Text(_proofError!,
+                      style: Lx.metadata.copyWith(color: Lx.danger)),
                 ),
-              ),
-              const SizedBox(height: Lx.s16),
-              Text('Catatan (opsional)', style: Lx.cardHeading),
-              const SizedBox(height: 6),
+              _step(3, 'Catatan', 'opsional'),
               TextField(
                 controller: _notes,
                 enabled: !_sending,
@@ -908,24 +1030,32 @@ class _AmalDepositFormScreenState extends State<AmalDepositFormScreen> {
                 maxLength: AmalDepositFormScreen.maxNotes,
                 textCapitalization: TextCapitalization.sentences,
                 scrollPadding: const EdgeInsets.only(bottom: 120),
-                decoration: _decoration,
+                decoration: _decoration.copyWith(
+                    hintText: 'Mis. termasuk titipan dari keluarga'),
               ),
               const SizedBox(height: Lx.s8),
-              Text('Bukti transfer', style: Lx.cardHeading),
-              const SizedBox(height: 2),
-              Text('JPG, PNG atau PDF, maksimal 5 MB.', style: Lx.metadata),
-              const SizedBox(height: 6),
-              _proofField(),
-              if (_proofError != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 6, left: 4),
-                  child: Text(_proofError!,
-                      style: Lx.metadata.copyWith(color: Lx.danger)),
+              Container(
+                padding: const EdgeInsets.all(Lx.s12),
+                decoration: BoxDecoration(
+                  color: Lx.surface,
+                  borderRadius: BorderRadius.circular(Lx.rButton),
+                  border: Border.all(color: Lx.border),
                 ),
-              const SizedBox(height: Lx.s12),
-              Text('Setoran menunggu verifikasi bendahara sebelum tercatat.',
-                  style: Lx.metadata),
-              const SizedBox(height: Lx.s24),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.verified_user_outlined,
+                        size: 18, color: Lx.textSecondary),
+                    const SizedBox(width: Lx.s8),
+                    Expanded(
+                      child: Text(
+                          'Setoran menunggu verifikasi bendahara sebelum '
+                          'tercatat di Buku Amal Jariyah.',
+                          style: Lx.metadata.copyWith(height: 1.4)),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
