@@ -263,6 +263,20 @@ class BudgetVoiceUnreadable implements Exception {
   final List<String> candidates;
 }
 
+/// Runs [fetch] once per [key] at a time: a second caller while it is running
+/// gets the same future. The entry is dropped when it ends, whether it
+/// succeeded or failed.
+///
+/// The cleanup must not return a value: `whenComplete` waits for a future its
+/// callback returns, and `Map.remove` would hand back this very future, which
+/// then waits for itself and never completes.
+Future<T> sharedRequest<T>(
+    Map<String, Future<T>> running, String key, Future<T> Function() fetch) {
+  return running[key] ??= fetch().whenComplete(() {
+    running.remove(key);
+  });
+}
+
 /// What the budget screens need from the backend.
 class BudgetRepository {
   int _startDay = 1;
@@ -321,11 +335,8 @@ class BudgetRepository {
 
   /// One request per month at a time: the screens ask for the summary and
   /// for the transactions together, and the latter needs the dates.
-  Future<BudgetSummary> summary(DateTime month) {
-    final key = budgetPeriod(month);
-    return _summaries[key] ??=
-        _fetchSummary(month).whenComplete(() => _summaries.remove(key));
-  }
+  Future<BudgetSummary> summary(DateTime month) => sharedRequest(
+      _summaries, budgetPeriod(month), () => _fetchSummary(month));
 
   Future<BudgetSummary> _fetchSummary(DateTime month) async {
     final d = (await ApiService().getBudgetSummary(budgetPeriod(month))).data;
