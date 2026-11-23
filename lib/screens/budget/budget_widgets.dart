@@ -91,8 +91,9 @@ Color budgetColor(double percent, bool over) => over
         : Lx.success;
 
 /// One expense category with its budget: the name and the amount set for
-/// it. The thin bar underneath only shows how much of it is used (it turns
-/// orange near the limit and red over it); no spent figures are written.
+/// it. The thin bar underneath shows how much of it is used (it turns orange
+/// near the limit and red over it), with what is left beside it ("Sisa
+/// Rp 525.000 · 35%", "Habis", "Lewat Rp 120.000 · 8%").
 class BudgetProgressRow extends StatelessWidget {
   const BudgetProgressRow({super.key, required this.line, this.onTap});
 
@@ -130,7 +131,32 @@ class BudgetProgressRow extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 6),
-                  RoundBar(value: line.percent / 100, color: color, height: 6),
+                  Row(
+                    children: [
+                      Expanded(
+                        flex: 2,
+                        child: RoundBar(
+                            value: line.percent / 100, color: color, height: 6),
+                      ),
+                      const SizedBox(width: Lx.s8),
+                      // Shrinks rather than overflow on a narrow screen.
+                      Flexible(
+                        flex: 3,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerRight,
+                          child: Text(budgetLeftLabel(line),
+                              maxLines: 1,
+                              style: Lx.metadata.copyWith(
+                                  color: line.over || line.percent >= 80
+                                      ? color
+                                      : Lx.textSecondary,
+                                  fontWeight: FontWeight.w600,
+                                  fontFeatures: tabular)),
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -139,6 +165,21 @@ class BudgetProgressRow extends StatelessWidget {
       ),
     );
   }
+}
+
+/// What is left of the budget, from the server's `remaining` and `percent`
+/// (used): "Sisa Rp 525.000 · 35%", "Habis" when nothing is left, "Lewat
+/// Rp 120.000 · 8%" over it. The share is rounded down while some is left, so
+/// "0%" never shows for a budget not yet used up.
+String budgetLeftLabel(BudgetCategoryLine line) {
+  final used = line.percent;
+  if (line.over || used > 100) {
+    final over = (used - 100).ceil();
+    return 'Lewat ${rp(line.remaining.abs())} · ${over < 1 ? 1 : over}%';
+  }
+  if (used >= 100 || line.remaining <= 0) return 'Habis';
+  final left = (100 - used).floor();
+  return 'Sisa ${rp(line.remaining)} · ${left < 1 ? '<1' : left}%';
 }
 
 // ── Transaction detail ──────────────────────────────────────────────────────
