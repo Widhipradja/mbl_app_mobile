@@ -74,7 +74,6 @@ class ProfileErrorBox extends StatelessWidget {
       );
 }
 
-
 /// A failed photo call: the server's own text for the photo rules (400, 413,
 /// 415) and for the account (409, 422).
 String avatarFailure(Object e) {
@@ -262,3 +261,19 @@ class _ProfilePhotoEditorState extends State<ProfilePhotoEditor> {
     );
   }
 }
+
+/// `YYYY-MM-DD` as a date, or null when it is empty or not a real date. Strict:
+/// `DateTime.tryParse('1990-02-30')` quietly gives 2 March, so the parts are
+/// compared back.
+DateTime? parseBirthDate(String? raw) {
+  final m = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$').firstMatch((raw ?? '').trim());
+  if (m == null) return null;
+  final y = int.parse(m[1]!), mo = int.parse(m[2]!), d = int.parse(m[3]!);
+  final date = DateTime(y, mo, d);
+  return date.year == y && date.month == mo && date.day == d ? date : null;
+}
+
+/// `YYYY-MM-DD` with no time or zone: what the server takes.
+String birthDateParam(DateTime d) =>
+    '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-'
+    '${d.day.toString().padLeft(2, '0')}';

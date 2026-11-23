@@ -6,8 +6,8 @@ Error di field `error`. **Hanya 401 yang berarti sesi berakhir** (app logout); 4
 
 | Aksi | Call |
 |---|---|
-| Baca profil | `GET /profile` → datar: `user_id, first_name, last_name, name, email, phone, sex` (+ `firstname, lastname, address, avatar` lama). Tanpa `sex` = akun belum terhubung ke satu anggota (read-only). |
-| Ubah profil | `PUT /profile` — parsial: `first_name, last_name, email, phone, sex`; `current_password` **wajib bila email berubah**. |
+| Baca profil | `GET /profile` → datar: `user_id, first_name, last_name, name, email, phone, sex, birth_date` (+ `firstname, lastname, address, avatar` lama). Tanpa `sex` = akun belum terhubung ke satu anggota (read-only). |
+| Ubah profil | `PUT /profile` — parsial: `first_name, last_name, email, phone, sex, birth_date` (`YYYY-MM-DD`; `""` menghapus; tidak butuh password; 422 bila format salah, sebelum 1900, atau di masa depan); `current_password` **wajib bila email berubah**. |
 | Ganti foto | `PUT /profile/avatar` — multipart, satu file di field `avatar` (jpeg/png/webp, maks 2 MB; server tidak resize). Respons: profil terbaru. |
 | Hapus foto | `DELETE /profile/avatar` — respons profil dengan `avatar: ""`; bisa diulang. |
 | Lihat foto | `GET /profile/avatar` dengan `Authorization` (byte gambar, ETag). `avatar` di profil adalah path relatif ke host API; `?v=` berubah tiap ganti foto. |
