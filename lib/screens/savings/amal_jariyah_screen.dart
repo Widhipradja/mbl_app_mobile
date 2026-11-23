@@ -65,8 +65,7 @@ class _AmalJariyahScreenState extends State<AmalJariyahScreen> {
     try {
       final api = ApiService();
       for (var y = _now.year;; y--) {
-        final data =
-            AmalJariyahYear.parse((await api.getFamilyReportYearly(y)).data);
+        final data = await _fetchYear(api, y);
         _earliestYear = data.earliestYear ?? _earliestYear;
         final withData = data.months
             .where((m) => !m.isEmpty && m.monthNumber != null)
@@ -113,6 +112,10 @@ class _AmalJariyahScreenState extends State<AmalJariyahScreen> {
   static String _param(DateTime m) =>
       '${m.year}-${m.month.toString().padLeft(2, '0')}';
 
+  /// One yearly report, parsed from the answer's body.
+  static Future<AmalJariyahYear> _fetchYear(ApiService api, int year) async =>
+      AmalJariyahYear.parse((await api.getFamilyReportYearly(year)).data);
+
   Future<void> _load() async {
     final mode = _mode;
     final month = _month;
@@ -137,11 +140,10 @@ class _AmalJariyahScreenState extends State<AmalJariyahScreen> {
         final withPrev =
             mode == _Mode.chart && (earliest == null || year - 1 >= earliest);
         final results = await Future.wait([
-          api.getFamilyReportYearly(year).then(AmalJariyahYear.parse),
+          _fetchYear(api, year),
           if (withPrev)
-            api
-                .getFamilyReportYearly(year - 1)
-                .then<AmalJariyahYear?>(AmalJariyahYear.parse)
+            _fetchYear(api, year - 1)
+                .then<AmalJariyahYear?>((d) => d)
                 .catchError((Object e) {
               debugPrint('AmalJariyahScreen previous year error: $e');
               return null;
