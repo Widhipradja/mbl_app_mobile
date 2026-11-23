@@ -8,6 +8,7 @@ import '../screens/launcher/information_hub_screen.dart';
 import '../screens/savings/amal_jariyah_screen.dart';
 import '../screens/savings/kurban_screen.dart';
 import '../screens/budget/budget_wallet_screen.dart';
+import '../screens/ringkasan/ringkasan_screen.dart';
 import '../screens/events/events_list_screen.dart';
 import '../screens/finance/finance_dashboard_screen.dart';
 import '../screens/zakatfitrah/add_muzakki_screen.dart';
@@ -102,6 +103,12 @@ class AppRouter {
       GoRoute(
         path: '/finance',
         builder: (context, state) => const FinanceDashboardScreen(),
+      ),
+
+      // Ringkasan: the community's numbers for the month.
+      GoRoute(
+        path: '/ringkasan',
+        builder: (context, state) => const RingkasanScreen(),
       ),
 
       // Budget: the personal wallet; its other screens are pushed.

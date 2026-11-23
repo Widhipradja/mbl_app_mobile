@@ -47,11 +47,16 @@ class HomeSummaryProvider extends ChangeNotifier {
   String orgName = '';
 
   /// Without the bootstrap, the member-facing modules show and the ones that
-  /// need a role (finance, budget, zakat fitrah) stay hidden.
+  /// need a role (finance, budget, zakat fitrah) stay hidden. Ringkasan
+  /// (dashboard) waits for the server to say it is open: an older server has
+  /// no such endpoint.
   bool isModuleVisible(String name) {
     final m = modules;
     if (m != null) return m[name] == true;
-    if (name == 'finance' || name == 'zakatfitrah' || name == 'budget') {
+    if (name == 'finance' ||
+        name == 'zakatfitrah' ||
+        name == 'budget' ||
+        name == 'dashboard') {
       return false;
     }
     return !hiddenModules.contains(name);
