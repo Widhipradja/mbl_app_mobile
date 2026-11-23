@@ -178,6 +178,30 @@ When releasing a new version:
    flutter build apk --release
    ```
 
+## Publishing to the update host
+
+`scripts/publish_apk.sh` builds the release APK and uploads it to
+https://apk.sangkarahub.app, where the app's update check finds it
+(Profil → Tentang Aplikasi, and a dialog when the dashboard opens).
+
+```bash
+export UPLOAD_TOKEN=<UPLOAD_TOKEN of the host's .env>   # never commit it
+
+scripts/publish_apk.sh --next                 # the versionCode it would use
+scripts/publish_apk.sh --dry-run              # build and check, no upload
+scripts/publish_apk.sh --name "Cappucino" --notes "Dompet Saya baru"
+scripts/publish_apk.sh --min-code 46 ...      # force older installs to update
+scripts/publish_apk.sh --verify-apk some.apk  # only check an APK's signature
+```
+
+- The package is `com.baraka.app`. The `versionCode` must be above the host's
+  newest, or the update is never offered; by default it is newest + 1.
+- The APK must be signed with the release key. The script refuses a debug-signed
+  APK and any APK whose certificate is not the one the published builds use
+  (SHA-256 `c0591e5a…8ea0fc`), because Android would reject it as an update.
+- It asks before uploading, then checks that the host lists the build with the
+  same SHA-256.
+
 ## Security Best Practices
 
 - ✅ Never commit `key.properties` to version control
