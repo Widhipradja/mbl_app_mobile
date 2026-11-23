@@ -4,15 +4,16 @@ import '../../config/launcher_tokens.dart';
 import '../../models/savings_ledgers.dart';
 import '../../services/api_service.dart';
 import '../launcher/launcher_models.dart' show rupiah;
+import 'amal_chart_view.dart';
 import 'amal_deposit_form_screen.dart';
 import '../../widgets/app_ui.dart' show InitialsAvatar, SoftTabs;
 import 'ledger_widgets.dart';
 
-enum _Mode { monthly, yearly }
+enum _Mode { monthly, yearly, chart }
 
 /// Buku Amal Jariyah of the logged-in member: FR, shodaqoh and infaq, for the
 /// whole family when the member is a head of family (KK), else for themself.
-/// Shown for one month, or as a year of months.
+/// Shown for one month, as a year of months, or as charts of a year.
 class AmalJariyahScreen extends StatefulWidget {
   const AmalJariyahScreen({super.key});
 
@@ -30,6 +31,10 @@ class _AmalJariyahScreenState extends State<AmalJariyahScreen> {
   String? _error;
   AmalJariyahMonth? _monthData;
   AmalJariyahYear? _yearData;
+
+  /// The year before [_yearData], for the chart's comparison; null when it
+  /// has no data, is before the oldest year, or could not be loaded.
+  AmalJariyahYear? _prevYearData;
 
   /// Months the backend lists as pending (`YYYY-MM`); null while unknown or if
   /// the call failed: no deposit button is shown then.
@@ -96,8 +101,8 @@ class _AmalJariyahScreenState extends State<AmalJariyahScreen> {
       setState(() {
         _pending = set;
         for (final p in set) {
-          _extendLast(DateTime(int.parse(p.substring(0, 4)),
-              int.parse(p.substring(5, 7))));
+          _extendLast(DateTime(
+              int.parse(p.substring(0, 4)), int.parse(p.substring(5, 7))));
         }
       });
     } catch (e) {
@@ -126,11 +131,27 @@ class _AmalJariyahScreenState extends State<AmalJariyahScreen> {
         if (stale()) return;
         setState(() => _monthData = AmalJariyahMonth.parse(resp.data));
       } else {
-        final resp = await api.getFamilyReportYearly(year);
+        // The chart also compares with the year before; that call may fail
+        // without failing the page.
+        final earliest = _earliestYear;
+        final withPrev =
+            mode == _Mode.chart && (earliest == null || year - 1 >= earliest);
+        final results = await Future.wait([
+          api.getFamilyReportYearly(year).then(AmalJariyahYear.parse),
+          if (withPrev)
+            api
+                .getFamilyReportYearly(year - 1)
+                .then<AmalJariyahYear?>(AmalJariyahYear.parse)
+                .catchError((Object e) {
+              debugPrint('AmalJariyahScreen previous year error: $e');
+              return null;
+            }),
+        ]);
         if (stale()) return;
-        final data = AmalJariyahYear.parse(resp.data);
+        final data = results.first!;
         setState(() {
           _yearData = data;
+          _prevYearData = withPrev ? results[1] : null;
           _earliestYear = data.earliestYear ?? _earliestYear;
         });
       }
@@ -150,9 +171,10 @@ class _AmalJariyahScreenState extends State<AmalJariyahScreen> {
   void _setMode(_Mode mode) {
     if (mode == _mode) return;
     setState(() {
+      // Every view starts from where the previous one is; the yearly list
+      // and the chart share their year.
+      if (_mode == _Mode.monthly) _year = _month.year;
       _mode = mode;
-      // Both views start from where the other one is.
-      if (mode == _Mode.yearly) _year = _month.year;
     });
     _load();
   }
@@ -195,6 +217,7 @@ class _AmalJariyahScreenState extends State<AmalJariyahScreen> {
         items: const [
           (_Mode.monthly, 'Bulanan', Icons.calendar_view_month_rounded),
           (_Mode.yearly, 'Tahunan', Icons.calendar_today_rounded),
+          (_Mode.chart, 'Grafik', Icons.bar_chart_rounded),
         ],
         onChanged: _setMode,
       ),
@@ -215,7 +238,11 @@ class _AmalJariyahScreenState extends State<AmalJariyahScreen> {
       emptyText: monthly
           ? 'Belum ada catatan amal jariyah di $label.'
           : 'Belum ada catatan amal jariyah di tahun $_year.',
-      children: monthly ? _monthly(label) : _yearly(),
+      children: switch (_mode) {
+        _Mode.monthly => _monthly(label),
+        _Mode.yearly => _yearly(),
+        _Mode.chart => _chart(),
+      },
     );
   }
 
@@ -257,7 +284,8 @@ class _AmalJariyahScreenState extends State<AmalJariyahScreen> {
                     children: [
                       Text('Setoran $label belum dikirim',
                           style: Lx.cardHeading.copyWith(fontSize: 14)),
-                      Text('Kirim dengan bukti transfer; bendahara akan '
+                      Text(
+                          'Kirim dengan bukti transfer; bendahara akan '
                           'memverifikasi.',
                           style: Lx.metadata),
                     ],
@@ -410,14 +438,29 @@ class _AmalJariyahScreenState extends State<AmalJariyahScreen> {
       for (final m in months) _MonthSummaryCard(month: m, onTap: _openMonth),
     ];
   }
+
+  // ── Charts of one year ───────────────────────────────────────────────────
+
+  List<Widget> _chart() {
+    final d = _yearData;
+    if (d == null || d.months.every((m) => m.isEmpty)) return const [];
+    return [
+      AmalChartView(
+        year: _year,
+        data: d,
+        previous: _prevYearData,
+        onOpenMonth: _openMonth,
+      ),
+    ];
+  }
 }
 
 const _amalAccent = Color(0xFF0891B2);
 
 /// Colours of the three kinds, the same on every card.
-const _frColor = Color(0xFF2563EB);
-const _shodaqohColor = Color(0xFF0D9488);
-const _infaqColor = Color(0xFF7C3AED);
+const _frColor = amalFrColor;
+const _shodaqohColor = amalShodaqohColor;
+const _infaqColor = amalInfaqColor;
 
 /// One month of the yearly list: its total and the three columns. Tapping it
 /// opens that month's per-person detail.
@@ -463,16 +506,14 @@ class _MonthSummaryCard extends StatelessWidget {
                       child: Text(
                           n == null ? '–' : monthNames[n - 1].substring(0, 3),
                           style: Lx.metadata.copyWith(
-                              color: _amalAccent,
-                              fontWeight: FontWeight.w800)),
+                              color: _amalAccent, fontWeight: FontWeight.w800)),
                     ),
                     const SizedBox(width: Lx.s12),
                     Expanded(child: Text(title, style: Lx.cardHeading)),
                     Text(rupiah(month.total),
-                        style: Lx.cardHeading.copyWith(
-                            fontFeatures: const [
-                              FontFeature.tabularFigures()
-                            ])),
+                        style: Lx.cardHeading.copyWith(fontFeatures: const [
+                          FontFeature.tabularFigures()
+                        ])),
                     const Icon(Icons.chevron_right_rounded,
                         color: Lx.textSecondary),
                   ],
@@ -540,9 +581,8 @@ class AmalEntryCard extends StatelessWidget {
               ),
               const SizedBox(width: Lx.s8),
               Text(rupiah(e.total),
-                  style: Lx.cardHeading.copyWith(fontFeatures: const [
-                    FontFeature.tabularFigures()
-                  ])),
+                  style: Lx.cardHeading.copyWith(
+                      fontFeatures: const [FontFeature.tabularFigures()])),
             ],
           ),
           const SizedBox(height: Lx.s12),
