@@ -129,7 +129,7 @@ class LauncherHomeTab extends StatelessWidget {
           description: [when, e.location].where((t) => t.isNotEmpty).join('\n'),
           icon: Icons.event_outlined,
           cta: 'Lihat Detail',
-          onTap: () => context.push('/info/kegiatan'),
+          onTap: () => context.push('/events'),
         ));
       }
     }

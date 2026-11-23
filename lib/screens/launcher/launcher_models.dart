@@ -490,6 +490,7 @@ class HubItem {
     this.contribution,
     this.lead = '',
     this.agenda = const [],
+    this.level = '',
   });
 
   final HubType type;
@@ -523,6 +524,10 @@ class HubItem {
   /// title.
   final List<NextEventInfo> agenda;
 
+  /// An event's level (kelompok … pusat): colours its date block the same
+  /// way as in the Kegiatan module. Empty for other types.
+  final String level;
+
   /// What the member gave to this fundraising; null when nothing is known
   /// to have been given.
   final Contribution? contribution;
@@ -535,8 +540,9 @@ class HubItem {
         type: HubType.event,
         others: others,
         title: e.title,
-        route: '/info/kegiatan',
+        route: '/events',
         date: e.date,
+        level: e.level,
         tag: e.countdown,
         lead: e.timeStart.isEmpty ? '' : e.timeRange,
         meta: [
@@ -551,7 +557,7 @@ class HubItem {
         type: HubType.event,
         others: others,
         title: 'Kegiatan hari ini',
-        route: '/info/kegiatan',
+        route: '/events',
         date: today.first.date,
         tag: '${today.length} kegiatan hari ini',
         agenda: today,
@@ -718,7 +724,7 @@ List<LauncherNotice> buildNotices(HomeSummaryProvider p) {
           if (e.timeStart.isNotEmpty) e.timeRange,
           if (e.location.isNotEmpty) e.location,
         ].join(' · '),
-        route: '/info/kegiatan',
+        route: '/events',
       ));
     }
   }

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../config/launcher_tokens.dart';
+import '../../widgets/app_ui.dart' show EmptyState;
 import '../../providers/home_summary_provider.dart';
 import '../../models/user.dart';
 import '../profile/change_password_screen.dart';
@@ -49,19 +50,8 @@ class _TabHeader extends StatelessWidget {
 }
 
 Widget _emptyState(IconData icon, String text) => Padding(
-      padding: const EdgeInsets.fromLTRB(32, 48, 32, 0),
-      child: Column(
-        children: [
-          Icon(icon, size: 44, color: Lx.border),
-          const SizedBox(height: 12),
-          Text(
-            text,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-                color: Lx.textSecondary, fontSize: 14, height: 1.4),
-          ),
-        ],
-      ),
+      padding: const EdgeInsets.fromLTRB(32, 40, 32, 0),
+      child: EmptyState(icon: icon, text: text),
     );
 
 /// One tappable row: tinted icon, title, one line of detail.

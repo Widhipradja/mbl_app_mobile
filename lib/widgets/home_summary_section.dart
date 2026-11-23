@@ -280,7 +280,7 @@ class _HomeSummarySectionState extends State<HomeSummarySection> {
         _CardSpec(
             Icons.event_outlined, 'Kegiatan terdekat', p.nextEvent, _eventBody,
             emptyText: 'Tidak ada kegiatan terdekat',
-            onTap: () => context.push('/info/kegiatan')),
+            onTap: () => context.push('/events')),
       if (p.isModuleVisible('jimpitan'))
         _CardSpec(Icons.volunteer_activism_outlined, 'Jimpitan bulan ini',
             p.jimpitan, _jimpitanBody,

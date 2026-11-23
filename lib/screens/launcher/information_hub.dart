@@ -26,7 +26,7 @@ class InformationHub extends StatelessWidget {
   /// "lainnya".
   static const _maxFundraising = 4;
 
-  static const _eventsRoute = '/info/kegiatan';
+  static const _eventsRoute = '/events';
   static const _fundraisingRoute = '/info/fundraising';
 
   @override

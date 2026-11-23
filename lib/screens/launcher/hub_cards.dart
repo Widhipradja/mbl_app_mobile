@@ -144,22 +144,26 @@ class HubCard extends StatelessWidget {
   Widget _leading(HubStyle style) {
     final d = item.date;
     if (d != null) {
-      final small = Lx.metadata.copyWith(
-          color: Lx.primaryDark, fontWeight: FontWeight.w600, fontSize: 11);
+      // Same block as the Kegiatan module: weekday, day, month, in the
+      // colour of the event's level.
+      final level = item.level.isEmpty ? null : EventLevel.of(item.level);
+      final fg = level?.fg ?? Lx.primaryDark;
+      final small =
+          Lx.metadata.copyWith(color: fg, fontWeight: FontWeight.w700, fontSize: 11);
       return Container(
         width: 50,
         padding: const EdgeInsets.symmetric(vertical: 6),
         decoration: BoxDecoration(
-          color: Lx.primaryLight,
+          color: level?.tint ?? Lx.primaryLight,
           borderRadius: BorderRadius.circular(14),
         ),
         child: Column(
           children: [
-            Text(monthsShort[d.month - 1], style: small),
-            Text('${d.day}',
-                style:
-                    Lx.userName.copyWith(color: Lx.primaryDark, height: 1.1)),
             Text(daysShort[d.weekday - 1], style: small),
+            Text('${d.day}',
+                style: Lx.userName.copyWith(color: fg, height: 1.1)),
+            Text(monthsShort[d.month - 1],
+                style: small.copyWith(fontWeight: FontWeight.w500)),
           ],
         ),
       );
@@ -480,26 +484,38 @@ class HubStateCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final failed = onRetry != null;
     return Container(
-      padding: const EdgeInsets.all(Lx.s16),
-      decoration: BoxDecoration(
-        color: Lx.surface,
-        borderRadius: BorderRadius.circular(Lx.rCard),
-      ),
+      padding: const EdgeInsets.all(Lx.s12),
+      decoration: Lx.card(),
       child: Row(
         children: [
-          if (loading)
-            const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          else
-            Icon(icon, size: 22, color: Lx.textMuted),
+          Container(
+            width: 40,
+            height: 40,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: failed ? const Color(0xFFFEF2F2) : Lx.primaryLight,
+              shape: BoxShape.circle,
+            ),
+            child: loading
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(icon,
+                    size: 20, color: failed ? Lx.danger : Lx.primary),
+          ),
           const SizedBox(width: Lx.s12),
           Expanded(child: Text(text, style: Lx.body)),
-          if (onRetry != null)
-            TextButton(onPressed: onRetry, child: const Text('Coba lagi')),
+          if (failed)
+            FilledButton.tonal(
+              onPressed: onRetry,
+              style: FilledButton.styleFrom(
+                  visualDensity: VisualDensity.compact),
+              child: const Text('Coba lagi'),
+            ),
         ],
       ),
     );
