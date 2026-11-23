@@ -2,8 +2,13 @@
 # Builds the release APK and publishes it to the update host
 # (https://apk.sangkarahub.app), where the app's own update check finds it.
 #
-#   export UPLOAD_TOKEN=<UPLOAD_TOKEN of the host's .env>
 #   scripts/publish_apk.sh [options]
+#
+# The upload token (UPLOAD_TOKEN of the host's .env) is taken from, in order:
+#   1. the UPLOAD_TOKEN environment variable,
+#   2. the UPLOAD_TOKEN= line of .env at the project root (ignored by git),
+#   3. the macOS Keychain entry "baraka-apk-upload-token".
+# It is only looked up for a real upload, never for --dry-run.
 #
 # Options:
 #   --code N          versionCode (default: the host's newest + 1)
@@ -16,8 +21,8 @@
 #   --next            only print the versionCode that would be used
 #   --verify-apk FILE only check FILE (signature, version inside, size), no build, no upload
 #
-# The token is read from the environment and never written anywhere. The
-# upload is asked about first: it is public as soon as it is up.
+# The token is never printed or written anywhere. The upload is asked about
+# first: it is public as soon as it is up.
 set -euo pipefail
 
 HOST="${APK_HOST:-https://apk.sangkarahub.app}"
@@ -162,8 +167,40 @@ fi
 
 # ── Build ───────────────────────────────────────────────────────────────────
 
-[ "$DRY" = 1 ] || [ -n "${UPLOAD_TOKEN:-}" ] ||
-  die "set UPLOAD_TOKEN (the host's upload token), or use --dry-run"
+# ── Upload token ─────────────────────────────────────────────────────────────
+
+KEYCHAIN_SERVICE="baraka-apk-upload-token"
+
+# UPLOAD_TOKEN= of .env, read as data (the file is never sourced); empty
+# when the file or the line is missing.
+token_from_env_file() {
+  local f="$ROOT/.env" v
+  [ -f "$f" ] || return 0
+  v="$(grep -E '^[[:space:]]*(export[[:space:]]+)?UPLOAD_TOKEN=' "$f" | tail -1 |
+    sed -E 's/^[[:space:]]*(export[[:space:]]+)?UPLOAD_TOKEN=//' | tr -d '\r')"
+  v="${v#\"}"; v="${v%\"}"; v="${v#\'}"; v="${v%\'}"
+  printf '%s' "$v"
+}
+
+token_from_keychain() {
+  command -v security >/dev/null 2>&1 || return 0
+  security find-generic-password -s "$KEYCHAIN_SERVICE" -w 2>/dev/null || true
+}
+
+if [ "$DRY" != 1 ]; then
+  TOKEN_SOURCE="environment"
+  if [ -z "${UPLOAD_TOKEN:-}" ]; then
+    UPLOAD_TOKEN="$(token_from_env_file)"
+    TOKEN_SOURCE=".env"
+  fi
+  if [ -z "$UPLOAD_TOKEN" ]; then
+    UPLOAD_TOKEN="$(token_from_keychain)"
+    TOKEN_SOURCE="Keychain ($KEYCHAIN_SERVICE)"
+  fi
+  [ -n "$UPLOAD_TOKEN" ] ||
+    die "no upload token: set UPLOAD_TOKEN, add UPLOAD_TOKEN=... to .env, or store it in the Keychain as $KEYCHAIN_SERVICE (or use --dry-run)"
+  echo "upload token: from $TOKEN_SOURCE"
+fi
 
 NEWEST="$(index_field newest_code)"
 [ -n "$CODE" ] || CODE=$(( NEWEST + 1 ))
