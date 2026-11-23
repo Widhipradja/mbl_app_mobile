@@ -567,6 +567,13 @@ class ApiService {
     return await _dio.get('/api/m/v1/profile');
   }
 
+  /// Own family, read-only, already sorted by the server (head first, then
+  /// oldest birth date, then name). The family comes from the token.
+  /// Endpoint: `GET /api/m/v1/profile/family`.
+  Future<Response> getProfileFamily() async {
+    return await _dio.get('/api/m/v1/profile/family');
+  }
+
   /// Edit own profile, partially: only the fields in [data] change
   /// (`first_name`, `last_name`, `email`, `phone`, `sex`). Changing the email
   /// also needs `current_password`. Never the `user_id`. Answers the updated

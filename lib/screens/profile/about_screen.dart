@@ -1,52 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../config/launcher_tokens.dart';
-import '../../services/update_service.dart';
+import '../../update/apk_updater.dart';
+import '../../update/update_button.dart';
+import '../../update/updater.dart';
 import '../../widgets/app_icon.dart';
 import '../../widgets/app_ui.dart';
 
-/// What the app is, which version is installed, and whether a newer build is
-/// published, with the link to download it.
-class AboutScreen extends StatefulWidget {
-  const AboutScreen({super.key, this.service});
-
-  /// Tests pass their own; the app uses the real update host.
-  final UpdateService? service;
-
-  @override
-  State<AboutScreen> createState() => _AboutScreenState();
-}
-
-class _AboutScreenState extends State<AboutScreen> {
-  late final UpdateService _service = widget.service ?? UpdateService();
-  UpdateCheck? _check;
-  bool _checking = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _run();
-  }
-
-  Future<void> _run() async {
-    setState(() => _checking = true);
-    final result = await _service.check();
-    if (!mounted) return;
-    setState(() {
-      _check = result;
-      _checking = false;
-    });
-  }
-
-  Future<void> _download(AppRelease r) async {
-    final ok = await launchUrl(Uri.parse(r.url),
-        mode: LaunchMode.externalApplication);
-    if (!ok && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Tidak bisa membuka tautan unduhan.')));
-    }
-  }
+/// What the app is, which version is installed, and the update row: it checks
+/// the update host and, when a newer build exists, downloads it, checks its
+/// SHA-256 and opens Android's installer.
+class AboutScreen extends StatelessWidget {
+  const AboutScreen({super.key});
 
   static const _features = [
     (Icons.account_balance_wallet_outlined, 'Dompet Saya',
@@ -75,11 +41,15 @@ class _AboutScreenState extends State<AboutScreen> {
           const SizedBox(height: Lx.s12),
           Text('Baraka', style: Lx.userName.copyWith(fontSize: 24)),
           const SizedBox(height: 2),
-          Text(
-            _check == null
-                ? 'Memuat versi…'
-                : 'Versi ${_check!.installedName} (${_check!.installedCode})',
-            style: Lx.metadata,
+          FutureBuilder<PackageInfo>(
+            future: PackageInfo.fromPlatform(),
+            builder: (_, snap) {
+              final i = snap.data;
+              return Text(
+                i == null ? 'Memuat versi…' : 'Versi ${i.version} (${i.buildNumber})',
+                style: Lx.metadata,
+              );
+            },
           ),
         ],
       );
@@ -96,154 +66,24 @@ class _AboutScreenState extends State<AboutScreen> {
 
   // ── Update ───────────────────────────────────────────────────────────────
 
-  Widget _update() {
-    final c = _check;
-    if (_checking || c == null) {
-      return const SectionCard(
-        child: Row(
-          children: [
-            SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2)),
-            SizedBox(width: Lx.s12),
-            Expanded(child: Text('Memeriksa pembaruan…', style: Lx.body)),
-          ],
-        ),
-      );
-    }
-    switch (c.state) {
-      case UpdateState.available:
-        return _available(c);
-      case UpdateState.upToDate:
-        return _status(Icons.check_circle_rounded, Lx.success,
-            'Aplikasi sudah terbaru',
-            'Versi ${c.installedName} adalah yang terbaru.');
-      case UpdateState.notPublished:
-        return _status(Icons.info_outline_rounded, Lx.textSecondary,
-            'Info pembaruan belum tersedia',
-            'Aplikasi ini belum diterbitkan di server pembaruan.');
-      case UpdateState.failed:
-        return _status(Icons.cloud_off_rounded, Lx.danger,
-            'Tidak bisa memeriksa pembaruan',
-            'Periksa koneksi Anda, lalu coba lagi.',
-            retry: true);
-      case UpdateState.unsupported:
-        return _status(Icons.phone_iphone_rounded, Lx.textSecondary,
-            'Pembaruan lewat APK hanya untuk Android',
-            'Di perangkat ini, perbarui lewat toko aplikasi.');
-    }
-  }
-
-  Widget _status(IconData icon, Color color, String title, String body,
-      {bool retry = false}) {
-    return SectionCard(
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-                color: color.withOpacity(0.12), shape: BoxShape.circle),
-            child: Icon(icon, color: color, size: 22),
-          ),
-          const SizedBox(width: Lx.s12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: Lx.cardHeading.copyWith(fontSize: 14)),
-                Text(body, style: Lx.metadata),
-              ],
-            ),
-          ),
-          if (retry)
-            TextButton(onPressed: _run, child: const Text('Coba lagi'))
-          else
-            IconButton(
-              tooltip: 'Periksa lagi',
-              onPressed: _run,
-              icon: const Icon(Icons.refresh_rounded, color: Lx.textSecondary),
-            ),
-        ],
-      ),
-    );
-  }
-
-  String _size(int bytes) => bytes <= 0
-      ? ''
-      : bytes >= 1048576
-          ? '${(bytes / 1048576).toStringAsFixed(1)} MB'
-          : '${(bytes / 1024).round()} KB';
-
-  Widget _available(UpdateCheck c) {
-    final r = c.latest!;
-    final size = _size(r.size);
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: Lx.s12),
-      padding: const EdgeInsets.all(Lx.s16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEFF6FF),
-        borderRadius: BorderRadius.circular(Lx.rCard),
-        border: Border.all(color: Lx.launcherBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: const BoxDecoration(
-                    color: Lx.primary, shape: BoxShape.circle),
-                child: const Icon(Icons.system_update_alt_rounded,
-                    color: Colors.white, size: 22),
-              ),
-              const SizedBox(width: Lx.s12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+  /// The update row of the update host's kit, in a card.
+  Widget _update() => SectionCard(
+        child: FutureBuilder<ApkUpdater>(
+          future: appUpdater(),
+          builder: (_, snap) => snap.hasData
+              ? UpdateButton(updater: snap.data!)
+              : const Row(
                   children: [
-                    Text(
-                        c.mandatory
-                            ? 'Pembaruan wajib tersedia'
-                            : 'Versi baru tersedia',
-                        style: Lx.cardHeading),
-                    Text(
-                        '${r.versionName} (${r.versionCode})'
-                        '${size.isEmpty ? '' : ' · $size'}',
-                        style: Lx.metadata),
+                    SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2)),
+                    SizedBox(width: Lx.s12),
+                    Text('Memeriksa pembaruan…', style: Lx.body),
                   ],
                 ),
-              ),
-            ],
-          ),
-          if (r.notes.isNotEmpty) ...[
-            const SizedBox(height: Lx.s12),
-            Text('Yang baru', style: Lx.metadata.copyWith(color: Lx.text)),
-            const SizedBox(height: 2),
-            Text(r.notes, style: Lx.body.copyWith(color: Lx.text)),
-          ],
-          const SizedBox(height: Lx.s16),
-          FilledButton.icon(
-            onPressed: () => _download(r),
-            style:
-                FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-            icon: const Icon(Icons.download_rounded),
-            label: const Text('Unduh pembaruan'),
-          ),
-          const SizedBox(height: Lx.s8),
-          Text(
-              'Setelah unduhan selesai, buka file APK dan ketuk Install. '
-              'Data Anda tetap aman.',
-              textAlign: TextAlign.center,
-              style: Lx.metadata),
-        ],
-      ),
-    );
-  }
+        ),
+      );
 
   // ── Features ─────────────────────────────────────────────────────────────
 
@@ -283,19 +123,15 @@ class _AboutScreenState extends State<AboutScreen> {
       data: Lx.theme,
       child: Scaffold(
         appBar: AppBar(title: const Text('Tentang Aplikasi')),
-        body: RefreshIndicator(
-          onRefresh: _run,
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(Lx.s16, Lx.s8, Lx.s16, Lx.s24),
-            children: [
-              _hero(),
-              const SizedBox(height: Lx.s20),
-              _update(),
-              _intro(),
-              _featureList(),
-            ],
-          ),
+        body: ListView(
+          padding: const EdgeInsets.fromLTRB(Lx.s16, Lx.s8, Lx.s16, Lx.s24),
+          children: [
+            _hero(),
+            const SizedBox(height: Lx.s20),
+            _update(),
+            _intro(),
+            _featureList(),
+          ],
         ),
       ),
     );

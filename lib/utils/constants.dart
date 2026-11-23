@@ -14,6 +14,9 @@ class AppConstants {
   static const String iosLocalApiUrl =
       'http://localhost:3000/api'; // iOS Simulator
 
+  // Where new builds are published (apk-host). The trailing slash is required.
+  static const String updateHost = 'https://apk.sangkarahub.app/';
+
   // App Info
   static const String appName = 'Manage Budget & Logs';
   static const String appVersion = '1.0.0';

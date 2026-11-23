@@ -224,8 +224,8 @@ class _BudgetWalletScreenState extends State<BudgetWalletScreen> {
                 fit: BoxFit.scaleDown,
                 alignment: Alignment.centerLeft,
                 child: Text(rp(v),
-                    style: Lx.cardHeading.copyWith(
-                        color: Colors.white, fontFeatures: tabular)),
+                    style: Lx.cardHeading
+                        .copyWith(color: Colors.white, fontFeatures: tabular)),
               ),
             ],
           ),
@@ -268,14 +268,26 @@ class _BudgetWalletScreenState extends State<BudgetWalletScreen> {
       padding: const EdgeInsets.symmetric(vertical: Lx.s12),
       child: Row(
         children: [
-          tile(Icons.receipt_long_rounded, 'Transaksi', Lx.primary,
-              Lx.primaryLight, () => _go(BudgetTransactionsScreen(month: _month))),
+          tile(
+              Icons.receipt_long_rounded,
+              'Transaksi',
+              Lx.primary,
+              Lx.primaryLight,
+              () => _go(BudgetTransactionsScreen(month: _month))),
           tile(Icons.pie_chart_rounded, 'Laporan', const Color(0xFF7C3AED),
               Lx.secondaryLight, () => _go(BudgetReportScreen(month: _month))),
-          tile(Icons.track_changes_rounded, 'Anggaran', const Color(0xFFEA580C),
-              const Color(0xFFFFEDD5), () => _go(BudgetLimitsScreen(month: _month))),
-          tile(Icons.category_rounded, 'Kategori', const Color(0xFF0D9488),
-              const Color(0xFFCCFBF1), () => _go(const BudgetCategoriesScreen())),
+          tile(
+              Icons.track_changes_rounded,
+              'Anggaran',
+              const Color(0xFFEA580C),
+              const Color(0xFFFFEDD5),
+              () => _go(BudgetLimitsScreen(month: _month))),
+          tile(
+              Icons.category_rounded,
+              'Kategori',
+              const Color(0xFF0D9488),
+              const Color(0xFFCCFBF1),
+              () => _go(const BudgetCategoriesScreen())),
         ],
       ),
     );
@@ -297,10 +309,6 @@ class _BudgetWalletScreenState extends State<BudgetWalletScreen> {
         ),
       );
     }
-    final total = s.limitTotal;
-    final spent = s.spentInBudget;
-    final pct = total == 0 ? 0.0 : spent * 100 / total;
-    final over = spent > total;
     final more = lines.length - _budgetRows;
     return SectionCard(
       title: 'Anggaran bulan ini',
@@ -309,30 +317,6 @@ class _BudgetWalletScreenState extends State<BudgetWalletScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(
-                child: Text.rich(
-                  TextSpan(children: [
-                    TextSpan(
-                        text: rp(over ? spent - total : total - spent),
-                        style: Lx.sectionHeading.copyWith(
-                            color: over ? Lx.danger : Lx.text,
-                            fontFeatures: tabular)),
-                    TextSpan(
-                        text: over ? '  melebihi anggaran' : '  tersisa',
-                        style: Lx.metadata),
-                  ]),
-                ),
-              ),
-              Text('dari ${rp(total)}',
-                  style: Lx.metadata.copyWith(fontFeatures: tabular)),
-            ],
-          ),
-          const SizedBox(height: Lx.s8),
-          RoundBar(value: pct / 100, color: budgetColor(pct, over), height: 10),
-          const SizedBox(height: Lx.s8),
           for (final l in lines.take(_budgetRows))
             BudgetProgressRow(
               line: l,
@@ -342,8 +326,8 @@ class _BudgetWalletScreenState extends State<BudgetWalletScreen> {
           if (more > 0)
             Padding(
               padding: const EdgeInsets.only(top: Lx.s4),
-              child: Text('+$more kategori lain di Anggaran',
-                  style: Lx.metadata),
+              child:
+                  Text('+$more kategori lain di Anggaran', style: Lx.metadata),
             ),
         ],
       ),

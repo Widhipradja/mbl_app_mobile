@@ -7,6 +7,7 @@ import '../../config/launcher_tokens.dart';
 import '../../providers/auth_provider.dart';
 import '../../utils/avatar_image.dart';
 import '../launcher/user_avatar.dart';
+import '../savings/ledger_widgets.dart' show monthNames;
 
 /// Text for a failed profile / password call. The server's Indonesian `error`
 /// is shown as it is for 403, 409, 422 and 429, and for the one 502 that asks
@@ -73,7 +74,6 @@ class ProfileErrorBox extends StatelessWidget {
         child: Text(text, style: Lx.metadata.copyWith(color: Lx.danger)),
       );
 }
-
 
 /// A failed photo call: the server's own text for the photo rules (400, 413,
 /// 415) and for the account (409, 422).
@@ -262,3 +262,22 @@ class _ProfilePhotoEditorState extends State<ProfilePhotoEditor> {
     );
   }
 }
+
+/// `YYYY-MM-DD` as a date, or null when it is empty or not a real date. Strict:
+/// `DateTime.tryParse('1990-02-30')` quietly gives 2 March, so the parts are
+/// compared back.
+DateTime? parseBirthDate(String? raw) {
+  final m = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$').firstMatch((raw ?? '').trim());
+  if (m == null) return null;
+  final y = int.parse(m[1]!), mo = int.parse(m[2]!), d = int.parse(m[3]!);
+  final date = DateTime(y, mo, d);
+  return date.year == y && date.month == mo && date.day == d ? date : null;
+}
+
+/// "17 Mei 1990".
+String longDate(DateTime d) => '${d.day} ${monthNames[d.month - 1]} ${d.year}';
+
+/// `YYYY-MM-DD` with no time or zone: what the server takes.
+String birthDateParam(DateTime d) =>
+    '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-'
+    '${d.day.toString().padLeft(2, '0')}';

@@ -7,7 +7,7 @@ import '../../services/api_service.dart';
 import '../../widgets/app_ui.dart' show RetryState;
 import 'profile_widgets.dart';
 
-/// Edit own profile: name, email, phone and gender. The login id (`user_id`)
+/// Edit own profile: name, date of birth, email, phone and gender. The login id (`user_id`)
 /// is shown but cannot be changed. See docs/PROFILE_PASSWORD_API.md.
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -73,6 +73,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final sex = _s(p['sex']).toUpperCase();
     _sex = sex == 'M' || sex == 'F' ? sex : null;
     _sexOrig = _sex;
+    _birthOrig = _birth = parseBirthDate(_s(p['birth_date']));
     _userId = _s(p['user_id']);
   }
 
@@ -113,6 +114,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       for (final e in now.entries)
         if (e.key == 'email' ? _emailChanged : e.value != (_orig[e.key] ?? ''))
           e.key: e.value,
+      // A date is `YYYY-MM-DD`; "" removes it.
+      if (_birthChanged)
+        'birth_date': _birth == null ? '' : birthDateParam(_birth!),
     };
   }
 
@@ -147,6 +151,79 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   String? _sexOrig;
   bool get _sexChanged => _sex != null && _sex != _sexOrig;
+
+  /// Date of birth as the server last said it, and as it is now; null for none.
+  DateTime? _birthOrig, _birth;
+
+  bool get _birthChanged => _birth != _birthOrig;
+
+  Future<void> _pickBirth() async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _birth ?? DateTime(1990, 1, 1),
+      firstDate: DateTime(1900, 1, 1),
+      lastDate: today,
+      helpText: 'Tanggal lahir',
+    );
+    if (picked != null) {
+      setState(() => _birth = DateTime(picked.year, picked.month, picked.day));
+    }
+  }
+
+  /// A tap opens the picker; "Hapus" clears it (the server then stores none).
+  Widget _birthField(bool enabled) {
+    final d = _birth;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Tanggal lahir', style: Lx.metadata),
+        const SizedBox(height: 6),
+        InkWell(
+          onTap: enabled ? _pickBirth : null,
+          borderRadius: BorderRadius.circular(Lx.rButton),
+          child: Container(
+            height: 52,
+            padding: const EdgeInsets.symmetric(horizontal: Lx.s12),
+            decoration: BoxDecoration(
+              color: Lx.surface,
+              borderRadius: BorderRadius.circular(Lx.rButton),
+              border: Border.all(color: Lx.border),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.cake_outlined, size: 20, color: Lx.textMuted),
+                const SizedBox(width: Lx.s12),
+                Expanded(
+                  child: Text(
+                    d == null ? 'Belum diisi' : longDate(d),
+                    style: Lx.body.copyWith(
+                        color: d == null ? Lx.textMuted : Lx.text,
+                        fontWeight:
+                            d == null ? FontWeight.w400 : FontWeight.w600),
+                  ),
+                ),
+                const Icon(Icons.calendar_today_outlined,
+                    size: 18, color: Lx.textSecondary),
+              ],
+            ),
+          ),
+        ),
+        if (d != null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: enabled ? () => setState(() => _birth = null) : null,
+              style: TextButton.styleFrom(
+                  foregroundColor: Lx.danger,
+                  visualDensity: VisualDensity.compact),
+              child: const Text('Hapus tanggal lahir'),
+            ),
+          ),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -335,6 +412,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   ? 'Maksimal 100 karakter.'
                   : null,
             ),
+            if (!readOnly) ...[
+              const SizedBox(height: Lx.s16),
+              _birthField(enabled),
+            ],
             if (!readOnly) ...[
               const SizedBox(height: Lx.s16),
               Text('Jenis kelamin', style: Lx.metadata),
