@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../config/launcher_tokens.dart';
-import '../../widgets/app_ui.dart' show SoftTabs;
+import '../../widgets/app_ui.dart' show RetryState, SoftTabs;
 import 'event_data.dart';
 
 const _statuses = {
@@ -40,26 +40,30 @@ class EventFormScreen extends StatefulWidget {
 
 class _EventFormScreenState extends State<EventFormScreen> {
   final _formKey = GlobalKey<FormState>();
-  late final _title = TextEditingController(text: widget.event?.title);
-  late final _location = TextEditingController(text: widget.event?.location);
-  late final _description =
-      TextEditingController(text: widget.event?.description);
+  final _title = TextEditingController();
+  final _location = TextEditingController();
+  final _description = TextEditingController();
 
-  late bool _announcement = widget.event?.isAnnouncement ?? false;
-  late String _category = widget.event?.category ?? 'Umum';
-  late String _level = _levels.contains(widget.event?.level)
-      ? widget.event!.level
-      : '';
-  late String _status = _statuses.containsKey(widget.event?.status)
-      ? widget.event!.status
-      : 'Scheduled';
-  late bool _multiDay = widget.event?.isMultiDay ?? false;
-  late DateTime? _start = widget.event?.start ?? DateTime.now();
-  late DateTime? _end = widget.event?.isMultiDay == true
-      ? widget.event!.end
-      : null;
+  bool _announcement = false;
+
+  /// One of the lookup categories; null until chosen. An edited event keeps
+  /// its own category even when the lookup no longer lists it.
+  String? _category;
+  String _level = '';
+  String _status = 'Scheduled';
+  bool _multiDay = false;
+  DateTime? _start = DateTime.now();
+  DateTime? _end;
   TimeOfDay? _from, _to;
   final List<_MaterialRow> _materials = [];
+
+  EventLookups? _lookups;
+  bool _lookupsLoading = true;
+  String? _categoryError;
+
+  /// Editing: the event is read from the server first (`GET events/:id`).
+  late bool _loading = widget.event != null;
+  String? _loadError;
 
   bool _saving = false;
   String? _error;
@@ -69,13 +73,86 @@ class _EventFormScreenState extends State<EventFormScreen> {
   @override
   void initState() {
     super.initState();
-    final e = widget.event;
-    if (e != null) {
-      _from = _parseTime(e.startTime);
-      _to = _parseTime(e.endTime);
-      _materials.addAll(e.materials
-          .map((m) => _MaterialRow(title: m.title, speaker: m.speaker)));
+    _loadLookups();
+    if (_editing) _loadEvent();
+  }
+
+  /// Fills the form from [e].
+  void _apply(MobileEvent e) {
+    _title.text = e.title;
+    _location.text = e.location;
+    _description.text = e.description;
+    _announcement = e.isAnnouncement;
+    _category = e.category.isEmpty ? null : e.category;
+    _level = _levels.contains(e.level) ? e.level : '';
+    _status = _statuses.containsKey(e.status) ? e.status : 'Scheduled';
+    _multiDay = e.isMultiDay;
+    _start = e.start ?? DateTime.now();
+    _end = e.isMultiDay ? e.end : null;
+    _from = _parseTime(e.startTime);
+    _to = _parseTime(e.endTime);
+    for (final m in _materials) {
+      m.dispose();
     }
+    _materials
+      ..clear()
+      ..addAll(e.materials
+          .map((m) => _MaterialRow(title: m.title, speaker: m.speaker)));
+  }
+
+  Future<void> _loadEvent() async {
+    setState(() {
+      _loading = true;
+      _loadError = null;
+    });
+    try {
+      final e = await eventRepo.get(widget.event!.id);
+      if (!mounted) return;
+      setState(() => _apply(e));
+    } catch (e) {
+      debugPrint('Event form load error: $e');
+      if (!mounted) return;
+      if (eventFailure(e) == EventFailure.notFound) {
+        // Deleted meanwhile: back to the list, which reloads.
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(eventError(e))));
+        Navigator.of(context).pop(true);
+        return;
+      }
+      setState(() => _loadError = eventError(e));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _loadLookups() async {
+    setState(() => _lookupsLoading = true);
+    try {
+      final l = await eventRepo.lookups();
+      if (!mounted) return;
+      setState(() {
+        _lookups = l;
+        // A new event starts on the first category.
+        if (_category == null && !_editing && l.categories.isNotEmpty) {
+          _category = l.categories.first;
+        }
+      });
+    } catch (e) {
+      // The categories are needed; the form says so and offers a retry.
+      debugPrint('Event lookups error: $e');
+    } finally {
+      if (mounted) setState(() => _lookupsLoading = false);
+    }
+  }
+
+  /// The lookup categories, plus the event's own when the lookup lacks it.
+  List<String> get _categoryOptions {
+    final list = [...?_lookups?.categories];
+    final own = _category;
+    if (own != null && own.isNotEmpty && !list.contains(own)) {
+      list.insert(0, own);
+    }
+    return list;
   }
 
   @override
@@ -175,7 +252,11 @@ class _EventFormScreenState extends State<EventFormScreen> {
       'kind': _announcement ? 'announcement' : 'event',
       if (_editing) 'status': _status,
       'start_date': eventDay(_start!),
-      if (multi) 'end_date': eventDay(_end!),
+      // Editing: `null` clears an end date left from a multi-day event.
+      if (multi)
+        'end_date': eventDay(_end!)
+      else if (_editing)
+        'end_date': null,
       if (timed) 'start_time': _fmt(_from!),
       if (timed) 'end_time': _fmt(_to!),
       // Editing replaces the list; an empty one clears it.
@@ -200,6 +281,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
     setState(() {
       _saving = true;
       _error = null;
+      _categoryError = null;
     });
     try {
       final body = _body();
@@ -220,10 +302,23 @@ class _EventFormScreenState extends State<EventFormScreen> {
         Navigator.of(context).pop(false);
         return;
       }
+      if (failure == EventFailure.notFound) {
+        // Deleted while the form was open: back to the list, which reloads.
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(eventError(e))));
+        Navigator.of(context).pop(true);
+        return;
+      }
       // Stay on the form with everything typed so far.
       setState(() {
         _saving = false;
-        _error = eventError(e);
+        if (failure == EventFailure.badCategory) {
+          // Shown at the field; the list may have changed, so reload it.
+          _categoryError = eventError(e);
+          _loadLookups();
+        } else {
+          _error = eventError(e);
+        }
       });
     }
   }
@@ -231,7 +326,8 @@ class _EventFormScreenState extends State<EventFormScreen> {
   InputDecoration _dec(String label, {String? hint}) => InputDecoration(
         labelText: label,
         hintText: hint,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(Lx.rButton)),
+        border:
+            OutlineInputBorder(borderRadius: BorderRadius.circular(Lx.rButton)),
         filled: true,
         fillColor: Lx.surface,
       );
@@ -246,175 +342,262 @@ class _EventFormScreenState extends State<EventFormScreen> {
       appBar: AppBar(
         title: Text(_editing ? 'Ubah $kindWord' : 'Tambah $kindWord'),
       ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(Lx.s16),
-          child: FilledButton(
-            onPressed: _saving ? null : _save,
-            style: FilledButton.styleFrom(
-              minimumSize: const Size.fromHeight(48),
-              backgroundColor: Lx.primary,
-              foregroundColor: Colors.white,
+      bottomNavigationBar: _loading || _loadError != null
+          ? null
+          : SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(Lx.s16),
+                child: FilledButton(
+                  onPressed: _saving ? null : _save,
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                    backgroundColor: Lx.primary,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: _saving
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white))
+                      : const Text('Simpan'),
+                ),
+              ),
             ),
-            child: _saving
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white))
-                : const Text('Simpan'),
+      body: _loadError != null
+          ? Center(child: RetryState(_loadError!, onRetry: _loadEvent))
+          : _loading
+              ? const Center(child: CircularProgressIndicator())
+              : Form(
+                  key: _formKey,
+                  child: ListView(
+                    padding: const EdgeInsets.all(Lx.s16),
+                    children: [
+                      if (_error != null)
+                        Container(
+                          margin: const EdgeInsets.only(bottom: Lx.s12),
+                          padding: const EdgeInsets.all(Lx.s12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEE2E2),
+                            borderRadius: BorderRadius.circular(Lx.rButton),
+                          ),
+                          child: Text(_error!,
+                              style: const TextStyle(color: Color(0xFFB91C1C))),
+                        ),
+                      // Type is fixed once saved: event-reminder refuses a change.
+                      SoftTabs<bool>(
+                        value: _announcement,
+                        items: const [
+                          (false, 'Kegiatan', Icons.event_outlined),
+                          (true, 'Pengumuman', Icons.campaign_outlined),
+                        ],
+                        onChanged: _editing
+                            ? null
+                            : (v) => setState(() {
+                                  _announcement = v;
+                                  if (_announcement) {
+                                    _from = _to = null;
+                                    _materials
+                                      ..forEach((m) => m.dispose())
+                                      ..clear();
+                                  }
+                                }),
+                      ),
+                      _gap(),
+                      TextFormField(
+                        controller: _title,
+                        decoration: _dec('Judul *'),
+                        textCapitalization: TextCapitalization.sentences,
+                        maxLength: 255,
+                        validator: (v) => (v ?? '').trim().isEmpty
+                            ? 'Judul wajib diisi.'
+                            : null,
+                      ),
+                      _categoryField(),
+                      _gap(),
+                      DropdownButtonFormField<String>(
+                        value: _level,
+                        decoration: _dec('Tingkat'),
+                        items: [
+                          for (final l in _levels)
+                            DropdownMenuItem(
+                                value: l,
+                                child: Text(l.isEmpty ? 'Tanpa tingkat' : l)),
+                        ],
+                        onChanged: (v) => setState(() => _level = v ?? ''),
+                      ),
+                      _gap(),
+                      TextFormField(
+                        controller: _location,
+                        decoration: _dec('Lokasi'),
+                        textCapitalization: TextCapitalization.sentences,
+                        onChanged: (_) => setState(() {}),
+                      ),
+                      ..._locationSuggestions(),
+                      _gap(),
+                      TextFormField(
+                        controller: _description,
+                        decoration: _dec('Keterangan'),
+                        textCapitalization: TextCapitalization.sentences,
+                        minLines: 3,
+                        maxLines: 6,
+                      ),
+                      if (_editing) ...[
+                        _gap(),
+                        DropdownButtonFormField<String>(
+                          value: _status,
+                          decoration: _dec('Status'),
+                          items: [
+                            for (final s in _statuses.entries)
+                              DropdownMenuItem(
+                                  value: s.key, child: Text(s.value)),
+                          ],
+                          onChanged: (v) =>
+                              setState(() => _status = v ?? 'Scheduled'),
+                        ),
+                      ],
+                      _gap(Lx.s20),
+                      Text('Waktu', style: Lx.cardHeading),
+                      _gap(Lx.s8),
+                      SoftTabs<bool>(
+                        value: _multiDay,
+                        items: const [
+                          (false, 'Satu hari', Icons.today_outlined),
+                          (true, 'Beberapa hari', Icons.date_range_outlined),
+                        ],
+                        onChanged: (v) => setState(() {
+                          _multiDay = v;
+                          if (_multiDay) {
+                            _from = _to = null;
+                            _end ??= _start;
+                          }
+                        }),
+                      ),
+                      _gap(),
+                      Row(children: [
+                        Expanded(
+                          child: _pickerField('Tanggal mulai',
+                              _dateLabel(_start), () => _pickDate(end: false)),
+                        ),
+                        if (_multiDay) ...[
+                          const SizedBox(width: Lx.s12),
+                          Expanded(
+                            child: _pickerField('Tanggal selesai',
+                                _dateLabel(_end), () => _pickDate(end: true)),
+                          ),
+                        ],
+                      ]),
+                      if (!_multiDay && !_announcement) ...[
+                        _gap(),
+                        Row(children: [
+                          Expanded(
+                            child: _pickerField(
+                                'Jam mulai',
+                                _from == null ? 'Seluruh hari' : _fmt(_from!),
+                                () => _pickTime(to: false)),
+                          ),
+                          const SizedBox(width: Lx.s12),
+                          Expanded(
+                            child: _pickerField(
+                                'Jam selesai',
+                                _to == null ? 'Seluruh hari' : _fmt(_to!),
+                                () => _pickTime(to: true)),
+                          ),
+                        ]),
+                        if (_from != null || _to != null)
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton(
+                              onPressed: () =>
+                                  setState(() => _from = _to = null),
+                              child: const Text('Hapus jam (seluruh hari)'),
+                            ),
+                          ),
+                      ],
+                      if (!_announcement) ..._materialSection(),
+                      const SizedBox(height: Lx.s32),
+                    ],
+                  ),
+                ),
+    );
+  }
+
+  /// The category is one of the lookup list; an edited event's own category
+  /// is kept in the list even when the lookup lacks it.
+  Widget _categoryField() {
+    if (_lookupsLoading && _categoryOptions.isEmpty) {
+      return InputDecorator(
+        decoration: _dec('Kategori *'),
+        child: const Row(
+          children: [
+            SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2)),
+            SizedBox(width: Lx.s8),
+            Text('Memuat kategori…'),
+          ],
+        ),
+      );
+    }
+    final options = _categoryOptions;
+    if (options.isEmpty) {
+      return InputDecorator(
+        decoration: _dec('Kategori *').copyWith(
+            errorText: _categoryError ?? 'Daftar kategori belum bisa dimuat.'),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton(
+              onPressed: _loadLookups, child: const Text('Coba lagi')),
+        ),
+      );
+    }
+    final inLookup = _lookups?.categories ?? const <String>[];
+    return DropdownButtonFormField<String>(
+      value: options.contains(_category) ? _category : null,
+      isExpanded: true,
+      decoration: _dec('Kategori *').copyWith(errorText: _categoryError),
+      items: [
+        for (final c in options)
+          DropdownMenuItem(
+              value: c,
+              child: Text(inLookup.contains(c) ? c : '$c (saat ini)',
+                  overflow: TextOverflow.ellipsis)),
+      ],
+      onChanged: _saving
+          ? null
+          : (v) => setState(() {
+                _category = v;
+                _categoryError = null;
+              }),
+      validator: (v) => v == null || v.isEmpty ? 'Pilih kategori.' : null,
+    );
+  }
+
+  /// Known places as one-tap suggestions; the field stays free text.
+  List<Widget> _locationSuggestions() {
+    final list = _lookups?.locations ?? const <String>[];
+    if (list.isEmpty) return const [];
+    return [
+      const SizedBox(height: Lx.s8),
+      SizedBox(
+        height: 36,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: list.length,
+          separatorBuilder: (_, __) => const SizedBox(width: Lx.s8),
+          itemBuilder: (_, i) => ChoiceChip(
+            avatar: const Icon(Icons.place_outlined, size: 16),
+            label: Text(list[i]),
+            selected: _location.text.trim() == list[i],
+            showCheckmark: false,
+            onSelected: _saving
+                ? null
+                : (_) => setState(() => _location.text = list[i]),
           ),
         ),
       ),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(Lx.s16),
-          children: [
-            if (_error != null)
-              Container(
-                margin: const EdgeInsets.only(bottom: Lx.s12),
-                padding: const EdgeInsets.all(Lx.s12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFEE2E2),
-                  borderRadius: BorderRadius.circular(Lx.rButton),
-                ),
-                child: Text(_error!,
-                    style: const TextStyle(color: Color(0xFFB91C1C))),
-              ),
-            // Type is fixed once saved: event-reminder refuses a change.
-            SoftTabs<bool>(
-              value: _announcement,
-              items: const [
-                (false, 'Kegiatan', Icons.event_outlined),
-                (true, 'Pengumuman', Icons.campaign_outlined),
-              ],
-              onChanged: _editing
-                  ? null
-                  : (v) => setState(() {
-                        _announcement = v;
-                        if (_announcement) {
-                          _from = _to = null;
-                          _materials
-                            ..forEach((m) => m.dispose())
-                            ..clear();
-                        }
-                      }),
-            ),
-            _gap(),
-            TextFormField(
-              controller: _title,
-              decoration: _dec('Judul *'),
-              textCapitalization: TextCapitalization.sentences,
-              maxLength: 255,
-              validator: (v) =>
-                  (v ?? '').trim().isEmpty ? 'Judul wajib diisi.' : null,
-            ),
-            DropdownButtonFormField<String>(
-              value: _category,
-              decoration: _dec('Kategori *'),
-              items: const [
-                DropdownMenuItem(value: 'Umum', child: Text('Umum')),
-                DropdownMenuItem(value: 'Generus', child: Text('Generus')),
-              ],
-              onChanged: (v) => setState(() => _category = v ?? 'Umum'),
-            ),
-            _gap(),
-            DropdownButtonFormField<String>(
-              value: _level,
-              decoration: _dec('Tingkat'),
-              items: [
-                for (final l in _levels)
-                  DropdownMenuItem(
-                      value: l, child: Text(l.isEmpty ? 'Tanpa tingkat' : l)),
-              ],
-              onChanged: (v) => setState(() => _level = v ?? ''),
-            ),
-            _gap(),
-            TextFormField(
-              controller: _location,
-              decoration: _dec('Lokasi'),
-              textCapitalization: TextCapitalization.sentences,
-            ),
-            _gap(),
-            TextFormField(
-              controller: _description,
-              decoration: _dec('Keterangan'),
-              textCapitalization: TextCapitalization.sentences,
-              minLines: 3,
-              maxLines: 6,
-            ),
-            if (_editing) ...[
-              _gap(),
-              DropdownButtonFormField<String>(
-                value: _status,
-                decoration: _dec('Status'),
-                items: [
-                  for (final s in _statuses.entries)
-                    DropdownMenuItem(value: s.key, child: Text(s.value)),
-                ],
-                onChanged: (v) => setState(() => _status = v ?? 'Scheduled'),
-              ),
-            ],
-            _gap(Lx.s20),
-            Text('Waktu', style: Lx.cardHeading),
-            _gap(Lx.s8),
-            SoftTabs<bool>(
-              value: _multiDay,
-              items: const [
-                (false, 'Satu hari', Icons.today_outlined),
-                (true, 'Beberapa hari', Icons.date_range_outlined),
-              ],
-              onChanged: (v) => setState(() {
-                _multiDay = v;
-                if (_multiDay) {
-                  _from = _to = null;
-                  _end ??= _start;
-                }
-              }),
-            ),
-            _gap(),
-            Row(children: [
-              Expanded(
-                child: _pickerField(
-                    'Tanggal mulai', _dateLabel(_start), () => _pickDate(end: false)),
-              ),
-              if (_multiDay) ...[
-                const SizedBox(width: Lx.s12),
-                Expanded(
-                  child: _pickerField(
-                      'Tanggal selesai', _dateLabel(_end), () => _pickDate(end: true)),
-                ),
-              ],
-            ]),
-            if (!_multiDay && !_announcement) ...[
-              _gap(),
-              Row(children: [
-                Expanded(
-                  child: _pickerField('Jam mulai',
-                      _from == null ? 'Seluruh hari' : _fmt(_from!), () => _pickTime(to: false)),
-                ),
-                const SizedBox(width: Lx.s12),
-                Expanded(
-                  child: _pickerField('Jam selesai',
-                      _to == null ? 'Seluruh hari' : _fmt(_to!), () => _pickTime(to: true)),
-                ),
-              ]),
-              if (_from != null || _to != null)
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton(
-                    onPressed: () => setState(() => _from = _to = null),
-                    child: const Text('Hapus jam (seluruh hari)'),
-                  ),
-                ),
-            ],
-            if (!_announcement) ..._materialSection(),
-            const SizedBox(height: Lx.s32),
-          ],
-        ),
-      ),
-    );
+    ];
   }
 
   Widget _pickerField(String label, String value, VoidCallback onTap) =>
@@ -476,7 +659,8 @@ class _EventFormScreenState extends State<EventFormScreen> {
                     ),
                     IconButton(
                       tooltip: 'Hapus materi',
-                      onPressed: () => setState(() => _materials.removeAt(i).dispose()),
+                      onPressed: () =>
+                          setState(() => _materials.removeAt(i).dispose()),
                       icon: const Icon(Icons.close),
                     ),
                   ],
@@ -485,7 +669,10 @@ class _EventFormScreenState extends State<EventFormScreen> {
           ],
         ),
         if (_materials.isEmpty)
-          Text(_editing ? 'Tanpa materi (daftar lama dikosongkan).' : 'Belum ada materi.',
+          Text(
+              _editing
+                  ? 'Tanpa materi (daftar lama dikosongkan).'
+                  : 'Belum ada materi.',
               style: Lx.sectionSubtitle),
       ];
 }

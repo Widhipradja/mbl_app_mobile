@@ -98,6 +98,47 @@ class MobileEvent {
   DateTime? get end => parseEventDay(endDate.isEmpty ? startDate : endDate);
 }
 
+/// The form's choices. Categories are required and must be one of them;
+/// locations are only suggestions (free text is fine).
+class EventLookups {
+  const EventLookups({this.categories = const [], this.locations = const []});
+
+  final List<String> categories, locations;
+
+  /// Values in the server's order, without blanks or repeats. Accepts
+  /// `[{value, order}]` or a plain list of texts.
+  static List<String> _values(dynamic raw) {
+    if (raw is! List) return const [];
+    final rows = <(int, String)>[];
+    for (var i = 0; i < raw.length; i++) {
+      final r = raw[i];
+      final v = _s(r is Map ? r['value'] : r);
+      if (v.isEmpty) continue;
+      final order = r is Map ? int.tryParse('${r['order']}') : null;
+      rows.add((order ?? i + 1, v));
+    }
+    // Stable: ties keep the server's sequence.
+    final at = {for (var i = 0; i < rows.length; i++) rows[i]: i};
+    rows.sort((a, b) {
+      final c = a.$1.compareTo(b.$1);
+      return c != 0 ? c : at[a]!.compareTo(at[b]!);
+    });
+    final seen = <String>{};
+    return [
+      for (final r in rows)
+        if (seen.add(r.$2)) r.$2
+    ];
+  }
+
+  factory EventLookups.fromJson(dynamic d) {
+    final m = d is Map ? d : const {};
+    return EventLookups(
+      categories: _values(m['categories']),
+      locations: _values(m['locations']),
+    );
+  }
+}
+
 class EventRepository {
   Map<String, dynamic> _map(dynamic d) =>
       d is Map<String, dynamic> ? d : <String, dynamic>{};
@@ -121,6 +162,9 @@ class EventRepository {
       });
   }
 
+  Future<EventLookups> lookups() async =>
+      EventLookups.fromJson((await ApiService().getEventLookups()).data);
+
   /// A hint for showing the controls; event-reminder still enforces.
   Future<bool> canManage() async {
     final d = (await ApiService().getEventAccess()).data;
@@ -142,13 +186,20 @@ class EventRepository {
 final eventRepo = EventRepository();
 
 /// What went wrong, so a screen can react (hide controls, refresh).
-enum EventFailure { notWriter, notProvisioned, notFound, other }
+enum EventFailure { notWriter, notProvisioned, notFound, badCategory, other }
 
 String? _code(Object e) {
   if (e is DioException && e.response?.data is Map) {
     return _s((e.response!.data as Map)['code']);
   }
   return null;
+}
+
+String _reason(Object e) {
+  if (e is DioException && e.response?.data is Map) {
+    return _s((e.response!.data as Map)['error']);
+  }
+  return '';
 }
 
 EventFailure eventFailure(Object e) {
@@ -161,6 +212,10 @@ EventFailure eventFailure(Object e) {
       return EventFailure.notProvisioned;
     }
     if (status == 404) return EventFailure.notFound;
+    // 422 "Kategori tidak dikenal. Pilih dari daftar kategori."
+    if (status == 422 && _reason(e).toLowerCase().contains('kategori')) {
+      return EventFailure.badCategory;
+    }
   }
   return EventFailure.other;
 }
@@ -183,9 +238,21 @@ String eventError(Object e) {
           case 'upstream_unauthorized':
             return 'Akun belum terdaftar di event-reminder.';
         }
+        if (reason == 'tenant required') {
+          return 'Akun Anda belum terhubung ke organisasi.';
+        }
         return 'Modul kegiatan tidak tersedia untuk akun Anda.';
       case 404:
         return 'Kegiatan sudah tidak ada.';
+      case 413:
+        return 'Isi kegiatan terlalu besar. Kurangi keterangan atau materi.';
+      case 422:
+        return reason.isNotEmpty ? reason : 'Data ditolak server. Periksa isian.';
+      case 502:
+      case 503:
+      case 504:
+        return 'Layanan kegiatan sedang tidak tersedia. Isian Anda tetap '
+            'ada, coba lagi sebentar lagi.';
       case 409:
         return reason.isNotEmpty ? reason : 'Data bentrok. Coba lagi.';
     }

@@ -173,6 +173,12 @@ class ApiService {
     return await _dio.get('/api/m/v1/events/access');
   }
 
+  /// Choices for the event form: `{categories:[{value,order}],
+  /// locations:[{value,order}]}`. Endpoint: `GET /api/m/v1/events/lookups`
+  Future<Response> getEventLookups() async {
+    return await _dio.get('/api/m/v1/events/lookups');
+  }
+
   /// Endpoint: `GET /api/m/v1/events/:id` → `{event}`
   Future<Response> getMobileEvent(String id) async {
     return await _dio.get('/api/m/v1/events/$id');
