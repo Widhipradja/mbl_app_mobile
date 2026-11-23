@@ -340,7 +340,7 @@ class _BudgetTransactionsScreenState extends State<BudgetTransactionsScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(Lx.s16, 0, Lx.s16, Lx.s8),
-              child: MonthPill(month: _month, onChanged: _setMonth),
+              child: BudgetMonthPill(month: _month, onChanged: _setMonth),
             ),
             SizedBox(
               height: 40,

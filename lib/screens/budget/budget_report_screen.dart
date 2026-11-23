@@ -125,10 +125,9 @@ class _BudgetReportScreenState extends State<BudgetReportScreen> {
     final prevTotal = _previous == null
         ? null
         : (_income ? _previous!.income : _previous!.expense);
-    final now = DateTime.now();
-    final isThisMonth = _month.year == now.year && _month.month == now.month;
-    final days =
-        isThisMonth ? now.day : DateTime(_month.year, _month.month + 1, 0).day;
+    // Days of the period so far (all of them for a past one): what the
+    // daily average is divided by.
+    final days = budgetRepo.rangeOf(_month).daysCountedAt(DateTime.now());
     final rows = _rows();
 
     return SectionCard(
@@ -442,7 +441,7 @@ class _BudgetReportScreenState extends State<BudgetReportScreen> {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(Lx.s16, 0, Lx.s16, Lx.s24),
             children: [
-              MonthPill(month: _month, onChanged: _setMonth),
+              BudgetMonthPill(month: _month, onChanged: _setMonth),
               const SizedBox(height: Lx.s12),
               if (_error != null)
                 RetryState(_error!, onRetry: _load)

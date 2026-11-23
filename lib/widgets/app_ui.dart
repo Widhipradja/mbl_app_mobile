@@ -318,10 +318,14 @@ class MonthPill extends StatelessWidget {
     required this.month,
     required this.onChanged,
     this.last,
+    this.subtitle,
   });
 
   final DateTime month;
   final ValueChanged<DateTime> onChanged;
+
+  /// A line under the month, e.g. the dates of a period "25 Okt – 24 Nov".
+  final String? subtitle;
 
   /// Furthest month that may be opened (defaults to the current month).
   final DateTime? last;
@@ -346,10 +350,18 @@ class MonthPill extends StatelessWidget {
             icon: const Icon(Icons.chevron_left_rounded),
           ),
           Expanded(
-            child: Text(
-              '${_monthNames[month.month - 1]} ${month.year}',
-              textAlign: TextAlign.center,
-              style: Lx.cardHeading,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '${_monthNames[month.month - 1]} ${month.year}',
+                  textAlign: TextAlign.center,
+                  style: Lx.cardHeading,
+                ),
+                if (subtitle != null)
+                  Text(subtitle!,
+                      textAlign: TextAlign.center, style: Lx.metadata),
+              ],
             ),
           ),
           IconButton(

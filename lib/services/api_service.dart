@@ -304,6 +304,16 @@ class ApiService {
   // organisation's cash. Amounts are decimal strings.
 
   /// `month` is `YYYY-MM`; empty means the current month.
+  /// `period_start_day` (1-28) and the period running today.
+  Future<Response> getBudgetSettings() =>
+      _dio.get('/api/m/v1/budget/settings');
+
+  /// Body: a JSON integer 1-28 (a string or 25.0 is refused). Answers the
+  /// same as [getBudgetSettings]; applies to every period, past ones too.
+  Future<Response> putBudgetSettings(int periodStartDay) => _dio.put(
+      '/api/m/v1/budget/settings',
+      data: {'period_start_day': periodStartDay});
+
   Future<Response> getBudgetSummary(String month) => _dio
       .get('/api/m/v1/budget/summary', queryParameters: {'month': month});
 
