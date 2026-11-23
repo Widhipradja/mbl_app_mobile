@@ -4,6 +4,7 @@ import '../../config/launcher_tokens.dart';
 import '../../widgets/app_ui.dart';
 import '../finance/finance_data.dart' show RupiahInputFormatter, rp, thousands;
 import 'budget_data.dart';
+import 'budget_widgets.dart';
 
 /// Monthly budget per expense category. A row left empty or 0 means no
 /// budget. Only the rows that changed are sent.
@@ -198,10 +199,10 @@ class _BudgetLimitsScreenState extends State<BudgetLimitsScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(Lx.s16, 0, Lx.s16, Lx.s8),
-              child: MonthPill(
+              child: BudgetMonthPill(
                 month: _month,
                 onChanged: _saving ? (_) {} : _setMonth,
-                last: DateTime(DateTime.now().year, DateTime.now().month + 1),
+                extraMonths: 1,
               ),
             ),
             Expanded(
