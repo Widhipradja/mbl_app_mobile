@@ -15,6 +15,7 @@ class User {
   final String gender;
   final String? remark;
   final List<Role>? roles;
+  final String? groupName;
 
   User({
     required this.id,
@@ -31,21 +32,26 @@ class User {
     this.gender = 'male',
     this.roles,
     this.remark,
+    this.groupName,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
     List<Role>? rolesList;
     if (json['roles'] != null) {
       rolesList = (json['roles'] as List)
-          .map((role) => Role.fromJson(role as Map<String, dynamic>))
-          .toList();
+        .map((role) => Role.fromJson(role as Map<String, dynamic>))
+        .toList();
     }
 
-    final firstname = json['firstname'] ?? '';
-    final lastname = json['lastname'] ?? '';
-    final fullName = firstname.isNotEmpty || lastname.isNotEmpty
-        ? '$firstname $lastname'.trim()
-        : (json['name'] ?? '');
+    // Accept multiple possible keys from different API responses
+    final firstname = (json['firstname'] ?? json['first_name'] ?? json['firstName'])?.toString() ?? '';
+    final lastname = (json['lastname'] ?? json['last_name'] ?? json['lastName'])?.toString() ?? '';
+    final fullNameFromFields = (firstname.isNotEmpty || lastname.isNotEmpty)
+      ? '$firstname $lastname'.trim()
+      : '';
+    final fullName = fullNameFromFields.isNotEmpty
+      ? fullNameFromFields
+      : (json['name'] ?? json['full_name'] ?? json['fullName'] ?? '');
 
     // Map sex (M/F) to gender (male/female)
     String gender = 'male';
@@ -62,20 +68,21 @@ class User {
     final remark = json['remark'] ?? '';
 
     return User(
-      id: json['id'] ?? json['user_id'] ?? '',
+      id: json['id'] ?? json['user_id'] ?? json['userId'] ?? '',
       name: fullName,
       email: json['email'] ?? '',
       avatar: json['avatar'],
       userId: json['user_id'],
       tenantId: json['tenant_id'],
-      firstname: json['firstname'],
-      lastname: json['lastname'],
+      firstname: firstname.isNotEmpty ? firstname : null,
+      lastname: lastname.isNotEmpty ? lastname : null,
       surname: json['surname'],
       phone: json['phone'],
       isActive: json['is_active'],
       gender: gender,
       remark: remark,
       roles: rolesList,
+      groupName: json['group_name'],
     );
   }
 
@@ -87,14 +94,15 @@ class User {
       'avatar': avatar,
       'user_id': userId,
       'tenant_id': tenantId,
-      'firstname': firstname,
-      'lastname': lastname,
+      'first_name': firstname,
+      'last_name': lastname,
       'surname': surname,
       'phone': phone,
       'is_active': isActive,
       'gender': gender,
       'remark': remark,
       'roles': roles?.map((role) => role.toJson()).toList(),
+      'group_name': groupName,
     };
   }
 

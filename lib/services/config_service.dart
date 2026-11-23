@@ -7,7 +7,7 @@ class ConfigService {
   static String? _apiBaseUrl;
 
   static String get apiBaseUrl =>
-      _apiBaseUrl ?? 'http://100.108.230.38:3000/api';
+      _apiBaseUrl ?? 'https://baraka-api.sangkarahub.app';
 
   static Future<void> loadRemoteConfig() async {
     try {
@@ -19,8 +19,8 @@ class ConfigService {
 
       if (response.statusCode == 200 && response.data != null) {
         final config = response.data;
-        if (config['mblapi_url'] != null) {
-          _apiBaseUrl = config['mblapi_url'];
+        if (config['barakaapi_url'] != null) {
+          _apiBaseUrl = config['barakaapi_url'];
           // debugPrint('✅ Remote config loaded: $_apiBaseUrl');
         }
       }

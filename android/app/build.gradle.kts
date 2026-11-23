@@ -15,9 +15,9 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.desalabs.mbl_app"
-    compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    namespace = "com.desalabs.baraka_funds"
+    compileSdk = 36
+    ndkVersion = "27.0.12077973"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -29,28 +29,40 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.desalabs.mbl_app"
+        // The installed identity. It must match the package published on
+        // apk.sangkarahub.app (the in-app update check finds its builds by
+        // it), and builds must be signed with the same keystore as the ones
+        // already installed. The code package (`namespace`) can differ.
+        applicationId = "com.baraka.app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        minSdk = 24
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
-    signingConfigs {
-        create("release") {
-            keyAlias = keystoreProperties["keyAlias"] as String
-            keyPassword = keystoreProperties["keyPassword"] as String
-            storeFile = file(keystoreProperties["storeFile"] as String)
-            storePassword = keystoreProperties["storePassword"] as String
+    if (keystorePropertiesFile.exists()) {
+        signingConfigs {
+            create("release") {
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+                storeFile = file(keystoreProperties["storeFile"] as String)
+                storePassword = keystoreProperties["storePassword"] as String
+            }
         }
-    }
 
-    buildTypes {
-        release {
-            signingConfig = signingConfigs.getByName("release")
+        buildTypes {
+            release {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
+    } else {
+        // No keystore properties found: keep default debug signing for local builds
+        buildTypes {
+            release {
+                // Intentionally left blank when no release keystore is provided.
+            }
         }
     }
 
@@ -58,7 +70,7 @@ android {
         outputs.all {
             val output = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
             val versionName = flutter.versionName ?: "1.0.0"
-            output.outputFileName = "mbl-app-v${versionName}-${buildType.name}.apk"
+            output.outputFileName = "baraka-v${versionName}-${buildType.name}.apk"
         }
     }
 }

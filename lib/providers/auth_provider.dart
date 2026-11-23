@@ -18,7 +18,7 @@ class AuthProvider with ChangeNotifier {
   final ApiService _apiService;
 
   AuthProvider({ApiService? apiService})
-    : _apiService = apiService ?? ApiService();
+      : _apiService = apiService ?? ApiService();
 
   // Initialize user from storage
   Future<void> init() async {
@@ -101,6 +101,7 @@ class AuthProvider with ChangeNotifier {
             'user_id': data['user_id'],
             'tenant_id': data['tenant_id'],
             'roles': rolesData,
+            'group_name': data['group_name'],
           };
         } else {
           // Fallback: Decode JWT and extract user data
@@ -139,6 +140,7 @@ class AuthProvider with ChangeNotifier {
             'user_id': decodedData['user_id'],
             'tenant_id': decodedData['tenant_id'],
             'roles': rolesData,
+            'group_name': decodedData['group_name'],
           };
         }
 
@@ -179,8 +181,7 @@ class AuthProvider with ChangeNotifier {
         _error = 'Network error. Please check your internet connection.';
       } else if (e.response?.data != null) {
         // Check for both 'error' and 'message' fields from gin.H
-        _error =
-            e.response?.data['error'] ??
+        _error = e.response?.data['error'] ??
             e.response?.data['message'] ??
             'Login failed. Please try again.';
       } else {
@@ -210,6 +211,71 @@ class AuthProvider with ChangeNotifier {
       await StorageService.clearAll();
       _user = null;
       notifyListeners();
+    }
+  }
+
+  /// Saves own profile edits: [changes] holds only the fields that changed
+  /// (never the `user_id`). The answer is flat and has no roles, tenant or
+  /// group, so those stay as they are. Throws on failure so the form can show
+  /// the reason.
+  Future<void> updateProfile(Map<String, dynamic> changes) async {
+    final resp = await _apiService.updateProfile(changes);
+    final body = resp.data;
+    final current = _user?.toJson() ?? <String, dynamic>{};
+    final sent = {...changes}..remove('current_password');
+    final merged = {
+      ...current,
+      ...sent,
+      if (body is Map<String, dynamic>)
+        for (final e in body.entries)
+          // address always comes back empty: keep ours.
+          if (e.key != 'address') e.key: e.value,
+    };
+    for (final k in ['user_id', 'tenant_id', 'id']) {
+      merged[k] = current[k];
+    }
+    _user = User.fromJson(merged);
+    await StorageService.saveUser(_user!);
+    notifyListeners();
+  }
+
+  Future<void> _storeAvatar(String path) async {
+    final current = _user?.toJson() ?? <String, dynamic>{};
+    if ((current['avatar'] ?? '') == path) return;
+    current['avatar'] = path.isEmpty ? null : path;
+    _user = User.fromJson(current);
+    await StorageService.saveUser(_user!);
+    notifyListeners();
+  }
+
+  /// `avatar` of a profile answer: `""` for no photo, else a path on the API
+  /// host whose `?v=` changes with every new photo (so image caches renew).
+  static String _avatarOf(dynamic body) =>
+      body is Map ? (body['avatar']?.toString().trim() ?? '') : '';
+
+  /// Uploads a new photo (already shrunk) and keeps the address the server
+  /// answers. Throws on failure so the screen can show the reason.
+  Future<void> setAvatar(List<int> bytes, String name) async {
+    final resp = await _apiService.uploadAvatar(bytes, name);
+    final path = _avatarOf(resp.data);
+    if (path.isEmpty) throw const FormatException('avatar path missing');
+    await _storeAvatar(path);
+  }
+
+  Future<void> removeAvatar() async {
+    final resp = await _apiService.deleteAvatar();
+    await _storeAvatar(_avatarOf(resp.data));
+  }
+
+  /// Picks up a photo set on another device (or by the web) from
+  /// `GET /profile`. Quiet: a failure leaves what is shown.
+  Future<void> refreshAvatar() async {
+    if (_user == null) return;
+    try {
+      final resp = await _apiService.getProfile();
+      if (resp.data is Map) await _storeAvatar(_avatarOf(resp.data));
+    } catch (e) {
+      debugPrint('refreshAvatar error: $e');
     }
   }
 

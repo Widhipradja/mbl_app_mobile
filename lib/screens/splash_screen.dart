@@ -32,7 +32,7 @@ class _SplashScreenState extends State<SplashScreen> {
         await StorageService.clearAll();
         context.go('/login');
       } else {
-        context.go('/home');
+        context.go('/dashboard');
       }
     } else {
       context.go('/login');

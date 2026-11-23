@@ -48,9 +48,8 @@ class TransactionProvider with ChangeNotifier {
         final data = response.data;
         // Handle response with 'transactions' array
         final List<dynamic> transactionsData = data['transactions'] ?? [];
-        final transactions = transactionsData
-            .map((json) => Transaction.fromJson(json))
-            .toList();
+        final transactions =
+            transactionsData.map((json) => Transaction.fromJson(json)).toList();
         return transactions;
       } else {
         throw Exception('Failed to inquiry transactions');
@@ -107,8 +106,8 @@ class TransactionProvider with ChangeNotifier {
           // Sort by absolute net value (highest first)
           _categories.sort(
             (a, b) => (b['net'] as double).abs().compareTo(
-              (a['net'] as double).abs(),
-            ),
+                  (a['net'] as double).abs(),
+                ),
           );
         }
 
@@ -130,9 +129,8 @@ class TransactionProvider with ChangeNotifier {
         final List<dynamic> data = response.data is List
             ? response.data
             : response.data['transactions'] ?? [];
-        _recentTransactions = data
-            .map((json) => Transaction.fromJson(json))
-            .toList();
+        _recentTransactions =
+            data.map((json) => Transaction.fromJson(json)).toList();
         notifyListeners();
       }
     } on DioException catch (e) {
@@ -160,8 +158,7 @@ class TransactionProvider with ChangeNotifier {
     } on DioException catch (e) {
       // Handle Dio-specific errors and extract error message from gin.H
       if (e.response?.data != null) {
-        _error =
-            e.response?.data['error'] ??
+        _error = e.response?.data['error'] ??
             e.response?.data['message'] ??
             'Failed to load transactions';
       } else {
@@ -191,8 +188,7 @@ class TransactionProvider with ChangeNotifier {
     } on DioException catch (e) {
       // Handle Dio-specific errors and extract error message from gin.H
       if (e.response?.data != null) {
-        _error =
-            e.response?.data['error'] ??
+        _error = e.response?.data['error'] ??
             e.response?.data['message'] ??
             'Failed to load transactions';
       } else {
@@ -256,8 +252,7 @@ class TransactionProvider with ChangeNotifier {
     } on DioException catch (e) {
       // Handle Dio-specific errors and extract error message from gin.H
       if (e.response?.data != null) {
-        _error =
-            e.response?.data['error'] ??
+        _error = e.response?.data['error'] ??
             e.response?.data['message'] ??
             'Failed to add transaction';
       } else {
@@ -297,8 +292,7 @@ class TransactionProvider with ChangeNotifier {
     } on DioException catch (e) {
       // Handle Dio-specific errors
       if (e.response?.data != null) {
-        _error =
-            e.response?.data['error'] ??
+        _error = e.response?.data['error'] ??
             e.response?.data['message'] ??
             'Failed to update transaction';
       } else {
@@ -326,8 +320,7 @@ class TransactionProvider with ChangeNotifier {
     } on DioException catch (e) {
       // Handle Dio-specific errors and extract error message from gin.H
       if (e.response?.data != null) {
-        _error =
-            e.response?.data['error'] ??
+        _error = e.response?.data['error'] ??
             e.response?.data['message'] ??
             'Failed to delete transaction';
       } else {

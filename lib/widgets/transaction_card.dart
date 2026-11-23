@@ -70,6 +70,34 @@ class TransactionCard extends StatelessWidget {
                 'PIC: ${transaction.pic}',
                 style: TextStyle(fontSize: 12, color: Colors.grey[600]),
               ),
+            if (transaction.tags != null && transaction.tags!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Wrap(
+                  spacing: 4,
+                  runSpacing: 2,
+                  children: transaction.tags!.map((tag) {
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: Colors.blue.shade200),
+                      ),
+                      child: Text(
+                        '#$tag',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.blue.shade700,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
           ],
         ),
         trailing: Column(

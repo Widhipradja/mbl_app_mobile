@@ -3,17 +3,17 @@ import '../screens/landing_screen.dart';
 import '../screens/splash_screen.dart';
 import '../screens/login_screen.dart';
 import '../screens/dashboard_screen.dart';
-import '../screens/budget/budget_home_screen.dart';
-import '../screens/budget/add_transaction_screen.dart';
-import '../screens/budget/transaction_list_screen.dart';
-import '../screens/budget/search_transaction_screen.dart';
-import '../screens/attendance/attendance_home_screen.dart';
-import '../screens/attendance/event_detail_screen.dart';
-import '../screens/attendance/event_inquiry_screen.dart';
-import '../screens/kbm/kbm_setup_screen.dart';
-import '../screens/kbm/kbm_home_screen.dart';
-import '../screens/member/member_list_screen.dart';
-import '../models/event.dart';
+import '../screens/info/info_screens.dart';
+import '../screens/launcher/information_hub_screen.dart';
+import '../screens/savings/amal_jariyah_screen.dart';
+import '../screens/savings/kurban_screen.dart';
+import '../screens/budget/budget_wallet_screen.dart';
+import '../screens/events/events_list_screen.dart';
+import '../screens/finance/finance_dashboard_screen.dart';
+import '../screens/zakatfitrah/add_muzakki_screen.dart';
+import '../screens/zakatfitrah/zakat_transaction_screen.dart';
+import '../models/muzakki.dart';
+import '../screens/zakatfitrah/zakat_shell_screen.dart';
 import '../services/storage_service.dart';
 import '../utils/jwt_decoder.dart';
 
@@ -26,9 +26,6 @@ class AppRouter {
       final isGoingToSplash = state.matchedLocation == '/splash';
       final isGoingToLanding = state.matchedLocation == '/landing';
 
-      // Allow landing page to show without authentication
-      if (isGoingToLanding) return null;
-
       if (isGoingToSplash) return null;
 
       // Check token expiry if authenticated
@@ -37,9 +34,14 @@ class AppRouter {
         if (token != null && JwtDecoder.isExpired(token)) {
           // Token expired, clear storage and redirect to landing
           await StorageService.clearAll();
-          return '/landing';
+          return isGoingToLanding ? null : '/landing';
         }
+        // Already signed in: skip the landing page
+        if (isGoingToLanding) return '/dashboard';
       }
+
+      // Allow landing page to show without authentication
+      if (isGoingToLanding) return null;
 
       if (!isAuthenticated && !isGoingToLogin) {
         return '/landing';
@@ -66,79 +68,90 @@ class AppRouter {
         builder: (context, state) => const DashboardScreen(),
       ),
 
-      // Budget Module Routes
+      // Read-only info screens behind the home summary cards
+      GoRoute(
+        path: '/info/hub',
+        builder: (context, state) => const InformationHubScreen(),
+      ),
+      GoRoute(
+        path: '/info/jimpitan',
+        builder: (context, state) => const JimpitanScreen(),
+      ),
+      GoRoute(
+        path: '/info/fundraising',
+        builder: (context, state) => const FundraisingScreen(),
+      ),
+
+      // Tabungan Kurban and Buku Amal Jariyah
+      GoRoute(
+        path: '/kurban',
+        builder: (context, state) => const KurbanScreen(),
+      ),
+      GoRoute(
+        path: '/amal-jariyah',
+        builder: (context, state) => const AmalJariyahScreen(),
+      ),
+
+      // Events: list, detail and (for writers) create/edit/delete.
+      GoRoute(
+        path: '/events',
+        builder: (context, state) => const EventsListScreen(),
+      ),
+
+      // Finance layout preview (sample data until the API is ready)
+      GoRoute(
+        path: '/finance',
+        builder: (context, state) => const FinanceDashboardScreen(),
+      ),
+
+      // Budget: the personal wallet; its other screens are pushed.
       GoRoute(
         path: '/budget',
-        builder: (context, state) => const BudgetHomeScreen(),
+        builder: (context, state) => const BudgetWalletScreen(),
+      ),
+
+      // Zakat Fitrah Module Routes
+      GoRoute(
+        path: '/zakat-fitrah',
+        builder: (context, state) => const ZakatShellScreen(),
       ),
       GoRoute(
-        path: '/budget/add-transaction',
-        builder: (context, state) => const AddTransactionScreen(),
+        path: '/zakat-fitrah/muzakki',
+        builder: (context, state) => const ZakatShellScreen(initialTab: 1),
       ),
       GoRoute(
-        path: '/budget/edit-transaction',
+        path: '/zakat-fitrah/laporan',
+        builder: (context, state) => const ZakatShellScreen(initialTab: 2),
+      ),
+      GoRoute(
+        path: '/zakat-fitrah/configuration',
+        builder: (context, state) => const ZakatShellScreen(initialTab: 4),
+      ),
+      GoRoute(
+        path: '/zakat-fitrah/mustahiq',
+        builder: (context, state) => const ZakatShellScreen(initialTab: 3),
+      ),
+      GoRoute(
+        path: '/zakat-fitrah/add',
+        builder: (context, state) => AddMuzakkiScreen(
+          initialFamilyId: state.uri.queryParameters['family_id'] ?? '',
+          initialMuzakki:
+              state.extra is Muzakki ? state.extra as Muzakki : null,
+        ),
+      ),
+      GoRoute(
+        path: '/zakat-fitrah/transaction',
         builder: (context, state) {
-          final transaction = state.extra as dynamic;
-          return AddTransactionScreen(transaction: transaction);
+          final muzakki = state.extra as Muzakki?;
+          if (muzakki == null) return const ZakatShellScreen(initialTab: 0);
+          return ZakatTransactionScreen(muzakki: muzakki);
         },
       ),
-      GoRoute(
-        path: '/budget/transactions',
-        builder: (context, state) => const TransactionListScreen(),
-      ),
-      GoRoute(
-        path: '/budget/search',
-        builder: (context, state) => const SearchTransactionScreen(),
-      ),
 
-      // Attendance Module Routes
-      GoRoute(
-        path: '/attendance',
-        builder: (context, state) => const AttendanceHomeScreen(),
-      ),
-      GoRoute(
-        path: '/attendance/inquiry',
-        builder: (context, state) => const EventInquiryScreen(),
-      ),
-      GoRoute(
-        path: '/attendance/event-detail',
-        builder: (context, state) {
-          final event = state.extra as Event;
-          return EventDetailScreen(event: event);
-        },
-      ),
-
-      // Member Module Routes
-      GoRoute(
-        path: '/members',
-        builder: (context, state) => const MemberListScreen(),
-      ),
-
-      // KBM Module Routes
-      GoRoute(path: '/kbm', builder: (context, state) => const KbmHomeScreen()),
-      GoRoute(
-        path: '/kbm/setup',
-        builder: (context, state) => const KbmSetupScreen(),
-      ),
-
-      // Contacts - redirect to attendance
-      GoRoute(
-        path: '/contacts',
-        builder: (context, state) => const AttendanceHomeScreen(),
-      ),
-
-      // Keep legacy routes for backward compatibility
+      // Old entry point (the splash screen once opened the budget home).
       GoRoute(
         path: '/home',
-        builder: (context, state) => const BudgetHomeScreen(),
-      ),
-      GoRoute(
-        path: '/add-transaction',
-        builder: (context, state) => const AddTransactionScreen(),
-      ),
-      GoRoute(
-        path: '/transactions',
-        builder: (context, state) => const TransactionListScreen(),
+        redirect: (context, state) => '/dashboard',
       ),
     ],
   );

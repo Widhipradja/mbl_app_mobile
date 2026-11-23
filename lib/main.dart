@@ -1,17 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
 import 'config/theme.dart';
+import 'providers/home_summary_provider.dart';
 import 'config/routes.dart';
 import 'providers/auth_provider.dart';
 import 'providers/transaction_provider.dart';
 import 'providers/event_provider.dart';
-import 'providers/kbm_provider.dart';
+import 'providers/zakat_provider.dart';
+import 'providers/configuration_provider.dart';
 import 'services/storage_service.dart';
 import 'services/api_service.dart';
 import 'services/config_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await initializeDateFormatting();
 
   // Initialize services
   await StorageService.init();
@@ -19,7 +23,19 @@ void main() async {
   // Load remote configuration
   await ConfigService.loadRemoteConfig();
 
-  runApp(const MyApp());
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => TransactionProvider()),
+        ChangeNotifierProvider(create: (_) => EventProvider()),
+        ChangeNotifierProvider(create: (_) => ZakatProvider()),
+        ChangeNotifierProvider(create: (_) => ConfigurationProvider()),
+        ChangeNotifierProvider(create: (_) => HomeSummaryProvider()),
+      ],
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatefulWidget {
@@ -35,6 +51,20 @@ class _MyAppState extends State<MyApp> {
     super.initState();
     // Listen for token expiration
     ApiService.tokenExpiredNotifier.addListener(_handleTokenExpiration);
+    // Initialize AuthProvider after the first frame so it can read saved user/token
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        final authProvider =
+            // use read to avoid subscribing here
+            Provider.of<AuthProvider>(context, listen: false);
+        await authProvider.init();
+        debugPrint(
+          'AuthProvider initialized user: ${authProvider.user?.toJson()}',
+        );
+      } catch (e) {
+        debugPrint('AuthProvider init error: $e');
+      }
+    });
   }
 
   @override
@@ -47,6 +77,12 @@ class _MyAppState extends State<MyApp> {
     if (ApiService.tokenExpiredNotifier.value) {
       // Reset the notifier
       ApiService.tokenExpiredNotifier.value = false;
+      // Clear cached provider data so next login starts fresh
+      try {
+        context.read<ZakatProvider>().reset();
+        context.read<ConfigurationProvider>().reset();
+        context.read<HomeSummaryProvider>().reset();
+      } catch (_) {}
       // Navigate to login
       AppRouter.router.go('/login');
     }
@@ -54,21 +90,13 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider()),
-        ChangeNotifierProvider(create: (_) => TransactionProvider()),
-        ChangeNotifierProvider(create: (_) => EventProvider()),
-        ChangeNotifierProvider(create: (_) => KbmProvider()),
-      ],
-      child: MaterialApp.router(
-        title: 'Manage Balance & Log',
-        theme: AppTheme.lightTheme,
-        darkTheme: AppTheme.darkTheme,
-        themeMode: ThemeMode.system,
-        routerConfig: AppRouter.router,
-        debugShowCheckedModeBanner: false,
-      ),
+    return MaterialApp.router(
+      title: 'Manage Balance & Log',
+      theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
+      themeMode: ThemeMode.system,
+      routerConfig: AppRouter.router,
+      debugShowCheckedModeBanner: false,
     );
   }
 }

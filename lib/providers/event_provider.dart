@@ -45,12 +45,14 @@ class EventProvider with ChangeNotifier {
 
   Future<bool> createEvent(Event event) async {
     try {
+      debugPrint('Creating event: ${event.toJson()}');
       final response = await _apiService.createEvent(event.toJson());
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        await fetchLatestEvents(); // Refresh the list
-        return true;
-      }
-      return false;
+      // Do NOT call fetchLatestEvents() here — it fires notifyListeners()
+      // while the caller's dialog StatefulBuilder is still mounted, which
+      // triggers the _dependents.isEmpty assertion.
+      // The dialog handles the refresh itself via addPostFrameCallback after
+      // it has safely been dismissed.
+      return response.statusCode == 200 || response.statusCode == 201;
     } catch (e) {
       _error = e.toString();
       debugPrint('Error creating event: $e');

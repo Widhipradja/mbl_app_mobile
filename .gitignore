@@ -47,3 +47,6 @@ app.*.map.json
 # Keystore files
 android/key.properties
 android/app/upload-keystore.jks
+
+# Real API answers saved by scripts/fetch_shodaqoh_samples.sh (personal data)
+shodaqoh_samples/
