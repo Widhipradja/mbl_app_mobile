@@ -145,10 +145,17 @@ class BudgetSummary {
   final int income, expense, net, limitTotal;
   final List<BudgetCategoryLine> categories;
 
-  /// Expense categories with a budget, most used first.
-  List<BudgetCategoryLine> get budgeted =>
-      categories.where((c) => !c.isIncome && c.budgeted).toList()
-        ..sort((a, b) => b.percent.compareTo(a.percent));
+  /// Expense categories with a budget: the ones still running first, most
+  /// used first; the used-up and overspent ones (100% or more) at the bottom,
+  /// as nothing is left to watch there.
+  List<BudgetCategoryLine> get budgeted {
+    bool done(BudgetCategoryLine c) => c.over || c.percent >= 100;
+    return categories.where((c) => !c.isIncome && c.budgeted).toList()
+      ..sort((a, b) {
+        final byDone = (done(a) ? 1 : 0) - (done(b) ? 1 : 0);
+        return byDone != 0 ? byDone : b.percent.compareTo(a.percent);
+      });
+  }
 
   /// Spent in the categories that have a budget (what [limitTotal] is
   /// measured against).
