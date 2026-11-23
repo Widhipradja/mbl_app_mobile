@@ -263,6 +263,20 @@ class BudgetVoiceUnreadable implements Exception {
   final List<String> candidates;
 }
 
+/// Which budgets of the earlier period can be copied into this one: those
+/// that had an amount ([previous], by category id), for rows that are on
+/// screen and still empty ([current] holds each row's amount, 0 for empty).
+/// What the user already filled in is never replaced.
+Map<String, int> limitsToCopy({
+  required Map<String, int> previous,
+  required Map<String, int> current,
+}) =>
+    {
+      for (final e in previous.entries)
+        if (e.value > 0 && current.containsKey(e.key) && current[e.key] == 0)
+          e.key: e.value,
+    };
+
 /// Runs [fetch] once per [key] at a time: a second caller while it is running
 /// gets the same future. The entry is dropped when it ends, whether it
 /// succeeded or failed.
