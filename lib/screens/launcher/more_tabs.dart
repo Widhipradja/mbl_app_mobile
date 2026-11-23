@@ -9,7 +9,8 @@ import '../../models/user.dart';
 import '../profile/change_password_screen.dart';
 import '../profile/edit_profile_screen.dart';
 import '../profile/about_screen.dart';
-import '../../services/update_service.dart';
+import '../../update/apk_updater.dart' show UpdateInfo;
+import '../../update/updater.dart';
 import 'user_avatar.dart';
 import 'hub_cards.dart';
 import 'launcher_models.dart';
@@ -307,7 +308,8 @@ class LauncherProfileTab extends StatefulWidget {
 class _LauncherProfileTabState extends State<LauncherProfileTab> {
   /// Installed version and whether a newer build is published; read once
   /// per visit of the tab, quietly.
-  late final Future<UpdateCheck> _update = UpdateService().check();
+  late final Future<UpdateInfo?> _update =
+      appUpdater().then((u) => u.check());
 
   void _open(Widget screen) => Navigator.of(context)
       .push(MaterialPageRoute<void>(builder: (_) => screen));
@@ -526,24 +528,22 @@ class _LauncherProfileTabState extends State<LauncherProfileTab> {
         ),
       );
 
-  Widget _aboutEntry() => FutureBuilder<UpdateCheck>(
+  Widget _aboutEntry() => FutureBuilder<UpdateInfo?>(
         future: _update,
         builder: (_, snap) {
-          final c = snap.data;
-          final subtitle = c == null
-              ? 'Versi dan pembaruan'
-              : c.available
-                  ? 'Versi ${c.latest!.versionName} tersedia'
-                  : 'Versi ${c.installedName}';
+          final newer = snap.data;
           return _menu(
             Icons.info_outline_rounded,
             const Color(0xFF0D9488),
             const Color(0xFFCCFBF1),
             'Tentang Aplikasi',
-            subtitle,
+            newer == null
+                ? 'Versi dan pembaruan'
+                : 'Versi ${newer.versionName} tersedia',
             () => _open(const AboutScreen()),
-            badge: c != null && c.available
-                ? Container(
+            badge: newer == null
+                ? null
+                : Container(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
@@ -555,8 +555,7 @@ class _LauncherProfileTabState extends State<LauncherProfileTab> {
                             fontSize: 10,
                             color: Colors.white,
                             fontWeight: FontWeight.w700)),
-                  )
-                : null,
+                  ),
           );
         },
       );
