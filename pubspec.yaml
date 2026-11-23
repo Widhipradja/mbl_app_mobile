@@ -38,7 +38,7 @@ dependencies:
   provider: ^6.1.1
   
   # HTTP Requests
-  http: ^1.1.0
+  http: ^1.2.0
   dio: ^5.4.0
   
   # Local Storage
@@ -76,6 +76,9 @@ dependencies:
   record: 5.1.2
   image: ^4.3.0
   package_info_plus: ^8.3.0
+  crypto: ^3.0.3
+  open_filex: ^4.5.0
+  permission_handler: ^11.3.1
 
 # record_android 1.4+ needs a newer Flutter Gradle plugin than 3.24 provides.
 dependency_overrides:

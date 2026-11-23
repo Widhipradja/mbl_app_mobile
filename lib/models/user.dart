@@ -17,6 +17,9 @@ class User {
   final List<Role>? roles;
   final String? groupName;
 
+  /// `YYYY-MM-DD` from `GET /profile`; null or "" when not filled.
+  final String? birthDate;
+
   User({
     required this.id,
     required this.name,
@@ -33,25 +36,31 @@ class User {
     this.roles,
     this.remark,
     this.groupName,
+    this.birthDate,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
     List<Role>? rolesList;
     if (json['roles'] != null) {
       rolesList = (json['roles'] as List)
-        .map((role) => Role.fromJson(role as Map<String, dynamic>))
-        .toList();
+          .map((role) => Role.fromJson(role as Map<String, dynamic>))
+          .toList();
     }
 
     // Accept multiple possible keys from different API responses
-    final firstname = (json['firstname'] ?? json['first_name'] ?? json['firstName'])?.toString() ?? '';
-    final lastname = (json['lastname'] ?? json['last_name'] ?? json['lastName'])?.toString() ?? '';
+    final firstname =
+        (json['firstname'] ?? json['first_name'] ?? json['firstName'])
+                ?.toString() ??
+            '';
+    final lastname = (json['lastname'] ?? json['last_name'] ?? json['lastName'])
+            ?.toString() ??
+        '';
     final fullNameFromFields = (firstname.isNotEmpty || lastname.isNotEmpty)
-      ? '$firstname $lastname'.trim()
-      : '';
+        ? '$firstname $lastname'.trim()
+        : '';
     final fullName = fullNameFromFields.isNotEmpty
-      ? fullNameFromFields
-      : (json['name'] ?? json['full_name'] ?? json['fullName'] ?? '');
+        ? fullNameFromFields
+        : (json['name'] ?? json['full_name'] ?? json['fullName'] ?? '');
 
     // Map sex (M/F) to gender (male/female)
     String gender = 'male';
@@ -83,6 +92,7 @@ class User {
       remark: remark,
       roles: rolesList,
       groupName: json['group_name'],
+      birthDate: json['birth_date']?.toString(),
     );
   }
 
@@ -103,6 +113,7 @@ class User {
       'remark': remark,
       'roles': roles?.map((role) => role.toJson()).toList(),
       'group_name': groupName,
+      'birth_date': birthDate,
     };
   }
 

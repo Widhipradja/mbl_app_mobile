@@ -181,26 +181,36 @@ When releasing a new version:
 ## Publishing to the update host
 
 `scripts/publish_apk.sh` builds the release APK and uploads it to
-https://apk.sangkarahub.app, where the app's update check finds it
-(Profil → Tentang Aplikasi, and a dialog when the dashboard opens).
+https://apk.sangkarahub.app. The app then offers it: a dialog when the dashboard
+opens, and an update row in Profil → Tentang Aplikasi that downloads the APK in
+the app, checks its SHA-256 and opens Android's installer (the user confirms;
+nothing is silent). The app reads `<host>/com.baraka.app/latest.json`.
 
 ```bash
 export UPLOAD_TOKEN=<UPLOAD_TOKEN of the host's .env>   # never commit it
 
 scripts/publish_apk.sh --next                 # the versionCode it would use
 scripts/publish_apk.sh --dry-run              # build and check, no upload
-scripts/publish_apk.sh --name "Cappucino" --notes "Dompet Saya baru"
+scripts/publish_apk.sh --name 1.6.0 --release-name Espresso --notes "Dompet Saya baru"
 scripts/publish_apk.sh --min-code 46 ...      # force older installs to update
-scripts/publish_apk.sh --verify-apk some.apk  # only check an APK's signature
+scripts/publish_apk.sh --verify-apk some.apk  # only check an APK's signature and version
 ```
 
+- `--name` is the versionName (a number such as 1.6.0); `--release-name` is the
+  label shown beside it (Espresso).
 - The package is `com.baraka.app`. The `versionCode` must be above the host's
   newest, or the update is never offered; by default it is newest + 1.
+- The script builds with `--build-name` and `--build-number` and then reads the
+  version back from inside the APK, refusing to upload when it differs. The app
+  decides "is there an update" from the number inside its own APK, so an APK built
+  without `--build-number` (versionCode 1) would be offered an update forever.
 - The APK must be signed with the release key. The script refuses a debug-signed
   APK and any APK whose certificate is not the one the published builds use
   (SHA-256 `c0591e5a…8ea0fc`), because Android would reject it as an update.
-- It asks before uploading, then checks that the host lists the build with the
-  same SHA-256.
+- It asks before uploading, then checks that the host's index and `latest.json`
+  both show the build with the same SHA-256.
+- The first update on a device asks once to allow "Install unknown apps" for
+  Baraka (Android setting).
 
 ## Security Best Practices
 
