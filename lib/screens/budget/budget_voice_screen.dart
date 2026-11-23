@@ -9,6 +9,7 @@ import '../../config/launcher_tokens.dart';
 import '../finance/finance_data.dart' show rp, RupiahInputFormatter;
 import 'budget_data.dart';
 import 'budget_form_screen.dart';
+import 'budget_widgets.dart';
 
 enum _Step { idle, recording, sending, result, pick }
 
@@ -115,7 +116,7 @@ class _BudgetVoiceScreenState extends State<BudgetVoiceScreen> {
       final match = cats.where((c) => c.id == txn.categoryId);
       setState(() {
         _result = txn;
-        _resultIncome = match.isEmpty ? null : match.first.isIncome;
+        _resultIncome = match.isEmpty ? txn.typeIncome : match.first.isIncome;
         _step = _Step.result;
       });
     } on BudgetVoiceUnreadable catch (e) {
@@ -124,8 +125,10 @@ class _BudgetVoiceScreenState extends State<BudgetVoiceScreen> {
         return <BudgetCategory>[];
       });
       if (!mounted) return;
-      final active =
-          cats.where((c) => c.active && c.isIncome == e.isIncome).toList();
+      // The type is unknown when the amount looked wrong: offer them all.
+      final active = cats
+          .where((c) => c.active && (e.amountSuspect || c.isIncome == e.isIncome))
+          .toList();
       final names = e.candidates.map((c) => c.toLowerCase()).toSet();
       final matched =
           active.where((c) => names.contains(c.name.toLowerCase())).toList();
@@ -170,7 +173,7 @@ class _BudgetVoiceScreenState extends State<BudgetVoiceScreen> {
       await budgetRepo.addTransaction(
         amount: _amountValue,
         categoryId: c.id,
-        description: u.transcript,
+        description: u.description.isNotEmpty ? u.description : u.transcript,
         date: DateTime.now(),
         source: 'voice',
       );
@@ -313,25 +316,37 @@ class _BudgetVoiceScreenState extends State<BudgetVoiceScreen> {
           ),
         ),
         const SizedBox(height: Lx.s16),
-        Text('Kategorinya belum dikenali. Pilih yang sesuai:',
+        Text(
+            u.amountSuspect
+                ? 'Nominalnya tidak cocok dengan yang diucapkan. Isi nominal, '
+                    'lalu pilih kategori:'
+                : 'Kategorinya belum dikenali. Pilih yang sesuai:',
             style: Lx.cardHeading),
         const SizedBox(height: Lx.s12),
-        Text(u.isIncome ? 'Pemasukan' : 'Pengeluaran', style: Lx.metadata),
+        if (!u.amountSuspect)
+          Text(u.isIncome ? 'Pemasukan' : 'Pengeluaran', style: Lx.metadata),
         TextField(
           controller: _amount,
           enabled: !_saving,
           keyboardType: TextInputType.number,
           inputFormatters: [RupiahInputFormatter()],
           onChanged: (_) => setState(() => _error = null),
-          style:
-              Lx.greeting.copyWith(color: u.isIncome ? Lx.success : Lx.danger),
+          style: Lx.greeting.copyWith(
+              color: u.amountSuspect
+                  ? Lx.text
+                  : u.isIncome
+                      ? Lx.success
+                      : Lx.danger),
           decoration: const InputDecoration(hintText: '0', prefixText: 'Rp '),
         ),
         const SizedBox(height: Lx.s16),
         if (_choices.isEmpty)
           Text(
-              'Belum ada kategori ${u.isIncome ? 'pemasukan' : 'pengeluaran'}. '
-              'Tambahkan dulu di Kelola kategori.',
+              u.amountSuspect
+                  ? 'Belum ada kategori. Tambahkan dulu di Kelola kategori.'
+                  : 'Belum ada kategori '
+                      '${u.isIncome ? 'pemasukan' : 'pengeluaran'}. '
+                      'Tambahkan dulu di Kelola kategori.',
               style: Lx.body)
         else
           Wrap(
@@ -340,6 +355,9 @@ class _BudgetVoiceScreenState extends State<BudgetVoiceScreen> {
             children: [
               for (final c in _choices)
                 ActionChip(
+                  avatar: Icon(categoryLook(c.name, income: c.isIncome).icon,
+                      size: 16,
+                      color: categoryLook(c.name, income: c.isIncome).color),
                   label: Text(c.name),
                   onPressed: _saving ? null : () => _choose(c),
                 ),

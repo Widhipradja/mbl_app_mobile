@@ -7,6 +7,17 @@ String _s(dynamic v) => v?.toString().trim() ?? '';
 List<Map<String, dynamic>> _list(dynamic d) =>
     d is List ? d.whereType<Map<String, dynamic>>().toList() : const [];
 
+/// The calendar day of a stored date. A date entered in the app is midnight
+/// UTC (keep that day); one the server stamped with the current time
+/// (no date given, e.g. from the web) is read in the phone's own zone.
+DateTime? _calendarDay(DateTime? d) {
+  if (d == null) return null;
+  final midnightUtc =
+      d.isUtc && d.hour == 0 && d.minute == 0 && d.second == 0;
+  final day = midnightUtc ? d : d.toLocal();
+  return DateTime(day.year, day.month, day.day);
+}
+
 /// `YYYY-MM`
 String budgetPeriod(DateTime m) =>
     '${m.year}-${m.month.toString().padLeft(2, '0')}';
@@ -43,20 +54,21 @@ class BudgetTxn {
     required this.description,
     this.source = 'app',
     this.transcript = '',
+    this.categoryType = '',
   });
 
   factory BudgetTxn.fromJson(Map<String, dynamic> j) {
-    // `trx_date` is a date at midnight UTC: keep the calendar day.
-    final d = DateTime.tryParse(_s(j['trx_date']));
+    final d = _calendarDay(DateTime.tryParse(_s(j['trx_date'])));
     return BudgetTxn(
       id: _s(j['id']),
       categoryId: _s(j['category_id']),
       categoryName: _s(j['category_name']),
       amount: _amt(j['amount']),
-      date: d == null ? DateTime.now() : DateTime(d.year, d.month, d.day),
+      date: d ?? DateTime.now(),
       description: _s(j['description']),
       source: _s(j['source']).isEmpty ? 'app' : _s(j['source']),
       transcript: _s(j['transcript']),
+      categoryType: _s(j['category_type']),
     );
   }
 
@@ -66,6 +78,18 @@ class BudgetTxn {
   final String source, transcript;
 
   bool get isVoice => source == 'voice';
+
+  /// `income` or `expense` as the server stored it with the transaction, so
+  /// the sign is known even after its category was deleted; empty when the
+  /// transaction has no category.
+  final String categoryType;
+
+  /// [categoryType] as income (true), expense (false) or unknown (null).
+  bool? get typeIncome => categoryType == 'income'
+      ? true
+      : categoryType == 'expense'
+          ? false
+          : null;
   final int amount;
   final DateTime date;
 }
@@ -140,9 +164,18 @@ class BudgetVoiceUnreadable implements Exception {
     required this.amount,
     required this.isIncome,
     required this.candidates,
+    this.description = '',
+    this.amountSuspect = false,
   });
 
   final String message, transcript;
+
+  /// The description cleaned of the amount; empty when the server gave none.
+  final String description;
+
+  /// "amount looks wrong": the amount read does not fit what was said, so it
+  /// is not offered and the user types it.
+  final bool amountSuspect;
 
   /// 0 when no amount could be read.
   final int amount;
@@ -190,13 +223,14 @@ class BudgetRepository {
           {required int amount,
           required String categoryId,
           required String description,
-          required DateTime date}) =>
+          required DateTime date,
+          String source = 'app'}) =>
       {
         'amount': '$amount.00',
         'category_id': categoryId,
         'description': description,
         'trx_date': budgetDay(date),
-        'source': 'app',
+        'source': source,
       };
 
   Future<void> addTransaction(
@@ -210,8 +244,8 @@ class BudgetRepository {
             amount: amount,
             categoryId: categoryId,
             description: description,
-            date: date),
-        'source': source,
+            date: date,
+            source: source),
       });
 
   /// The transaction is created by the server on 200. Throws
@@ -224,10 +258,13 @@ class BudgetRepository {
     } on DioException catch (e) {
       final d = e.response?.data;
       if (e.response?.statusCode == 422 && d is Map) {
+        final suspect = _s(d['error']).startsWith('amount looks wrong');
         throw BudgetVoiceUnreadable(
           message: _s(d['error']),
           transcript: _s(d['transcript']),
-          amount: _amt(d['amount']),
+          description: _s(d['description']),
+          amountSuspect: suspect,
+          amount: suspect ? 0 : _amt(d['amount']),
           isIncome: _s(d['trx_type']) == 'income',
           candidates: [
             if (d['candidates'] is List)
@@ -239,18 +276,22 @@ class BudgetRepository {
     }
   }
 
+  /// PUT sends every field again, so the stored [source] goes back as it
+  /// was: editing a voice entry must not turn it into an app one.
   Future<void> updateTransaction(String id,
           {required int amount,
           required String categoryId,
           required String description,
-          required DateTime date}) =>
+          required DateTime date,
+          String source = 'app'}) =>
       ApiService().updateBudgetTransaction(
           id,
           _txnBody(
               amount: amount,
               categoryId: categoryId,
               description: description,
-              date: date));
+              date: date,
+              source: source));
 
   Future<void> deleteTransaction(String id) =>
       ApiService().deleteBudgetTransaction(id);

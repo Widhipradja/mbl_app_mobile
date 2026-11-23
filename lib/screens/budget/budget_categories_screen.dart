@@ -1,33 +1,51 @@
 import 'package:flutter/material.dart';
 
 import '../../config/launcher_tokens.dart';
-import '../finance/finance_widgets.dart' show GroupLabel, hairline;
 import 'budget_data.dart';
+import 'budget_widgets.dart';
+
+const _expenseIdeas = [
+  'Makan', 'Transportasi', 'Belanja', 'Tagihan', 'Pulsa & Internet', //
+  'Kesehatan', 'Pendidikan', 'Sedekah', 'Hiburan',
+];
+const _incomeIdeas = ['Gaji', 'Bonus', 'Usaha', 'Hadiah', 'Kiriman', 'Investasi'];
 
 /// Add a category, or rename / retype [existing]. Returns the saved one.
+/// [taken] are names already in use, left out of the suggestions.
 Future<BudgetCategory?> showCategoryDialog(BuildContext context,
-    {BudgetCategory? existing, bool income = false}) {
-  return showDialog<BudgetCategory>(
+    {BudgetCategory? existing,
+    bool income = false,
+    Set<String> taken = const {}}) {
+  return showModalBottomSheet<BudgetCategory>(
     context: context,
-    builder: (_) => _CategoryDialog(existing: existing, income: income),
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (_) => Theme(
+      data: Lx.theme,
+      child: _CategorySheet(existing: existing, income: income, taken: taken),
+    ),
   );
 }
 
-class _CategoryDialog extends StatefulWidget {
-  const _CategoryDialog({this.existing, required this.income});
+class _CategorySheet extends StatefulWidget {
+  const _CategorySheet(
+      {this.existing, required this.income, required this.taken});
 
   final BudgetCategory? existing;
   final bool income;
+  final Set<String> taken;
 
   @override
-  State<_CategoryDialog> createState() => _CategoryDialogState();
+  State<_CategorySheet> createState() => _CategorySheetState();
 }
 
-class _CategoryDialogState extends State<_CategoryDialog> {
+class _CategorySheetState extends State<_CategorySheet> {
   late final _name = TextEditingController(text: widget.existing?.name ?? '');
   late bool _income = widget.existing?.isIncome ?? widget.income;
   bool _saving = false;
   String? _error;
+
+  bool get _editing => widget.existing != null;
 
   @override
   void dispose() {
@@ -69,51 +87,112 @@ class _CategoryDialogState extends State<_CategoryDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(widget.existing == null ? 'Kategori baru' : 'Ubah kategori'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          TextField(
-            controller: _name,
-            autofocus: true,
-            enabled: !_saving,
-            textCapitalization: TextCapitalization.words,
-            decoration: const InputDecoration(hintText: 'Nama, mis. Makan'),
-          ),
-          const SizedBox(height: Lx.s12),
-          SegmentedButton<bool>(
-            showSelectedIcon: false,
-            segments: const [
-              ButtonSegment(value: false, label: Text('Pengeluaran')),
-              ButtonSegment(value: true, label: Text('Pemasukan')),
+    final name = _name.text.trim();
+    final taken = widget.taken.map((t) => t.toLowerCase()).toSet();
+    final ideas = (_income ? _incomeIdeas : _expenseIdeas)
+        .where((i) => !taken.contains(i.toLowerCase()))
+        .toList();
+    return Padding(
+      padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(Lx.s20, 0, Lx.s20, Lx.s16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(_editing ? 'Ubah kategori' : 'Kategori baru',
+                  style: Lx.sectionHeading),
+              const SizedBox(height: 2),
+              Text(
+                  'Kategori mengelompokkan transaksi, misalnya Makan atau '
+                  'Gaji, supaya laporan mudah dibaca.',
+                  style: Lx.metadata),
+              const SizedBox(height: Lx.s16),
+              Text('Jenis', style: Lx.cardHeading),
+              const SizedBox(height: Lx.s8),
+              BudgetTypeToggle(
+                income: _income,
+                expenseLabel: 'Uang keluar',
+                incomeLabel: 'Uang masuk',
+                onChanged: _saving ? null : (v) => setState(() => _income = v),
+              ),
+              const SizedBox(height: Lx.s16),
+              Text('Nama', style: Lx.cardHeading),
+              const SizedBox(height: Lx.s8),
+              TextField(
+                controller: _name,
+                autofocus: !_editing,
+                enabled: !_saving,
+                textCapitalization: TextCapitalization.words,
+                maxLength: 40,
+                onChanged: (_) => setState(() => _error = null),
+                onSubmitted: (_) => _save(),
+                decoration: InputDecoration(
+                  hintText: _income ? 'Mis. Gaji' : 'Mis. Makan',
+                  counterText: '',
+                  prefixIcon: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: CategoryAvatar(name, income: _income, size: 32),
+                  ),
+                ),
+              ),
+              if (!_editing && ideas.isNotEmpty) ...[
+                const SizedBox(height: Lx.s12),
+                Text('Saran', style: Lx.metadata),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: Lx.s8,
+                  runSpacing: Lx.s8,
+                  children: [
+                    for (final i in ideas)
+                      ActionChip(
+                        avatar: Icon(categoryLook(i, income: _income).icon,
+                            size: 16,
+                            color: categoryLook(i, income: _income).color),
+                        label: Text(i),
+                        onPressed: _saving
+                            ? null
+                            : () => setState(() {
+                                  _name.text = i;
+                                  _error = null;
+                                }),
+                      ),
+                  ],
+                ),
+              ],
+              if (_error != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: Lx.s12),
+                  child: Text(_error!,
+                      style: Lx.metadata.copyWith(color: Lx.danger)),
+                ),
+              const SizedBox(height: Lx.s20),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: FilledButton(
+                  onPressed: _saving ? null : _save,
+                  child: _saving
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white))
+                      : Text(_editing ? 'Simpan Perubahan' : 'Buat Kategori'),
+                ),
+              ),
             ],
-            selected: {_income},
-            onSelectionChanged:
-                _saving ? null : (s) => setState(() => _income = s.first),
           ),
-          if (_error != null)
-            Padding(
-              padding: const EdgeInsets.only(top: Lx.s8),
-              child:
-                  Text(_error!, style: Lx.metadata.copyWith(color: Lx.danger)),
-            ),
-        ],
+        ),
       ),
-      actions: [
-        TextButton(
-            onPressed: _saving ? null : () => Navigator.pop(context),
-            child: const Text('Batal')),
-        FilledButton(
-            onPressed: _saving ? null : _save, child: const Text('Simpan')),
-      ],
     );
   }
 }
 
-/// Manage categories: add, rename, switch off (kept for history) or delete.
-/// Deleting keeps past transactions, which carry their own category name.
+/// Manage categories by type: add, rename, switch off (kept for history) or
+/// delete. Deleting keeps past transactions, which carry their own name.
 class BudgetCategoriesScreen extends StatefulWidget {
   const BudgetCategoriesScreen({super.key});
 
@@ -123,6 +202,7 @@ class BudgetCategoriesScreen extends StatefulWidget {
 
 class _BudgetCategoriesScreenState extends State<BudgetCategoriesScreen> {
   List<BudgetCategory>? _items;
+  bool _income = false;
   String? _error;
 
   @override
@@ -135,6 +215,7 @@ class _BudgetCategoriesScreenState extends State<BudgetCategoriesScreen> {
     setState(() => _error = null);
     try {
       final list = await budgetRepo.categories();
+      list.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
       if (mounted) setState(() => _items = list);
     } catch (e) {
       debugPrint('BudgetCategories load error: $e');
@@ -146,14 +227,25 @@ class _BudgetCategoriesScreenState extends State<BudgetCategoriesScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
 
   Future<void> _edit([BudgetCategory? c]) async {
-    final saved = await showCategoryDialog(context, existing: c);
-    if (saved != null && mounted) _load();
+    final saved = await showCategoryDialog(context,
+        existing: c,
+        income: _income,
+        taken: {for (final i in _items ?? const <BudgetCategory>[]) i.name});
+    if (saved == null || !mounted) return;
+    // Show the tab the category ended up in.
+    setState(() => _income = saved.isIncome);
+    _load();
   }
 
   Future<void> _toggle(BudgetCategory c, bool active) async {
     try {
       await budgetRepo.updateCategory(c, active: active);
       await _load();
+      if (mounted) {
+        _toast(active
+            ? '"${c.name}" aktif lagi.'
+            : '"${c.name}" dinonaktifkan. Riwayatnya tetap ada.');
+      }
     } catch (e) {
       debugPrint('BudgetCategories toggle error: $e');
       if (mounted) _toast(budgetError(e));
@@ -166,7 +258,9 @@ class _BudgetCategoriesScreenState extends State<BudgetCategoriesScreen> {
       builder: (context) => AlertDialog(
         title: Text('Hapus "${c.name}"?'),
         content: const Text(
-            'Transaksi yang sudah ada tetap tersimpan dengan nama kategori ini.'),
+            'Transaksi yang sudah ada tetap tersimpan dengan nama kategori '
+            'ini. Kalau hanya ingin menyembunyikannya dari form, pilih '
+            'Nonaktifkan.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -188,42 +282,66 @@ class _BudgetCategoriesScreenState extends State<BudgetCategoriesScreen> {
     }
   }
 
-  List<Widget> _group(String title, List<BudgetCategory> list) {
-    if (list.isEmpty) return const [];
-    return [
-      GroupLabel(title),
-      for (var i = 0; i < list.length; i++) ...[
-        if (i > 0) hairline,
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          title: Text(list[i].name,
-              style: Lx.cardHeading
-                  .copyWith(color: list[i].active ? Lx.text : Lx.textMuted)),
-          subtitle:
-              list[i].active ? null : Text('Nonaktif', style: Lx.metadata),
-          onTap: () => _edit(list[i]),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Switch(
-                value: list[i].active,
-                onChanged: (v) => _toggle(list[i], v),
-              ),
-              IconButton(
-                tooltip: 'Hapus',
-                onPressed: () => _delete(list[i]),
-                icon: const Icon(Icons.delete_outline_rounded),
-              ),
-            ],
-          ),
+  Widget _row(BudgetCategory c) => ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: Lx.s4),
+        leading: CategoryAvatar(c.name, income: c.isIncome, muted: !c.active),
+        title: Text(c.name,
+            style: Lx.cardHeading
+                .copyWith(color: c.active ? Lx.text : Lx.textMuted)),
+        subtitle: c.active
+            ? null
+            : Text('Tidak muncul di form', style: Lx.metadata),
+        onTap: () => _edit(c),
+        trailing: PopupMenuButton<String>(
+          tooltip: 'Pilihan',
+          icon: const Icon(Icons.more_vert_rounded, color: Lx.textSecondary),
+          onSelected: (v) {
+            switch (v) {
+              case 'edit':
+                _edit(c);
+              case 'off':
+                _toggle(c, false);
+              case 'on':
+                _toggle(c, true);
+              case 'delete':
+                _delete(c);
+            }
+          },
+          itemBuilder: (_) => [
+            const PopupMenuItem(
+                value: 'edit',
+                child: ListTile(
+                    leading: Icon(Icons.edit_outlined),
+                    title: Text('Ubah'),
+                    contentPadding: EdgeInsets.zero)),
+            PopupMenuItem(
+                value: c.active ? 'off' : 'on',
+                child: ListTile(
+                    leading: Icon(c.active
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined),
+                    title: Text(c.active ? 'Nonaktifkan' : 'Aktifkan'),
+                    contentPadding: EdgeInsets.zero)),
+            const PopupMenuItem(
+                value: 'delete',
+                child: ListTile(
+                    leading: Icon(Icons.delete_outline, color: Lx.danger),
+                    title: Text('Hapus', style: TextStyle(color: Lx.danger)),
+                    contentPadding: EdgeInsets.zero)),
+          ],
         ),
-      ],
-    ];
-  }
+      );
 
   @override
   Widget build(BuildContext context) {
     final items = _items;
+    final ofType = (items ?? const <BudgetCategory>[])
+        .where((c) => c.isIncome == _income)
+        .toList();
+    final active = ofType.where((c) => c.active).toList();
+    final inactive = ofType.where((c) => !c.active).toList();
+    final word = _income ? 'pemasukan' : 'pengeluaran';
+
     return Theme(
       data: Lx.theme,
       child: Scaffold(
@@ -231,19 +349,10 @@ class _BudgetCategoriesScreenState extends State<BudgetCategoriesScreen> {
         floatingActionButton: FloatingActionButton.extended(
           onPressed: _edit,
           icon: const Icon(Icons.add_rounded),
-          label: const Text('Kategori'),
+          label: const Text('Kategori baru'),
         ),
         body: _error != null
-            ? Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(_error!, style: Lx.body),
-                    TextButton(
-                        onPressed: _load, child: const Text('Coba lagi')),
-                  ],
-                ),
-              )
+            ? Center(child: BudgetRetry(_error!, onRetry: _load))
             : items == null
                 ? const Center(child: CircularProgressIndicator())
                 : RefreshIndicator(
@@ -252,17 +361,40 @@ class _BudgetCategoriesScreenState extends State<BudgetCategoriesScreen> {
                       physics: const AlwaysScrollableScrollPhysics(),
                       padding: const EdgeInsets.fromLTRB(Lx.s16, 0, Lx.s16, 96),
                       children: [
-                        if (items.isEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 64),
-                            child: Center(
-                                child: Text('Belum ada kategori.',
-                                    style: Lx.body)),
+                        BudgetTypeToggle(
+                          income: _income,
+                          onChanged: (v) => setState(() => _income = v),
+                        ),
+                        const SizedBox(height: Lx.s16),
+                        if (active.isEmpty && inactive.isEmpty)
+                          BudgetCard(
+                            child: BudgetEmpty(
+                              icon: Icons.category_rounded,
+                              text: 'Belum ada kategori $word.',
+                              action: 'Buat kategori',
+                              onAction: _edit,
+                            ),
                           ),
-                        ..._group('Pengeluaran',
-                            items.where((c) => !c.isIncome).toList()),
-                        ..._group('Pemasukan',
-                            items.where((c) => c.isIncome).toList()),
+                        if (active.isNotEmpty)
+                          BudgetCard(
+                            title: 'Aktif',
+                            subtitle:
+                                '${active.length} kategori · ketuk untuk mengubah',
+                            padding: const EdgeInsets.fromLTRB(
+                                Lx.s12, Lx.s16, Lx.s4, Lx.s8),
+                            child: Column(
+                                children: [for (final c in active) _row(c)]),
+                          ),
+                        if (inactive.isNotEmpty)
+                          BudgetCard(
+                            title: 'Nonaktif',
+                            subtitle:
+                                'Disembunyikan dari form, riwayatnya tetap ada',
+                            padding: const EdgeInsets.fromLTRB(
+                                Lx.s12, Lx.s16, Lx.s4, Lx.s8),
+                            child: Column(
+                                children: [for (final c in inactive) _row(c)]),
+                          ),
                       ],
                     ),
                   ),

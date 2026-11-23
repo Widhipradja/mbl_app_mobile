@@ -1,8 +1,8 @@
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
 import '../../config/launcher_tokens.dart';
-import '../finance/finance_data.dart' show rp, rpShort, monthLabel;
-import '../finance/finance_widgets.dart';
+import '../finance/finance_data.dart' show rp, rpShort;
 import '../savings/ledger_widgets.dart' show monthNames;
 import 'budget_data.dart';
 import 'budget_transactions_screen.dart';
@@ -114,17 +114,11 @@ class _BudgetReportScreenState extends State<BudgetReportScreen> {
     return rows;
   }
 
-  Widget _toggle() => SegmentedButton<bool>(
-        showSelectedIcon: false,
-        segments: const [
-          ButtonSegment(value: false, label: Text('Pengeluaran')),
-          ButtonSegment(value: true, label: Text('Pemasukan')),
-        ],
-        selected: {_income},
-        onSelectionChanged: (s) => setState(() => _income = s.first),
-      );
+  Color _rowColor(_Row r) => r.id == null
+      ? const Color(0xFFCBD5E1)
+      : categoryLook(r.name, income: _income).color;
 
-  Widget _total() {
+  Widget _summary() {
     final s = _current;
     final total = _income ? s.income : s.expense;
     final prevTotal = _previous == null
@@ -134,128 +128,192 @@ class _BudgetReportScreenState extends State<BudgetReportScreen> {
     final isThisMonth = _month.year == now.year && _month.month == now.month;
     final days =
         isThisMonth ? now.day : DateTime(_month.year, _month.month + 1, 0).day;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(Lx.s16),
-      decoration: BoxDecoration(
-        color: Lx.primaryLight,
-        borderRadius: BorderRadius.circular(Lx.rCard),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(_income ? 'Total pemasukan' : 'Total pengeluaran',
-              style: Lx.metadata),
-          Text(rp(total),
-              style: Lx.greeting
-                  .copyWith(color: _income ? Lx.success : Lx.danger)),
-          const SizedBox(height: Lx.s8),
-          if (prevTotal != null && prevTotal > 0)
-            _Delta(
-                now: total,
-                before: prevTotal,
-                upIsBad: !_income,
-                suffix: 'dari bulan lalu'),
-          if (!_income && days > 0)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text('Rata-rata ${rp((total / days).round())} per hari',
-                  style: Lx.metadata),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _categories() {
     final rows = _rows();
-    final total = _income ? _current.income : _current.expense;
-    if (rows.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.only(top: Lx.s24),
-        child: Center(
-            child: Text(
-                _income
-                    ? 'Belum ada pemasukan bulan ini.'
-                    : 'Belum ada pengeluaran bulan ini.',
-                style: Lx.body)),
-      );
-    }
-    final top = rows.first.amount;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: Lx.s24),
-        Text('Per kategori', style: Lx.sectionHeading),
-        const SizedBox(height: Lx.s12),
-        for (final r in rows)
-          InkWell(
-            onTap: r.id == null
-                ? null
-                : () => Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => BudgetTransactionsScreen(
-                        month: _month, categoryId: r.id))),
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: Lx.s16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+
+    return BudgetCard(
+      child: Column(
+        children: [
+          if (rows.isEmpty)
+            BudgetEmpty(
+              icon: Icons.pie_chart_outline_rounded,
+              text: _income
+                  ? 'Belum ada pemasukan bulan ini.'
+                  : 'Belum ada pengeluaran bulan ini.',
+            )
+          else
+            SizedBox(
+              height: 200,
+              child: Stack(
+                alignment: Alignment.center,
                 children: [
-                  Row(
-                    children: [
-                      Expanded(child: Text(r.name, style: Lx.cardHeading)),
-                      Text(rp(r.amount), style: Lx.cardHeading),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(
-                      value: top == 0 ? 0 : r.amount / top,
-                      minHeight: 6,
-                      backgroundColor: Lx.border,
-                      color: _income ? Lx.success : Lx.primary,
+                  PieChart(
+                    PieChartData(
+                      startDegreeOffset: -90,
+                      sectionsSpace: 2,
+                      centerSpaceRadius: 68,
+                      sections: [
+                        for (final r in rows)
+                          PieChartSectionData(
+                            value: r.amount.toDouble(),
+                            color: _rowColor(r),
+                            radius: 26,
+                            showTitle: false,
+                          ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Row(
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                          '${total == 0 ? 0 : (r.amount * 100 / total).round()}% '
-                          'dari total',
+                      Text(_income ? 'Total masuk' : 'Total keluar',
                           style: Lx.metadata),
-                      const Spacer(),
-                      if (_previous != null && r.id != null)
-                        r.before == null || r.before == 0
-                            ? Text('baru', style: Lx.metadata)
-                            : _Delta(
-                                now: r.amount,
-                                before: r.before!,
-                                upIsBad: !_income),
+                      const SizedBox(height: 2),
+                      SizedBox(
+                        width: 120,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(rp(total),
+                              style: Lx.sectionHeading.copyWith(
+                                  color: _income ? Lx.success : Lx.text,
+                                  fontFeatures: tabular)),
+                        ),
+                      ),
                     ],
                   ),
                 ],
               ),
             ),
+          const SizedBox(height: Lx.s12),
+          Row(
+            children: [
+              Expanded(
+                child: _stat(
+                  'Dibanding bulan lalu',
+                  prevTotal != null && prevTotal > 0
+                      ? _Delta(now: total, before: prevTotal, upIsBad: !_income)
+                      : Text('–', style: Lx.cardHeading),
+                ),
+              ),
+              Container(width: 1, height: 36, color: Lx.border),
+              const SizedBox(width: Lx.s12),
+              Expanded(
+                child: _stat(
+                  _income ? 'Jumlah transaksi' : 'Rata-rata per hari',
+                  Text(
+                      _income
+                          ? '${_txns.where((t) => (_incomeOf[t.categoryId] ?? t.typeIncome) == true).length}'
+                          : rp(days > 0 ? (total / days).round() : 0),
+                      style: Lx.cardHeading.copyWith(fontFeatures: tabular)),
+                ),
+              ),
+            ],
           ),
-      ],
+        ],
+      ),
+    );
+  }
+
+  Widget _stat(String label, Widget value) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: Lx.metadata),
+          const SizedBox(height: 2),
+          value,
+        ],
+      );
+
+  Widget _categories() {
+    final rows = _rows();
+    if (rows.isEmpty) return const SizedBox.shrink();
+    final total = _income ? _current.income : _current.expense;
+    return BudgetCard(
+      title: 'Per kategori',
+      subtitle: 'Ketuk kategori untuk melihat transaksinya',
+      padding: const EdgeInsets.fromLTRB(Lx.s16, Lx.s16, Lx.s16, Lx.s8),
+      child: Column(
+        children: [
+          for (final r in rows)
+            InkWell(
+              borderRadius: BorderRadius.circular(Lx.rButton),
+              onTap: r.id == null
+                  ? null
+                  : () => Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => BudgetTransactionsScreen(
+                          month: _month, categoryId: r.id))),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: Lx.s8),
+                child: Row(
+                  children: [
+                    CategoryAvatar(r.id == null ? '' : r.name,
+                        income: _income, size: 36),
+                    const SizedBox(width: Lx.s12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(r.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style:
+                                        Lx.cardHeading.copyWith(fontSize: 14)),
+                              ),
+                              Text(rp(r.amount),
+                                  style: Lx.cardHeading.copyWith(
+                                      fontSize: 14, fontFeatures: tabular)),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          BudgetBar(
+                              value: total == 0 ? 0 : r.amount / total,
+                              color: _rowColor(r),
+                              height: 6),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Text(
+                                  '${total == 0 ? 0 : (r.amount * 100 / total).round()}% dari total',
+                                  style: Lx.metadata),
+                              const Spacer(),
+                              if (_previous != null && r.id != null)
+                                r.before == null || r.before == 0
+                                    ? Text('baru bulan ini', style: Lx.metadata)
+                                    : _Delta(
+                                        now: r.amount,
+                                        before: r.before!,
+                                        upIsBad: !_income),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
   /// The three biggest expenses of the month.
   Widget _biggest() {
-    final list = _txns.where((t) => _incomeOf[t.categoryId] == false).toList()
+    final list = _txns
+        .where((t) => (_incomeOf[t.categoryId] ?? t.typeIncome) == false)
+        .toList()
       ..sort((a, b) => b.amount.compareTo(a.amount));
     if (_income || list.isEmpty) return const SizedBox.shrink();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: Lx.s8),
-        Text('Pengeluaran terbesar', style: Lx.sectionHeading),
-        for (var i = 0; i < list.take(3).length; i++) ...[
-          if (i > 0) hairline,
-          BudgetTxnRow(txn: list[i], isIncome: false, showDate: true),
+    return BudgetCard(
+      title: 'Pengeluaran terbesar',
+      padding: const EdgeInsets.fromLTRB(Lx.s16, Lx.s16, Lx.s16, Lx.s8),
+      child: Column(
+        children: [
+          for (final t in list.take(3))
+            BudgetTxnRow(txn: t, isIncome: false, showDate: true),
         ],
-      ],
+      ),
     );
   }
 
@@ -267,79 +325,88 @@ class _BudgetReportScreenState extends State<BudgetReportScreen> {
       if (s.income > top) top = s.income;
       if (s.expense > top) top = s.expense;
     }
-    Widget bar(int v, Color c) => Container(
-          width: 12,
-          height: 4 + 96 * (v / top),
+    DateTime monthAt(int i) =>
+        DateTime(_month.year, _month.month - (data.length - 1 - i));
+    Widget bar(int v, Color c, bool on) => Container(
+          width: 11,
+          height: 4 + 100 * (v / top),
           decoration: BoxDecoration(
-            color: c,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(3)),
+            color: on ? c : c.withOpacity(0.35),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
           ),
         );
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: Lx.s24),
-        Row(
-          children: [
-            Expanded(
-                child: Text('$_trendMonths bulan terakhir',
-                    style: Lx.sectionHeading)),
-            _legend('Masuk', Lx.success),
-            const SizedBox(width: Lx.s12),
-            _legend('Keluar', Lx.danger),
-          ],
-        ),
-        const SizedBox(height: Lx.s12),
-        SizedBox(
-          height: 150,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
+    return BudgetCard(
+      title: '$_trendMonths bulan terakhir',
+      subtitle: 'Ketuk bulan untuk membukanya',
+      child: Column(
+        children: [
+          Row(
             children: [
-              for (var i = 0; i < data.length; i++)
-                Expanded(
-                  child: InkWell(
-                    onTap: i == data.length - 1
-                        ? null
-                        : () => _setMonth(DateTime(
-                            _month.year, _month.month - (data.length - 1 - i))),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        if (data[i] == null)
-                          Text('–', style: Lx.metadata)
-                        else
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              bar(data[i]!.income, Lx.success),
-                              const SizedBox(width: 3),
-                              bar(data[i]!.expense, Lx.danger),
-                            ],
-                          ),
-                        const SizedBox(height: 6),
-                        Text(
-                          monthNames[DateTime(_month.year,
-                                          _month.month - (data.length - 1 - i))
-                                      .month -
-                                  1]
-                              .substring(0, 3),
-                          style: Lx.metadata.copyWith(
-                              fontWeight: i == data.length - 1
-                                  ? FontWeight.w700
-                                  : null),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+              _legend('Pemasukan', Lx.success),
+              const SizedBox(width: Lx.s16),
+              _legend('Pengeluaran', Lx.danger),
             ],
           ),
-        ),
-        const SizedBox(height: Lx.s8),
-        Text('Rata-rata pengeluaran ${rpShort(_avgExpense(data))} per bulan.',
-            style: Lx.metadata),
-      ],
+          const SizedBox(height: Lx.s12),
+          SizedBox(
+            height: 140,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                for (var i = 0; i < data.length; i++)
+                  Expanded(
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(Lx.rSmall),
+                      onTap: i == data.length - 1
+                          ? null
+                          : () => _setMonth(monthAt(i)),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          if (data[i] == null)
+                            Text('–', style: Lx.metadata)
+                          else
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                bar(data[i]!.income, Lx.success,
+                                    i == data.length - 1),
+                                const SizedBox(width: 3),
+                                bar(data[i]!.expense, Lx.danger,
+                                    i == data.length - 1),
+                              ],
+                            ),
+                          const SizedBox(height: 6),
+                          Text(
+                            monthNames[monthAt(i).month - 1].substring(0, 3),
+                            style: Lx.metadata.copyWith(
+                                color: i == data.length - 1 ? Lx.text : null,
+                                fontWeight: i == data.length - 1
+                                    ? FontWeight.w700
+                                    : null),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: Lx.s12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(Lx.s12),
+            decoration: BoxDecoration(
+              color: Lx.background,
+              borderRadius: BorderRadius.circular(Lx.rButton),
+            ),
+            child: Text(
+                'Rata-rata pengeluaran ${rpShort(_avgExpense(data))} per bulan.',
+                style: Lx.metadata.copyWith(color: Lx.text)),
+          ),
+        ],
+      ),
     );
   }
 
@@ -354,8 +421,9 @@ class _BudgetReportScreenState extends State<BudgetReportScreen> {
           Container(
               width: 10,
               height: 10,
-              decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
-          const SizedBox(width: 4),
+              decoration: BoxDecoration(
+                  color: c, borderRadius: BorderRadius.circular(3))),
+          const SizedBox(width: 6),
           Text(label, style: Lx.metadata),
         ],
       );
@@ -373,28 +441,22 @@ class _BudgetReportScreenState extends State<BudgetReportScreen> {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(Lx.s16, 0, Lx.s16, Lx.s24),
             children: [
-              MonthSwitcher(month: _month, onChanged: _setMonth),
+              BudgetMonthPill(month: _month, onChanged: _setMonth),
+              const SizedBox(height: Lx.s12),
               if (_error != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: Lx.s24),
-                  child: Column(
-                    children: [
-                      Text(_error!,
-                          style: Lx.body, textAlign: TextAlign.center),
-                      TextButton(
-                          onPressed: _load, child: const Text('Coba lagi')),
-                    ],
-                  ),
-                )
+                BudgetRetry(_error!, onRetry: _load)
               else if (!ready)
                 const Padding(
                   padding: EdgeInsets.only(top: 80),
                   child: Center(child: CircularProgressIndicator()),
                 )
               else ...[
-                _toggle(),
-                const SizedBox(height: Lx.s16),
-                _total(),
+                BudgetTypeToggle(
+                  income: _income,
+                  onChanged: (v) => setState(() => _income = v),
+                ),
+                const SizedBox(height: Lx.s12),
+                _summary(),
                 _categories(),
                 _biggest(),
                 _trendChart(),
@@ -442,14 +504,28 @@ class _Delta extends StatelessWidget {
     if (before == 0) return const SizedBox.shrink();
     final pct = ((now - before) * 100 / before).round();
     if (pct == 0) {
-      return Text('Sama seperti bulan lalu', style: Lx.metadata);
+      return Text('Sama', style: Lx.metadata);
     }
     final up = pct > 0;
     final bad = up == upIsBad;
-    return Text(
-      '${up ? '▲' : '▼'} ${pct.abs()}%${suffix.isEmpty ? '' : ' $suffix'}',
-      style: Lx.metadata.copyWith(
-          color: bad ? Lx.danger : Lx.success, fontWeight: FontWeight.w600),
+    final color = bad ? Lx.danger : Lx.success;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(up ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+              size: 12, color: color),
+          const SizedBox(width: 2),
+          Text('${pct.abs()}%${suffix.isEmpty ? '' : ' $suffix'}',
+              style: Lx.metadata
+                  .copyWith(color: color, fontWeight: FontWeight.w700)),
+        ],
+      ),
     );
   }
 }

@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../config/launcher_tokens.dart';
 import '../finance/finance_data.dart' show RupiahInputFormatter, rp, thousands;
-import '../finance/finance_widgets.dart';
 import 'budget_data.dart';
+import 'budget_widgets.dart';
 
 /// Monthly budget per expense category. A row left empty or 0 means no
 /// budget. Only the rows that changed are sent.
@@ -21,6 +21,10 @@ class _BudgetLimitsScreenState extends State<BudgetLimitsScreen> {
   List<BudgetCategory>? _categories;
   final Map<String, TextEditingController> _fields = {};
   Map<String, int> _saved = {};
+
+  /// Spent this month per category, to set a limit against; empty when the
+  /// summary could not be read.
+  Map<String, int> _spent = const {};
   final _total = ValueNotifier<int>(0);
   bool _saving = false;
   String? _error;
@@ -53,9 +57,13 @@ class _BudgetLimitsScreenState extends State<BudgetLimitsScreen> {
       _categories = null;
     });
     try {
-      final r = await Future.wait([
+      final r = await Future.wait<dynamic>([
         budgetRepo.categories(),
         budgetRepo.limits(month),
+        budgetRepo
+            .summary(month)
+            .then<BudgetSummary?>((s) => s)
+            .catchError((Object e) => null),
       ]);
       if (!mounted || month != _month) return;
       final cats = (r[0] as List<BudgetCategory>)
@@ -77,6 +85,11 @@ class _BudgetLimitsScreenState extends State<BudgetLimitsScreen> {
                         : '')),
         ]);
       _saved = {for (final c in cats) c.id: limits[c.id] ?? 0};
+      final summary = r[2] as BudgetSummary?;
+      _spent = {
+        for (final l in summary?.categories ?? const <BudgetCategoryLine>[])
+          l.categoryId: l.spent,
+      };
       setState(() => _categories = cats);
       _recompute();
     } catch (e) {
@@ -129,10 +142,27 @@ class _BudgetLimitsScreenState extends State<BudgetLimitsScreen> {
         padding: const EdgeInsets.symmetric(vertical: Lx.s8),
         child: Row(
           children: [
-            Expanded(child: Text(c.name, style: Lx.cardHeading)),
+            CategoryAvatar(c.name, income: false, size: 36),
+            const SizedBox(width: Lx.s12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(c.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Lx.cardHeading.copyWith(fontSize: 14)),
+                  Text(
+                      (_spent[c.id] ?? 0) > 0
+                          ? 'Terpakai ${rp(_spent[c.id]!)}'
+                          : 'Belum ada pengeluaran',
+                      style: Lx.metadata.copyWith(fontFeatures: tabular)),
+                ],
+              ),
+            ),
             const SizedBox(width: Lx.s12),
             SizedBox(
-              width: 156,
+              width: 140,
               height: 48,
               child: TextField(
                 controller: _fields[c.id],
@@ -167,38 +197,27 @@ class _BudgetLimitsScreenState extends State<BudgetLimitsScreen> {
         body: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: Lx.s8),
-              child: MonthSwitcher(
+              padding: const EdgeInsets.fromLTRB(Lx.s16, 0, Lx.s16, Lx.s8),
+              child: BudgetMonthPill(
                 month: _month,
                 onChanged: _saving ? (_) {} : _setMonth,
                 last: DateTime(DateTime.now().year, DateTime.now().month + 1),
               ),
             ),
-            const Divider(height: 1, thickness: 1, color: Lx.border),
             Expanded(
               child: cats == null
                   ? (_error != null
-                      ? Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(_error!, style: Lx.body),
-                              TextButton(
-                                  onPressed: _load,
-                                  child: const Text('Coba lagi')),
-                            ],
-                          ),
-                        )
+                      ? Center(child: BudgetRetry(_error!, onRetry: _load))
                       : const Center(child: CircularProgressIndicator()))
                   : cats.isEmpty
-                      ? Center(
+                      ? const Center(
                           child: Padding(
-                            padding: const EdgeInsets.all(Lx.s24),
-                            child: Text(
-                                'Belum ada kategori pengeluaran. Tambahkan '
-                                'dulu di Kelola kategori.',
-                                textAlign: TextAlign.center,
-                                style: Lx.body),
+                            padding: EdgeInsets.all(Lx.s24),
+                            child: BudgetEmpty(
+                              icon: Icons.category_rounded,
+                              text: 'Belum ada kategori pengeluaran. '
+                                  'Tambahkan dulu di menu Kategori.',
+                            ),
                           ),
                         )
                       : ListView(
@@ -207,13 +226,28 @@ class _BudgetLimitsScreenState extends State<BudgetLimitsScreen> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: Lx.s16, vertical: Lx.s8),
                           children: [
-                            for (var i = 0; i < cats.length; i++) ...[
-                              if (i > 0) hairline,
-                              _row(cats[i]),
-                            ],
-                            const SizedBox(height: Lx.s16),
-                            Text('Kosongkan atau isi 0 bila tidak dianggarkan.',
-                                style: Lx.metadata),
+                            Text(
+                                'Isi batas belanja per kategori untuk bulan '
+                                'ini. Kosongkan atau isi 0 bila tidak '
+                                'dianggarkan.',
+                                style: Lx.body),
+                            const SizedBox(height: Lx.s12),
+                            BudgetCard(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: Lx.s12, vertical: Lx.s4),
+                              child: Column(
+                                children: [
+                                  for (var i = 0; i < cats.length; i++) ...[
+                                    if (i > 0)
+                                      const Divider(
+                                          height: 1,
+                                          indent: 48,
+                                          color: Lx.border),
+                                    _row(cats[i]),
+                                  ],
+                                ],
+                              ),
+                            ),
                           ],
                         ),
             ),

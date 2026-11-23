@@ -4,9 +4,9 @@ import 'package:flutter/services.dart';
 import '../../config/launcher_tokens.dart';
 import '../finance/finance_data.dart'
     show RupiahInputFormatter, dateLabel, thousands;
-import '../finance/finance_widgets.dart' show hairline;
 import 'budget_categories_screen.dart';
 import 'budget_data.dart';
+import 'budget_widgets.dart';
 
 /// Add or edit a personal transaction. Income or expense comes from the
 /// category's type, so the category is required. Pops `true` once saved or
@@ -85,7 +85,8 @@ class _BudgetFormScreenState extends State<BudgetFormScreen> {
       .toList();
 
   Future<void> _addCategory() async {
-    final c = await showCategoryDialog(context, income: _income);
+    final c = await showCategoryDialog(context,
+        income: _income, taken: {for (final c in _categories) c.name});
     if (c == null || !mounted) return;
     setState(() {
       _categories = [..._categories, c];
@@ -126,7 +127,8 @@ class _BudgetFormScreenState extends State<BudgetFormScreen> {
             amount: _value,
             categoryId: categoryId,
             description: desc,
-            date: _date);
+            date: _date,
+            source: widget.txn!.source);
       } else {
         await budgetRepo.addTransaction(
             amount: _value,
@@ -182,19 +184,167 @@ class _BudgetFormScreenState extends State<BudgetFormScreen> {
     }
   }
 
-  Widget _label(String t) => Padding(
+  Widget _label(String t, {Widget? trailing}) => Padding(
         padding: const EdgeInsets.only(top: Lx.s20, bottom: Lx.s8),
-        child: Text(t, style: Lx.cardHeading),
+        child: Row(
+          children: [
+            Expanded(child: Text(t, style: Lx.cardHeading)),
+            if (trailing != null) trailing,
+          ],
+        ),
       );
+
+  static bool _sameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  Widget _amountCard(Color color) => Container(
+        margin: const EdgeInsets.only(top: Lx.s16),
+        padding: const EdgeInsets.fromLTRB(Lx.s16, Lx.s16, Lx.s16, Lx.s8),
+        decoration: Lx.card(),
+        child: Column(
+          children: [
+            Text(_income ? 'Uang masuk' : 'Uang keluar', style: Lx.metadata),
+            TextField(
+              controller: _amount,
+              enabled: !_saving,
+              autofocus: !_editing,
+              textAlign: TextAlign.center,
+              keyboardType: TextInputType.number,
+              inputFormatters: [RupiahInputFormatter()],
+              onChanged: (_) => setState(() => _error = null),
+              style: Lx.userName.copyWith(
+                  fontSize: 32, color: color, fontFeatures: tabular),
+              decoration: InputDecoration(
+                hintText: '0',
+                hintStyle: Lx.userName.copyWith(
+                    fontSize: 32, color: Lx.textMuted.withOpacity(0.6)),
+                prefixText: 'Rp ',
+                prefixStyle: Lx.sectionHeading.copyWith(color: Lx.textMuted),
+                filled: false,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                disabledBorder: InputBorder.none,
+              ),
+            ),
+          ],
+        ),
+      );
+
+  Widget _categoryGrid() {
+    final shown = _shown;
+    Widget tile(
+        {required Widget icon,
+        required String label,
+        required bool selected,
+        required VoidCallback? onTap}) {
+      final color = _income ? Lx.success : Lx.primary;
+      return InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(Lx.rButton),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(vertical: Lx.s8, horizontal: 4),
+          decoration: BoxDecoration(
+            color: selected ? color.withOpacity(0.08) : Lx.surface,
+            borderRadius: BorderRadius.circular(Lx.rButton),
+            border: Border.all(
+                color: selected ? color : Lx.border, width: selected ? 2 : 1),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              icon,
+              const SizedBox(height: 6),
+              Text(label,
+                  maxLines: 2,
+                  textAlign: TextAlign.center,
+                  overflow: TextOverflow.ellipsis,
+                  style: Lx.metadata.copyWith(
+                      color: selected ? Lx.text : Lx.textSecondary,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return GridView.count(
+      crossAxisCount: 4,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: Lx.s8,
+      crossAxisSpacing: Lx.s8,
+      childAspectRatio: 0.82,
+      children: [
+        for (final c in shown)
+          tile(
+            icon: CategoryAvatar(c.name, income: c.isIncome, size: 36),
+            label: c.name,
+            selected: _categoryId == c.id,
+            onTap: _saving
+                ? null
+                : () => setState(() {
+                      _categoryId = c.id;
+                      _error = null;
+                    }),
+          ),
+        tile(
+          icon: Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Lx.launcherBorder),
+            ),
+            child: const Icon(Icons.add_rounded, color: Lx.primary, size: 20),
+          ),
+          label: 'Baru',
+          selected: false,
+          onTap: _saving ? null : _addCategory,
+        ),
+      ],
+    );
+  }
+
+  Widget _dateChoices() {
+    final now = DateTime.now();
+    final yesterday = now.subtract(const Duration(days: 1));
+    final isToday = _sameDay(_date, now);
+    final isYesterday = _sameDay(_date, yesterday);
+    Widget chip(String label, bool selected, VoidCallback onTap) => ChoiceChip(
+          label: Text(label),
+          selected: selected,
+          showCheckmark: false,
+          onSelected: _saving ? null : (_) => onTap(),
+        );
+    return Wrap(
+      spacing: Lx.s8,
+      runSpacing: Lx.s8,
+      children: [
+        chip('Hari ini', isToday, () => setState(() => _date = now)),
+        chip('Kemarin', isYesterday, () => setState(() => _date = yesterday)),
+        ActionChip(
+          avatar: const Icon(Icons.calendar_today_outlined, size: 16),
+          label: Text(isToday || isYesterday ? 'Pilih tanggal' : dateLabel(_date)),
+          side: isToday || isYesterday
+              ? null
+              : const BorderSide(color: Lx.primary, width: 1.5),
+          onPressed: _saving ? null : _pickDate,
+        ),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final color = _income ? Lx.success : Lx.danger;
+    final color = _income ? Lx.success : Lx.text;
+    final accent = _income ? Lx.success : Lx.primary;
     return Theme(
       data: Lx.theme,
       child: Scaffold(
         appBar: AppBar(
-          title: Text(_editing ? 'Ubah Transaksi' : 'Transaksi Baru'),
+          title: Text(_editing ? 'Ubah Transaksi' : 'Catat Transaksi'),
           actions: [
             if (_editing)
               IconButton(
@@ -205,118 +355,61 @@ class _BudgetFormScreenState extends State<BudgetFormScreen> {
           ],
         ),
         body: _loadError != null
-            ? Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(_loadError!, style: Lx.body),
-                    TextButton(
-                        onPressed: _load, child: const Text('Coba lagi')),
-                  ],
-                ),
-              )
+            ? BudgetRetry(_loadError!, onRetry: _load)
             : ListView(
                 keyboardDismissBehavior:
                     ScrollViewKeyboardDismissBehavior.onDrag,
                 padding: const EdgeInsets.fromLTRB(Lx.s16, 0, Lx.s16, Lx.s24),
                 children: [
-                  SegmentedButton<bool>(
-                    showSelectedIcon: false,
-                    segments: const [
-                      ButtonSegment(value: false, label: Text('Pengeluaran')),
-                      ButtonSegment(value: true, label: Text('Pemasukan')),
-                    ],
-                    selected: {_income},
-                    onSelectionChanged: _saving
+                  BudgetTypeToggle(
+                    income: _income,
+                    onChanged: _saving
                         ? null
-                        : (s) => setState(() {
-                              _income = s.first;
+                        : (v) => setState(() {
+                              if (v == _income) return;
+                              _income = v;
                               _categoryId = null;
                             }),
                   ),
-                  const SizedBox(height: Lx.s16),
-                  Text('Nominal',
-                      style: Lx.metadata, textAlign: TextAlign.center),
-                  TextField(
-                    controller: _amount,
-                    enabled: !_saving,
-                    autofocus: !_editing,
-                    textAlign: TextAlign.center,
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [RupiahInputFormatter()],
-                    onChanged: (_) => setState(() => _error = null),
-                    style: Lx.greeting.copyWith(color: color),
-                    decoration: InputDecoration(
-                      hintText: '0',
-                      prefixText: 'Rp ',
-                      prefixStyle: Lx.greeting.copyWith(color: Lx.textMuted),
-                      filled: false,
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                    ),
-                  ),
-                  hairline,
-                  _label('Kategori'),
+                  _amountCard(color),
+                  _label('Kategori',
+                      trailing: _categoryId == null
+                          ? Text('Pilih satu',
+                              style: Lx.metadata.copyWith(color: Lx.textMuted))
+                          : null),
                   if (_loading)
                     const Padding(
                       padding: EdgeInsets.all(Lx.s12),
                       child: Center(child: CircularProgressIndicator()),
                     )
-                  else
-                    Wrap(
-                      spacing: Lx.s8,
-                      runSpacing: Lx.s8,
-                      children: [
-                        for (final c in _shown)
-                          ChoiceChip(
-                            label: Text(c.name),
-                            selected: _categoryId == c.id,
-                            showCheckmark: false,
-                            onSelected: _saving
-                                ? null
-                                : (_) => setState(() {
-                                      _categoryId = c.id;
-                                      _error = null;
-                                    }),
-                          ),
-                        ActionChip(
-                          avatar: const Icon(Icons.add_rounded, size: 18),
-                          label: const Text('Kategori'),
-                          onPressed: _saving ? null : _addCategory,
-                        ),
-                      ],
-                    ),
+                  else ...[
+                    if (_shown.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: Lx.s8),
+                        child: Text(
+                            'Belum ada kategori ${_income ? 'pemasukan' : 'pengeluaran'}. '
+                            'Buat satu dengan tombol Baru.',
+                            style: Lx.body),
+                      ),
+                    _categoryGrid(),
+                  ],
                   _label('Tanggal'),
-                  InkWell(
-                    onTap: _saving ? null : _pickDate,
-                    borderRadius: BorderRadius.circular(Lx.rButton),
-                    child: Container(
-                      height: 48,
-                      padding: const EdgeInsets.symmetric(horizontal: Lx.s12),
-                      decoration: BoxDecoration(
-                        color: Lx.surface,
-                        borderRadius: BorderRadius.circular(Lx.rButton),
-                        border: Border.all(color: Lx.border),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                              child: Text(dateLabel(_date), style: Lx.body)),
-                          const Icon(Icons.calendar_today_outlined,
-                              size: 18, color: Lx.textSecondary),
-                        ],
-                      ),
-                    ),
-                  ),
-                  _label('Keterangan (opsional)'),
+                  _dateChoices(),
+                  _label('Keterangan',
+                      trailing: Text('Opsional',
+                          style: Lx.metadata.copyWith(color: Lx.textMuted))),
                   TextField(
                     controller: _description,
                     enabled: !_saving,
                     textCapitalization: TextCapitalization.sentences,
                     inputFormatters: [LengthLimitingTextInputFormatter(120)],
-                    decoration:
-                        const InputDecoration(hintText: 'Mis. beli kopi'),
+                    decoration: InputDecoration(
+                      hintText: _income
+                          ? 'Mis. gaji November'
+                          : 'Mis. makan siang di warung',
+                      prefixIcon: const Icon(Icons.notes_rounded,
+                          color: Lx.textMuted),
+                    ),
                   ),
                 ],
               ),
@@ -335,17 +428,25 @@ class _BudgetFormScreenState extends State<BudgetFormScreen> {
                     if (_error != null)
                       Padding(
                         padding: const EdgeInsets.only(bottom: Lx.s8),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(_error!,
-                              style: Lx.metadata.copyWith(color: Lx.danger)),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.error_outline_rounded,
+                                size: 16, color: Lx.danger),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(_error!,
+                                  style:
+                                      Lx.metadata.copyWith(color: Lx.danger)),
+                            ),
+                          ],
                         ),
                       ),
                     SizedBox(
                       width: double.infinity,
-                      height: 48,
+                      height: 50,
                       child: FilledButton(
                         onPressed: _saving || _loading ? null : _save,
+                        style: FilledButton.styleFrom(backgroundColor: accent),
                         child: _saving
                             ? const SizedBox(
                                 width: 20,
@@ -353,7 +454,11 @@ class _BudgetFormScreenState extends State<BudgetFormScreen> {
                                 child: CircularProgressIndicator(
                                     strokeWidth: 2, color: Colors.white),
                               )
-                            : Text(_editing ? 'Simpan Perubahan' : 'Simpan'),
+                            : Text(_editing
+                                ? 'Simpan Perubahan'
+                                : _income
+                                    ? 'Simpan Pemasukan'
+                                    : 'Simpan Pengeluaran'),
                       ),
                     ),
                   ],
