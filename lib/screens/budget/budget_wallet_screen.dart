@@ -23,8 +23,8 @@ class BudgetWalletScreen extends StatefulWidget {
 }
 
 class _BudgetWalletScreenState extends State<BudgetWalletScreen> {
-  /// Budget rows shown on the home card; the rest are one tap away.
-  static const _budgetRows = 4;
+  /// Transactions in the "Transaksi terbaru" card; every budget is listed.
+  static const _recentRows = 20;
 
   late DateTime _month = DateTime(DateTime.now().year, DateTime.now().month);
   BudgetSummary? _summary;
@@ -44,7 +44,7 @@ class _BudgetWalletScreenState extends State<BudgetWalletScreen> {
     try {
       final r = await Future.wait([
         budgetRepo.summary(month),
-        budgetRepo.transactions(month, limit: 5),
+        budgetRepo.transactions(month, limit: _recentRows),
         budgetRepo.categories(),
       ]);
       if (!mounted || month != _month) return;
@@ -309,7 +309,6 @@ class _BudgetWalletScreenState extends State<BudgetWalletScreen> {
         ),
       );
     }
-    final more = lines.length - _budgetRows;
     return SectionCard(
       title: 'Anggaran bulan ini',
       action: 'Atur',
@@ -317,17 +316,11 @@ class _BudgetWalletScreenState extends State<BudgetWalletScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          for (final l in lines.take(_budgetRows))
+          for (final l in lines)
             BudgetProgressRow(
               line: l,
               onTap: () => _go(BudgetTransactionsScreen(
                   month: _month, categoryId: l.categoryId)),
-            ),
-          if (more > 0)
-            Padding(
-              padding: const EdgeInsets.only(top: Lx.s4),
-              child:
-                  Text('+$more kategori lain di Anggaran', style: Lx.metadata),
             ),
         ],
       ),
