@@ -57,7 +57,8 @@ class BudgetTxnRow extends StatelessWidget {
                           const SizedBox(width: 3),
                         ],
                         Flexible(
-                          child: Text(sub.isEmpty ? 'Dicatat dengan suara' : sub,
+                          child: Text(
+                              sub.isEmpty ? 'Dicatat dengan suara' : sub,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: Lx.metadata),
@@ -89,8 +90,9 @@ Color budgetColor(double percent, bool over) => over
         ? Lx.warning
         : Lx.success;
 
-/// One expense category against its limit. Over budget turns red and says
-/// by how much.
+/// One expense category with its budget: the name and the amount set for
+/// it. The thin bar underneath only shows how much of it is used (it turns
+/// orange near the limit and red over it); no spent figures are written.
 class BudgetProgressRow extends StatelessWidget {
   const BudgetProgressRow({super.key, required this.line, this.onTap});
 
@@ -99,8 +101,7 @@ class BudgetProgressRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final over = line.over;
-    final color = budgetColor(line.percent, over);
+    final color = budgetColor(line.percent, line.over);
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(Lx.rButton),
@@ -122,33 +123,14 @@ class BudgetProgressRow extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: Lx.cardHeading.copyWith(fontSize: 14)),
                       ),
-                      Text('${line.percent.round()}%',
-                          style: Lx.metadata.copyWith(
-                              color: color, fontWeight: FontWeight.w700)),
+                      const SizedBox(width: Lx.s8),
+                      Text(rp(line.limit),
+                          style: Lx.cardHeading
+                              .copyWith(fontSize: 14, fontFeatures: tabular)),
                     ],
                   ),
                   const SizedBox(height: 6),
-                  RoundBar(value: line.percent / 100, color: color),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          '${rp(line.spent)} dari ${rp(line.limit)}',
-                          style: Lx.metadata.copyWith(fontFeatures: tabular),
-                        ),
-                      ),
-                      Text(
-                        over
-                            ? 'Lebih ${rp(-line.remaining)}'
-                            : 'Sisa ${rp(line.remaining)}',
-                        style: Lx.metadata.copyWith(
-                            color: over ? Lx.danger : Lx.textSecondary,
-                            fontWeight: over ? FontWeight.w700 : null,
-                            fontFeatures: tabular),
-                      ),
-                    ],
-                  ),
+                  RoundBar(value: line.percent / 100, color: color, height: 6),
                 ],
               ),
             ),
@@ -214,8 +196,12 @@ Future<String?> showBudgetTxnDetail(
             if (t.description.isNotEmpty)
               line(Icons.notes_rounded, 'Keterangan', t.description),
             if (t.isVoice)
-              line(Icons.mic_rounded, 'Suara',
-                  t.transcript.isEmpty ? 'Dicatat dengan suara' : '"${t.transcript}"'),
+              line(
+                  Icons.mic_rounded,
+                  'Suara',
+                  t.transcript.isEmpty
+                      ? 'Dicatat dengan suara'
+                      : '"${t.transcript}"'),
             const SizedBox(height: Lx.s16),
             Row(
               children: [
@@ -247,4 +233,3 @@ Future<String?> showBudgetTxnDetail(
     ),
   );
 }
-
