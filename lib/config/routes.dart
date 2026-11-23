@@ -74,10 +74,6 @@ class AppRouter {
         builder: (context, state) => const InformationHubScreen(),
       ),
       GoRoute(
-        path: '/info/kegiatan',
-        builder: (context, state) => const KegiatanScreen(),
-      ),
-      GoRoute(
         path: '/info/jimpitan',
         builder: (context, state) => const JimpitanScreen(),
       ),

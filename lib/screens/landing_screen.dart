@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../widgets/mbl_app_icon.dart';
+import '../widgets/app_icon.dart';
 
 class LandingScreen extends StatefulWidget {
   const LandingScreen({super.key});
@@ -14,6 +14,11 @@ class _LandingScreenState extends State<LandingScreen>
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
+
+  // ── Brand colours ──────────────────────────────────────────────────────
+  static const _green1 = Color(0xFF064E3B); // deep forest green
+  static const _green2 = Color(0xFF065F46);
+  static const _green3 = Color(0xFF047857); // lighter green (bottom)
 
   @override
   void initState() {
@@ -32,11 +37,11 @@ class _LandingScreenState extends State<LandingScreen>
 
     _slideAnimation =
         Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(
-          CurvedAnimation(
-            parent: _animationController,
-            curve: const Interval(0.3, 1.0, curve: Curves.easeOutCubic),
-          ),
-        );
+      CurvedAnimation(
+        parent: _animationController,
+        curve: const Interval(0.3, 1.0, curve: Curves.easeOutCubic),
+      ),
+    );
 
     _animationController.forward();
   }
@@ -53,28 +58,21 @@ class _LandingScreenState extends State<LandingScreen>
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF1E3A8A), // deep blue
-              Color(0xFF3B82F6), // bright blue
-              Color(0xFF8B5CF6), // purple
-            ],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [_green1, _green2, _green3],
             stops: [0.0, 0.5, 1.0],
           ),
         ),
         child: SafeArea(
           child: CustomScrollView(
             slivers: [
-              // Header
-              SliverToBoxAdapter(child: _buildHeader(context)),
-
-              // Hero Section
+              SliverToBoxAdapter(child: _buildHeader()),
               SliverFillRemaining(
                 hasScrollBody: false,
                 child: Column(
                   children: [
-                    Expanded(child: _buildHeroSection(context)),
+                    Expanded(child: _buildHeroSection()),
                     _buildBottomSection(context),
                   ],
                 ),
@@ -86,78 +84,53 @@ class _LandingScreenState extends State<LandingScreen>
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
+  // ── Header ──────────────────────────────────────────────────────────────
+  Widget _buildHeader() {
     return FadeTransition(
       opacity: _fadeAnimation,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    Icons.account_balance_wallet,
-                    color: Colors.white,
-                    size: 24,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'MBL App',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    SizedBox(height: 2),
-                    Text(
-                      'Manage Balance & Log',
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w400,
-                        letterSpacing: 0.2,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+            // App icon with subtle glow ring
             Container(
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: Colors.white.withOpacity(0.3),
-                  width: 1,
-                ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.white.withOpacity(0.15),
+                    blurRadius: 16,
+                    spreadRadius: 2,
+                  ),
+                ],
               ),
-              child: TextButton(
-                onPressed: () => context.go('/login'),
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 8),
-                  child: Text(
-                    'Sign In',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: const BarakaFundsAppIcon(size: 44),
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Baraka',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.3,
                   ),
                 ),
-              ),
+                Text(
+                  'Community Finance Management',
+                  style: TextStyle(
+                    color: Colors.white60,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -165,83 +138,85 @@ class _LandingScreenState extends State<LandingScreen>
     );
   }
 
-  Widget _buildHeroSection(BuildContext context) {
+  // ── Hero ────────────────────────────────────────────────────────────────
+  Widget _buildHeroSection() {
     return SlideTransition(
       position: _slideAnimation,
       child: FadeTransition(
         opacity: _fadeAnimation,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+          padding: const EdgeInsets.symmetric(horizontal: 32),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Animated Icon
+              // Animated app icon (large)
               TweenAnimationBuilder<double>(
                 tween: Tween(begin: 0.0, end: 1.0),
-                duration: const Duration(milliseconds: 800),
+                duration: const Duration(milliseconds: 900),
                 curve: Curves.elasticOut,
                 builder: (context, value, child) {
                   return Transform.scale(
                     scale: value,
                     child: Container(
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(30),
+                        borderRadius: BorderRadius.circular(36),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
-                            blurRadius: 30,
-                            offset: const Offset(0, 15),
-                            spreadRadius: 5,
+                            color: Colors.black.withOpacity(0.25),
+                            blurRadius: 40,
+                            offset: const Offset(0, 20),
+                            spreadRadius: 4,
+                          ),
+                          BoxShadow(
+                            color: Colors.white.withOpacity(0.08),
+                            blurRadius: 0,
+                            spreadRadius: 6,
                           ),
                         ],
                       ),
                       child: ClipRRect(
-                        borderRadius: BorderRadius.circular(30),
-                        child: const MblAppIcon(size: 120),
+                        borderRadius: BorderRadius.circular(36),
+                        child: const BarakaFundsAppIcon(size: 110),
                       ),
                     ),
                   );
                 },
               ),
-              const SizedBox(height: 40),
+              const SizedBox(height: 44),
 
-              // Title
+              // Main title
               const Text(
                 'Manage Your\nCommunity Together',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.white,
-                  fontSize: 40,
+                  fontSize: 38,
                   fontWeight: FontWeight.bold,
                   height: 1.2,
                   letterSpacing: -0.5,
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
 
               // Subtitle
               Text(
-                'Comprehensive tools for attendance tracking,\nevent management, and community engagement',
+                'Comprehensive tools for budget management\nand Zakat Fitrah',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.9),
-                  fontSize: 16,
+                  color: Colors.white.withOpacity(0.75),
+                  fontSize: 15,
                   height: 1.6,
-                  letterSpacing: 0.2,
                 ),
               ),
-              const SizedBox(height: 48),
+              const SizedBox(height: 40),
 
-              // Feature Pills
-              Wrap(
-                alignment: WrapAlignment.center,
-                spacing: 12,
-                runSpacing: 12,
+              // Feature pills
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  _buildFeaturePill('📅 Events', Icons.event),
-                  _buildFeaturePill('✓ Attendance', Icons.check_circle_outline),
-                  _buildFeaturePill('💰 Budget', Icons.account_balance_wallet),
-                  _buildFeaturePill('👥 Members', Icons.people),
+                  _buildPill('💰 Dompet Saya'),
+                  const SizedBox(width: 12),
+                  _buildPill('🌾 Zakat Fitrah'),
                 ],
               ),
             ],
@@ -251,87 +226,53 @@ class _LandingScreenState extends State<LandingScreen>
     );
   }
 
-  Widget _buildFeaturePill(String label, IconData icon) {
+  Widget _buildPill(String label) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.3), width: 1.5),
+        color: Colors.white.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.25),
+          width: 1.5,
+        ),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: Colors.white, size: 18),
-          const SizedBox(width: 8),
-          Text(
-            label,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.2,
+        ),
       ),
     );
   }
 
+  // ── Bottom CTA ──────────────────────────────────────────────────────────
   Widget _buildBottomSection(BuildContext context) {
     return FadeTransition(
       opacity: _fadeAnimation,
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
         child: Column(
           children: [
-            // Key Features Grid
+            // Divider line
             Container(
-              padding: const EdgeInsets.all(20),
+              height: 1,
+              margin: const EdgeInsets.only(bottom: 28),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: Colors.white.withOpacity(0.2),
-                  width: 1,
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.transparent,
+                    Colors.white.withOpacity(0.2),
+                    Colors.transparent,
+                  ],
                 ),
               ),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildMiniFeature(
-                          Icons.speed,
-                          'Fast & Reliable',
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: _buildMiniFeature(Icons.security, 'Secure Data'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildMiniFeature(
-                          Icons.cloud_sync,
-                          'Cloud Sync',
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: _buildMiniFeature(Icons.devices, 'Multi-Device'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
             ),
-            const SizedBox(height: 24),
 
-            // CTA Button
+            // Get Started button
             SizedBox(
               width: double.infinity,
               height: 56,
@@ -339,9 +280,9 @@ class _LandingScreenState extends State<LandingScreen>
                 onPressed: () => context.go('/login'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.white,
-                  foregroundColor: const Color(0xFF1E3A8A),
-                  elevation: 10,
-                  shadowColor: Colors.black.withOpacity(0.3),
+                  foregroundColor: _green1,
+                  elevation: 12,
+                  shadowColor: Colors.black.withOpacity(0.35),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                   ),
@@ -352,13 +293,39 @@ class _LandingScreenState extends State<LandingScreen>
                     Text(
                       'Get Started',
                       style: TextStyle(
-                        fontSize: 18,
+                        fontSize: 17,
                         fontWeight: FontWeight.bold,
-                        letterSpacing: 0.5,
+                        letterSpacing: 0.4,
                       ),
                     ),
                     SizedBox(width: 8),
-                    Icon(Icons.arrow_forward, size: 20),
+                    Icon(Icons.arrow_forward_rounded, size: 20),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+
+            // Sign In link
+            GestureDetector(
+              onTap: () => context.go('/login'),
+              child: RichText(
+                text: TextSpan(
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.white.withOpacity(0.6),
+                  ),
+                  children: const [
+                    TextSpan(text: 'Already have an account? '),
+                    TextSpan(
+                      text: 'Sign In',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        decoration: TextDecoration.underline,
+                        decorationColor: Colors.white,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -369,38 +336,13 @@ class _LandingScreenState extends State<LandingScreen>
             Text(
               'Built for modern communities',
               style: TextStyle(
-                color: Colors.white.withOpacity(0.7),
-                fontSize: 13,
+                color: Colors.white.withOpacity(0.35),
+                fontSize: 11,
               ),
             ),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildMiniFeature(IconData icon, String label) {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.15),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(icon, color: Colors.white, size: 24),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          label,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
     );
   }
 }
