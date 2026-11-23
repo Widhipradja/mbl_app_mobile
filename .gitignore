@@ -50,3 +50,8 @@ android/app/upload-keystore.jks
 
 # Real API answers saved by scripts/fetch_shodaqoh_samples.sh (personal data)
 shodaqoh_samples/
+
+# Local secrets for scripts (UPLOAD_TOKEN for scripts/publish_apk.sh).
+# Never list it under assets: in pubspec.yaml: it would ship inside the APK.
+.env
+.env.*
