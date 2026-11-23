@@ -644,6 +644,18 @@ List<LauncherModule> buildModules(HomeSummaryProvider p) {
         tint: Color(0xFFFDF2F8),
         push: true,
       ),
+    // The community's numbers (Saldo Kas, Keanggotaan, Shodaqoh, Jimpitan).
+    // Saldo Kas inside it has its own gate and is left out when closed.
+    if (p.isModuleVisible('dashboard'))
+      const LauncherModule(
+        label: 'Ringkasan',
+        description: 'Saldo kas, keanggotaan, shodaqoh, dan jimpitan bulanan',
+        icon: Icons.insights_outlined,
+        route: '/ringkasan',
+        color: Color(0xFF4F46E5),
+        tint: Color(0xFFEEF2FF),
+        push: true,
+      ),
     // The organisation's cash (finance API), apart from the personal Budget.
     if (p.isModuleVisible('finance'))
       const LauncherModule(

@@ -141,6 +141,12 @@ class ApiService {
     return await _dio.get('/api/lookups/type/$type');
   }
 
+  /// Ringkasan: Saldo Kas, Keanggotaan, Shodaqoh Bulanan and Jimpitan of
+  /// `month` (`YYYY-MM`), each section `{data}` or `{error}`.
+  /// Endpoint: `GET /api/m/v1/dashboard?month=YYYY-MM`
+  Future<Response> getMobileDashboard(String month) => _dio
+      .get('/api/m/v1/dashboard', queryParameters: {'month': month});
+
   /// One call for the home cards: next event, jimpitan, fundraising and
   /// shodaqoh. Each section is `{data}` or `{error}` and fails on its own.
   ///
