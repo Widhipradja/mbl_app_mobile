@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../config/launcher_tokens.dart';
-import '../budget/budget_widgets.dart'
-    show BudgetMonthPill, BudgetEmpty, BudgetRetry;
+import '../../widgets/app_ui.dart'
+    show MonthPill, EmptyState, RetryState;
 import '../launcher/launcher_models.dart'
     show EventLevel, daysShort, monthsShort;
 import 'event_data.dart';
@@ -125,7 +125,7 @@ class _EventsListScreenState extends State<EventsListScreen>
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(Lx.s16, 0, Lx.s16, Lx.s8),
-            child: BudgetMonthPill(
+            child: MonthPill(
               month: _month,
               onChanged: _setMonth,
               last: DateTime(DateTime.now().year + 2, 12),
@@ -151,7 +151,7 @@ class _EventsListScreenState extends State<EventsListScreen>
     if (_error != null) {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        children: [BudgetRetry(_error!, onRetry: _load)],
+        children: [RetryState(_error!, onRetry: _load)],
       );
     }
     if (_events.isEmpty) {
@@ -160,7 +160,7 @@ class _EventsListScreenState extends State<EventsListScreen>
         padding: const EdgeInsets.all(Lx.s24),
         children: [
           const SizedBox(height: 32),
-          BudgetEmpty(
+          EmptyState(
             icon: Icons.event_available_rounded,
             text: 'Tidak ada kegiatan di bulan ini.',
             action: _canManage ? 'Tambah kegiatan' : null,

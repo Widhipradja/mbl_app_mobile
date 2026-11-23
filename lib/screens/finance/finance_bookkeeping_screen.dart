@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../config/launcher_tokens.dart';
-import '../budget/budget_widgets.dart';
+import '../../widgets/app_ui.dart';
 import 'finance_data.dart';
 
 /// Daily bookkeeping of one month: lines per report group with the running
@@ -63,7 +63,7 @@ class _FinanceBookkeepingScreenState extends State<FinanceBookkeepingScreen> {
         ),
       );
 
-  Widget _group(BookGroup g) => BudgetCard(
+  Widget _group(BookGroup g) => SectionCard(
         padding: const EdgeInsets.fromLTRB(Lx.s16, Lx.s16, Lx.s16, Lx.s8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -159,11 +159,11 @@ class _FinanceBookkeepingScreenState extends State<FinanceBookkeepingScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(Lx.s16, 0, Lx.s16, Lx.s8),
-              child: BudgetMonthPill(month: _month, onChanged: _setMonth),
+              child: MonthPill(month: _month, onChanged: _setMonth),
             ),
             Expanded(
               child: _error != null
-                  ? Center(child: BudgetRetry(_error!, onRetry: _load))
+                  ? Center(child: RetryState(_error!, onRetry: _load))
                   : d == null
                       ? const Center(child: CircularProgressIndicator())
                       : RefreshIndicator(
@@ -173,7 +173,7 @@ class _FinanceBookkeepingScreenState extends State<FinanceBookkeepingScreen> {
                             padding: const EdgeInsets.fromLTRB(
                                 Lx.s16, Lx.s4, Lx.s16, Lx.s24),
                             children: [
-                              BudgetCard(
+                              SectionCard(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -211,8 +211,8 @@ class _FinanceBookkeepingScreenState extends State<FinanceBookkeepingScreen> {
                                 ),
                               ),
                               if (d.groups.isEmpty)
-                                const BudgetCard(
-                                  child: BudgetEmpty(
+                                const SectionCard(
+                                  child: EmptyState(
                                     icon: Icons.menu_book_rounded,
                                     text: 'Belum ada pembukuan bulan ini.',
                                   ),

@@ -4,7 +4,7 @@ import '../../config/launcher_tokens.dart';
 import '../../models/savings_ledgers.dart';
 import '../../services/api_service.dart';
 import '../launcher/launcher_models.dart' show monthsShort, rupiah;
-import '../budget/budget_widgets.dart' show InitialsAvatar;
+import '../../widgets/app_ui.dart' show InitialsAvatar;
 import 'ledger_widgets.dart';
 
 /// Item code of kurban in the shodaqoh service.

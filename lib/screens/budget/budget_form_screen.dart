@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../config/launcher_tokens.dart';
+import '../../widgets/app_ui.dart';
 import '../finance/finance_data.dart'
     show RupiahInputFormatter, dateLabel, thousands;
 import 'budget_categories_screen.dart';
 import 'budget_data.dart';
-import 'budget_widgets.dart';
 
 /// Add or edit a personal transaction. Income or expense comes from the
 /// category's type, so the category is required. Pops `true` once saved or
@@ -355,13 +355,13 @@ class _BudgetFormScreenState extends State<BudgetFormScreen> {
           ],
         ),
         body: _loadError != null
-            ? BudgetRetry(_loadError!, onRetry: _load)
+            ? RetryState(_loadError!, onRetry: _load)
             : ListView(
                 keyboardDismissBehavior:
                     ScrollViewKeyboardDismissBehavior.onDrag,
                 padding: const EdgeInsets.fromLTRB(Lx.s16, 0, Lx.s16, Lx.s24),
                 children: [
-                  BudgetTypeToggle(
+                  FlowTypeToggle(
                     income: _income,
                     onChanged: _saving
                         ? null

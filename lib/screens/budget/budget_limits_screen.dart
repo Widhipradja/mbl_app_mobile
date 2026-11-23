@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../config/launcher_tokens.dart';
+import '../../widgets/app_ui.dart';
 import '../finance/finance_data.dart' show RupiahInputFormatter, rp, thousands;
 import 'budget_data.dart';
-import 'budget_widgets.dart';
 
 /// Monthly budget per expense category. A row left empty or 0 means no
 /// budget. Only the rows that changed are sent.
@@ -198,7 +198,7 @@ class _BudgetLimitsScreenState extends State<BudgetLimitsScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(Lx.s16, 0, Lx.s16, Lx.s8),
-              child: BudgetMonthPill(
+              child: MonthPill(
                 month: _month,
                 onChanged: _saving ? (_) {} : _setMonth,
                 last: DateTime(DateTime.now().year, DateTime.now().month + 1),
@@ -207,13 +207,13 @@ class _BudgetLimitsScreenState extends State<BudgetLimitsScreen> {
             Expanded(
               child: cats == null
                   ? (_error != null
-                      ? Center(child: BudgetRetry(_error!, onRetry: _load))
+                      ? Center(child: RetryState(_error!, onRetry: _load))
                       : const Center(child: CircularProgressIndicator()))
                   : cats.isEmpty
                       ? const Center(
                           child: Padding(
                             padding: EdgeInsets.all(Lx.s24),
-                            child: BudgetEmpty(
+                            child: EmptyState(
                               icon: Icons.category_rounded,
                               text: 'Belum ada kategori pengeluaran. '
                                   'Tambahkan dulu di menu Kategori.',
@@ -232,7 +232,7 @@ class _BudgetLimitsScreenState extends State<BudgetLimitsScreen> {
                                 'dianggarkan.',
                                 style: Lx.body),
                             const SizedBox(height: Lx.s12),
-                            BudgetCard(
+                            SectionCard(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: Lx.s12, vertical: Lx.s4),
                               child: Column(

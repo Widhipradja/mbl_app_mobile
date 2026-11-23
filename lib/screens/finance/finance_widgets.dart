@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../config/launcher_tokens.dart';
-import '../budget/budget_widgets.dart';
+import '../../widgets/app_ui.dart';
 import 'finance_data.dart';
 
 /// A transaction as one row, in the same look as Dompet Saya: category

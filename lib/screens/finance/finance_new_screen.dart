@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../config/launcher_tokens.dart';
-import '../budget/budget_widgets.dart';
+import '../../widgets/app_ui.dart';
 import 'finance_data.dart';
 
 /// New transaction: type, amount, account (category), date and a description.
@@ -315,7 +315,7 @@ class _FinanceNewScreenState extends State<FinanceNewScreen> {
                   ],
                 ),
               ),
-            BudgetTypeToggle(
+            FlowTypeToggle(
               income: _income,
               onChanged: _saving
                   ? null

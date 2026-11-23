@@ -2,6 +2,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
 import '../../config/launcher_tokens.dart';
+import '../../widgets/app_ui.dart';
 import '../finance/finance_data.dart' show rp, rpShort;
 import '../savings/ledger_widgets.dart' show monthNames;
 import 'budget_data.dart';
@@ -130,11 +131,11 @@ class _BudgetReportScreenState extends State<BudgetReportScreen> {
         isThisMonth ? now.day : DateTime(_month.year, _month.month + 1, 0).day;
     final rows = _rows();
 
-    return BudgetCard(
+    return SectionCard(
       child: Column(
         children: [
           if (rows.isEmpty)
-            BudgetEmpty(
+            EmptyState(
               icon: Icons.pie_chart_outline_rounded,
               text: _income
                   ? 'Belum ada pemasukan bulan ini.'
@@ -226,7 +227,7 @@ class _BudgetReportScreenState extends State<BudgetReportScreen> {
     final rows = _rows();
     if (rows.isEmpty) return const SizedBox.shrink();
     final total = _income ? _current.income : _current.expense;
-    return BudgetCard(
+    return SectionCard(
       title: 'Per kategori',
       subtitle: 'Ketuk kategori untuk melihat transaksinya',
       padding: const EdgeInsets.fromLTRB(Lx.s16, Lx.s16, Lx.s16, Lx.s8),
@@ -266,7 +267,7 @@ class _BudgetReportScreenState extends State<BudgetReportScreen> {
                             ],
                           ),
                           const SizedBox(height: 6),
-                          BudgetBar(
+                          RoundBar(
                               value: total == 0 ? 0 : r.amount / total,
                               color: _rowColor(r),
                               height: 6),
@@ -305,7 +306,7 @@ class _BudgetReportScreenState extends State<BudgetReportScreen> {
         .toList()
       ..sort((a, b) => b.amount.compareTo(a.amount));
     if (_income || list.isEmpty) return const SizedBox.shrink();
-    return BudgetCard(
+    return SectionCard(
       title: 'Pengeluaran terbesar',
       padding: const EdgeInsets.fromLTRB(Lx.s16, Lx.s16, Lx.s16, Lx.s8),
       child: Column(
@@ -335,7 +336,7 @@ class _BudgetReportScreenState extends State<BudgetReportScreen> {
             borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
           ),
         );
-    return BudgetCard(
+    return SectionCard(
       title: '$_trendMonths bulan terakhir',
       subtitle: 'Ketuk bulan untuk membukanya',
       child: Column(
@@ -441,17 +442,17 @@ class _BudgetReportScreenState extends State<BudgetReportScreen> {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(Lx.s16, 0, Lx.s16, Lx.s24),
             children: [
-              BudgetMonthPill(month: _month, onChanged: _setMonth),
+              MonthPill(month: _month, onChanged: _setMonth),
               const SizedBox(height: Lx.s12),
               if (_error != null)
-                BudgetRetry(_error!, onRetry: _load)
+                RetryState(_error!, onRetry: _load)
               else if (!ready)
                 const Padding(
                   padding: EdgeInsets.only(top: 80),
                   child: Center(child: CircularProgressIndicator()),
                 )
               else ...[
-                BudgetTypeToggle(
+                FlowTypeToggle(
                   income: _income,
                   onChanged: (v) => setState(() => _income = v),
                 ),

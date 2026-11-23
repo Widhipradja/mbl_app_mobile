@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import '../../config/launcher_tokens.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/home_summary_provider.dart';
-import '../budget/budget_widgets.dart';
+import '../../widgets/app_ui.dart';
 import 'finance_data.dart';
 
 /// Submissions waiting for approval. KU can approve or reject; whoever
@@ -242,7 +242,7 @@ class _FinancePendingScreenState extends State<FinancePendingScreen> {
       child: Scaffold(
         appBar: AppBar(title: const Text('Menunggu Persetujuan')),
         body: _error != null
-            ? Center(child: BudgetRetry(_error!, onRetry: _load))
+            ? Center(child: RetryState(_error!, onRetry: _load))
             : items == null
                 ? const Center(child: CircularProgressIndicator())
                 : RefreshIndicator(
@@ -265,8 +265,8 @@ class _FinancePendingScreenState extends State<FinancePendingScreen> {
                               style: Lx.body),
                         ),
                         if (items.isEmpty)
-                          const BudgetCard(
-                            child: BudgetEmpty(
+                          const SectionCard(
+                            child: EmptyState(
                               icon: Icons.task_alt_rounded,
                               text: 'Tidak ada yang menunggu. Semua sudah '
                                   'diputuskan.',

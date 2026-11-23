@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../config/launcher_tokens.dart';
+import '../../widgets/app_ui.dart';
 import '../finance/finance_data.dart' show rp, dateLabel;
 import '../finance/finance_widgets.dart' show showAddEntrySheet;
 import 'budget_data.dart';
@@ -212,7 +213,7 @@ class _BudgetTransactionsScreenState extends State<BudgetTransactionsScreen> {
   List<Widget> _rows(List<BudgetTxn> list) {
     if (list.isEmpty) {
       return [
-        BudgetEmpty(
+        EmptyState(
           icon: Icons.receipt_long_rounded,
           text: _categoryId != null || _filter != _Filter.all
               ? 'Tidak ada transaksi dengan filter ini.'
@@ -228,7 +229,7 @@ class _BudgetTransactionsScreenState extends State<BudgetTransactionsScreen> {
     }
     return [
       for (final e in days.entries) ...[
-        BudgetDayHeader(
+        DayHeader(
           label: dateLabel(e.key),
           net: e.value.fold<int>(0, (s, t) {
             final inc = _income[t.categoryId] ?? t.typeIncome;
@@ -339,7 +340,7 @@ class _BudgetTransactionsScreenState extends State<BudgetTransactionsScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(Lx.s16, 0, Lx.s16, Lx.s8),
-              child: BudgetMonthPill(month: _month, onChanged: _setMonth),
+              child: MonthPill(month: _month, onChanged: _setMonth),
             ),
             SizedBox(
               height: 40,
@@ -379,7 +380,7 @@ class _BudgetTransactionsScreenState extends State<BudgetTransactionsScreen> {
             ),
             Expanded(
               child: _error != null
-                  ? Center(child: BudgetRetry(_error!, onRetry: _load))
+                  ? Center(child: RetryState(_error!, onRetry: _load))
                   : all == null
                       ? const Center(child: CircularProgressIndicator())
                       : RefreshIndicator(

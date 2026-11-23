@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../config/launcher_tokens.dart';
+import '../../widgets/app_ui.dart';
 import '../finance/finance_data.dart' show rp;
 import '../finance/finance_widgets.dart' show showAddEntrySheet;
 import 'budget_categories_screen.dart';
@@ -285,9 +286,9 @@ class _BudgetWalletScreenState extends State<BudgetWalletScreen> {
   Widget _budget(BudgetSummary s) {
     final lines = s.budgeted;
     if (lines.isEmpty) {
-      return BudgetCard(
+      return SectionCard(
         title: 'Anggaran bulan ini',
-        child: BudgetEmpty(
+        child: EmptyState(
           icon: Icons.track_changes_rounded,
           text: 'Tentukan batas belanja per kategori, lalu pantau sisanya '
               'di sini.',
@@ -301,7 +302,7 @@ class _BudgetWalletScreenState extends State<BudgetWalletScreen> {
     final pct = total == 0 ? 0.0 : spent * 100 / total;
     final over = spent > total;
     final more = lines.length - _budgetRows;
-    return BudgetCard(
+    return SectionCard(
       title: 'Anggaran bulan ini',
       action: 'Atur',
       onAction: () => _go(BudgetLimitsScreen(month: _month)),
@@ -330,7 +331,7 @@ class _BudgetWalletScreenState extends State<BudgetWalletScreen> {
             ],
           ),
           const SizedBox(height: Lx.s8),
-          BudgetBar(value: pct / 100, color: budgetColor(pct, over), height: 10),
+          RoundBar(value: pct / 100, color: budgetColor(pct, over), height: 10),
           const SizedBox(height: Lx.s8),
           for (final l in lines.take(_budgetRows))
             BudgetProgressRow(
@@ -351,13 +352,13 @@ class _BudgetWalletScreenState extends State<BudgetWalletScreen> {
 
   // ── Recent ───────────────────────────────────────────────────────────────
 
-  Widget _recentCard() => BudgetCard(
+  Widget _recentCard() => SectionCard(
         title: 'Transaksi terbaru',
         action: _recent.isEmpty ? null : 'Lihat semua',
         onAction: () => _go(BudgetTransactionsScreen(month: _month)),
         padding: const EdgeInsets.fromLTRB(Lx.s16, Lx.s16, Lx.s16, Lx.s8),
         child: _recent.isEmpty
-            ? BudgetEmpty(
+            ? EmptyState(
                 icon: Icons.receipt_long_rounded,
                 text: 'Belum ada transaksi bulan ini.',
                 action: 'Catat sekarang',
@@ -394,10 +395,10 @@ class _BudgetWalletScreenState extends State<BudgetWalletScreen> {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(Lx.s16, 0, Lx.s16, 96),
             children: [
-              BudgetMonthPill(month: _month, onChanged: _setMonth),
+              MonthPill(month: _month, onChanged: _setMonth),
               _intro(),
               if (_error != null)
-                BudgetRetry(_error!, onRetry: _load)
+                RetryState(_error!, onRetry: _load)
               else if (s == null)
                 const Padding(
                   padding: EdgeInsets.only(top: 80),

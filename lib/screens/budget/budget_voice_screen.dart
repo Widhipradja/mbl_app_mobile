@@ -6,10 +6,10 @@ import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
 import '../../config/launcher_tokens.dart';
+import '../../widgets/app_ui.dart';
 import '../finance/finance_data.dart' show rp, RupiahInputFormatter;
 import 'budget_data.dart';
 import 'budget_form_screen.dart';
-import 'budget_widgets.dart';
 
 enum _Step { idle, recording, sending, result, pick }
 

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../config/launcher_tokens.dart';
-import '../budget/budget_widgets.dart';
+import '../../widgets/app_ui.dart';
 import 'finance_bookkeeping_screen.dart';
 import 'finance_data.dart';
 import 'finance_month_screen.dart';
@@ -297,7 +297,7 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
     final total = d.expense == 0
         ? rows.fold<int>(0, (a, e) => a + e.value)
         : d.expense;
-    return BudgetCard(
+    return SectionCard(
       title: 'Pengeluaran per kategori',
       subtitle: rows.length > 5 ? '5 terbesar dari ${rows.length}' : null,
       padding: const EdgeInsets.fromLTRB(Lx.s16, Lx.s16, Lx.s16, Lx.s8),
@@ -329,7 +329,7 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
                           ],
                         ),
                         const SizedBox(height: 6),
-                        BudgetBar(
+                        RoundBar(
                             value: total == 0 ? 0 : e.value / total,
                             color: categoryLook(e.key, income: false).color,
                             height: 6),
@@ -350,13 +350,13 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
 
   Widget _recent(FinanceMonth d) {
     final rows = d.txns.take(5).toList();
-    return BudgetCard(
+    return SectionCard(
       title: 'Transaksi terbaru',
       action: rows.isEmpty ? null : 'Lihat semua',
       onAction: () => _go(FinanceMonthScreen(month: _month)),
       padding: const EdgeInsets.fromLTRB(Lx.s16, Lx.s16, Lx.s16, Lx.s8),
       child: rows.isEmpty
-          ? BudgetEmpty(
+          ? EmptyState(
               icon: Icons.receipt_long_rounded,
               text: 'Belum ada transaksi bulan ini.',
               action: 'Catat sekarang',
@@ -388,7 +388,7 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(Lx.s16, 0, Lx.s16, 96),
             children: [
-              BudgetMonthPill(month: _month, onChanged: _setMonth),
+              MonthPill(month: _month, onChanged: _setMonth),
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: Lx.s12),
                 child: Row(
@@ -411,7 +411,7 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
                 ),
               ),
               if (_error != null)
-                BudgetRetry(_error!, onRetry: _load)
+                RetryState(_error!, onRetry: _load)
               else if (d == null || _loading && d.month != _month)
                 const Padding(
                   padding: EdgeInsets.only(top: 80),

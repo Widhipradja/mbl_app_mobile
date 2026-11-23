@@ -5,7 +5,7 @@ import '../../models/savings_ledgers.dart';
 import '../../services/api_service.dart';
 import '../launcher/launcher_models.dart' show rupiah;
 import 'amal_deposit_form_screen.dart';
-import '../budget/budget_widgets.dart' show InitialsAvatar, SoftTabs;
+import '../../widgets/app_ui.dart' show InitialsAvatar, SoftTabs;
 import 'ledger_widgets.dart';
 
 enum _Mode { monthly, yearly }

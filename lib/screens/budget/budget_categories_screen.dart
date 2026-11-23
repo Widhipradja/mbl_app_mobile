@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../config/launcher_tokens.dart';
+import '../../widgets/app_ui.dart';
 import 'budget_data.dart';
-import 'budget_widgets.dart';
 
 const _expenseIdeas = [
   'Makan', 'Transportasi', 'Belanja', 'Tagihan', 'Pulsa & Internet', //
@@ -112,7 +112,7 @@ class _CategorySheetState extends State<_CategorySheet> {
               const SizedBox(height: Lx.s16),
               Text('Jenis', style: Lx.cardHeading),
               const SizedBox(height: Lx.s8),
-              BudgetTypeToggle(
+              FlowTypeToggle(
                 income: _income,
                 expenseLabel: 'Uang keluar',
                 incomeLabel: 'Uang masuk',
@@ -352,7 +352,7 @@ class _BudgetCategoriesScreenState extends State<BudgetCategoriesScreen> {
           label: const Text('Kategori baru'),
         ),
         body: _error != null
-            ? Center(child: BudgetRetry(_error!, onRetry: _load))
+            ? Center(child: RetryState(_error!, onRetry: _load))
             : items == null
                 ? const Center(child: CircularProgressIndicator())
                 : RefreshIndicator(
@@ -361,14 +361,14 @@ class _BudgetCategoriesScreenState extends State<BudgetCategoriesScreen> {
                       physics: const AlwaysScrollableScrollPhysics(),
                       padding: const EdgeInsets.fromLTRB(Lx.s16, 0, Lx.s16, 96),
                       children: [
-                        BudgetTypeToggle(
+                        FlowTypeToggle(
                           income: _income,
                           onChanged: (v) => setState(() => _income = v),
                         ),
                         const SizedBox(height: Lx.s16),
                         if (active.isEmpty && inactive.isEmpty)
-                          BudgetCard(
-                            child: BudgetEmpty(
+                          SectionCard(
+                            child: EmptyState(
                               icon: Icons.category_rounded,
                               text: 'Belum ada kategori $word.',
                               action: 'Buat kategori',
@@ -376,7 +376,7 @@ class _BudgetCategoriesScreenState extends State<BudgetCategoriesScreen> {
                             ),
                           ),
                         if (active.isNotEmpty)
-                          BudgetCard(
+                          SectionCard(
                             title: 'Aktif',
                             subtitle:
                                 '${active.length} kategori · ketuk untuk mengubah',
@@ -386,7 +386,7 @@ class _BudgetCategoriesScreenState extends State<BudgetCategoriesScreen> {
                                 children: [for (final c in active) _row(c)]),
                           ),
                         if (inactive.isNotEmpty)
-                          BudgetCard(
+                          SectionCard(
                             title: 'Nonaktif',
                             subtitle:
                                 'Disembunyikan dari form, riwayatnya tetap ada',

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../config/launcher_tokens.dart';
-import '../budget/budget_widgets.dart' show SoftTabs;
+import '../../widgets/app_ui.dart' show SoftTabs;
 import 'event_data.dart';
 
 const _statuses = {

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../config/launcher_tokens.dart';
-import '../budget/budget_widgets.dart';
+import '../../widgets/app_ui.dart';
 import 'finance_data.dart';
 import 'finance_new_screen.dart';
 import 'finance_voice_screen.dart';
@@ -83,7 +83,7 @@ class _FinanceMonthScreenState extends State<FinanceMonthScreen> {
   List<Widget> _rows(List<FinanceTxn> list) {
     if (list.isEmpty) {
       return [
-        BudgetEmpty(
+        EmptyState(
           icon: Icons.receipt_long_rounded,
           text: _filter == _Filter.all
               ? 'Belum ada transaksi bulan ini.'
@@ -101,7 +101,7 @@ class _FinanceMonthScreenState extends State<FinanceMonthScreen> {
     }
     return [
       for (final e in days.entries) ...[
-        BudgetDayHeader(
+        DayHeader(
           label: dateLabel(e.key),
           net: e.value.fold<int>(
               0, (s, t) => s + (t.isIncome ? t.amount : -t.amount)),
@@ -190,7 +190,7 @@ class _FinanceMonthScreenState extends State<FinanceMonthScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(Lx.s16, 0, Lx.s16, Lx.s8),
-              child: BudgetMonthPill(month: _month, onChanged: _setMonth),
+              child: MonthPill(month: _month, onChanged: _setMonth),
             ),
             SizedBox(
               height: 40,
@@ -208,7 +208,7 @@ class _FinanceMonthScreenState extends State<FinanceMonthScreen> {
             ),
             Expanded(
               child: _error != null
-                  ? Center(child: BudgetRetry(_error!, onRetry: _load))
+                  ? Center(child: RetryState(_error!, onRetry: _load))
                   : d == null
                       ? const Center(child: CircularProgressIndicator())
                       : RefreshIndicator(
