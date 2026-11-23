@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../config/launcher_tokens.dart';
 import '../../widgets/app_ui.dart';
 import '../finance/finance_data.dart' show RupiahInputFormatter, rp, thousands;
+import '../savings/ledger_widgets.dart' show monthNames;
 import 'budget_data.dart';
 import 'budget_widgets.dart';
 
@@ -22,6 +23,10 @@ class _BudgetLimitsScreenState extends State<BudgetLimitsScreen> {
   List<BudgetCategory>? _categories;
   final Map<String, TextEditingController> _fields = {};
   Map<String, int> _saved = {};
+
+  /// Budgets of the period before this one, by category id; empty when it
+  /// had none or could not be read.
+  Map<String, int> _previous = const {};
 
   /// Spent this month per category, to set a limit against; empty when the
   /// summary could not be read.
@@ -65,6 +70,10 @@ class _BudgetLimitsScreenState extends State<BudgetLimitsScreen> {
             .summary(month)
             .then<BudgetSummary?>((s) => s)
             .catchError((Object e) => null),
+        // Only offered as a shortcut: a failure just hides it.
+        budgetRepo
+            .limits(DateTime(month.year, month.month - 1))
+            .catchError((Object e) => <String, int>{}),
       ]);
       if (!mounted || month != _month) return;
       final cats = (r[0] as List<BudgetCategory>)
@@ -86,6 +95,7 @@ class _BudgetLimitsScreenState extends State<BudgetLimitsScreen> {
                         : '')),
         ]);
       _saved = {for (final c in cats) c.id: limits[c.id] ?? 0};
+      _previous = r[3] as Map<String, int>;
       final summary = r[2] as BudgetSummary?;
       _spent = {
         for (final l in summary?.categories ?? const <BudgetCategoryLine>[])
@@ -102,6 +112,67 @@ class _BudgetLimitsScreenState extends State<BudgetLimitsScreen> {
   void _setMonth(DateTime m) {
     setState(() => _month = DateTime(m.year, m.month));
     _load();
+  }
+
+  Map<String, int> get _copyable => limitsToCopy(
+        previous: _previous,
+        current: {for (final id in _fields.keys) id: _value(id)},
+      );
+
+  DateTime get _previousMonth => DateTime(_month.year, _month.month - 1);
+
+  /// Fills the empty rows from the period before. Nothing is saved until
+  /// Simpan, and rows already filled are left alone.
+  void _copyPrevious() {
+    final copy = _copyable;
+    if (copy.isEmpty) return;
+    for (final e in copy.entries) {
+      _fields[e.key]?.text = thousands(e.value);
+    }
+    _recompute();
+    setState(() {});
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+          content: Text('${copy.length} anggaran disalin. '
+              'Tekan Simpan untuk menyimpannya.')));
+  }
+
+  /// "Salin dari Oktober 2026": shown while the earlier period has budgets
+  /// this one lacks.
+  Widget _copyCard(Map<String, int> copy) {
+    final p = _previousMonth;
+    final total = copy.values.fold<int>(0, (a, b) => a + b);
+    return Container(
+      margin: const EdgeInsets.only(bottom: Lx.s12),
+      padding: const EdgeInsets.all(Lx.s12),
+      decoration: BoxDecoration(
+        color: Lx.primaryLight,
+        borderRadius: BorderRadius.circular(Lx.rCard),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.copy_all_rounded, color: Lx.primary),
+          const SizedBox(width: Lx.s12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${monthNames[p.month - 1]} ${p.year}',
+                    style: Lx.cardHeading.copyWith(fontSize: 14)),
+                Text('${copy.length} anggaran, total ${rp(total)}',
+                    style: Lx.metadata.copyWith(fontFeatures: tabular)),
+              ],
+            ),
+          ),
+          const SizedBox(width: Lx.s8),
+          FilledButton.tonal(
+            onPressed: _saving ? null : _copyPrevious,
+            child: const Text('Salin'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _save() async {
@@ -233,6 +304,7 @@ class _BudgetLimitsScreenState extends State<BudgetLimitsScreen> {
                                 'dianggarkan.',
                                 style: Lx.body),
                             const SizedBox(height: Lx.s12),
+                            if (_copyable.isNotEmpty) _copyCard(_copyable),
                             SectionCard(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: Lx.s12, vertical: Lx.s4),
