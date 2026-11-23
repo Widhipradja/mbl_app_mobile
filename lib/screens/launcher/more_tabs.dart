@@ -9,10 +9,12 @@ import '../../models/user.dart';
 import '../profile/change_password_screen.dart';
 import '../profile/edit_profile_screen.dart';
 import '../profile/about_screen.dart';
+import '../profile/family_section.dart';
+import '../profile/profile_widgets.dart' show longDate, parseBirthDate;
+import '../../providers/auth_provider.dart';
 import '../../update/apk_updater.dart' show UpdateInfo;
 import '../../update/updater.dart';
 import 'user_avatar.dart';
-import 'hub_cards.dart';
 import 'launcher_models.dart';
 
 /// Shared title block for the secondary tabs.
@@ -308,8 +310,11 @@ class LauncherProfileTab extends StatefulWidget {
 class _LauncherProfileTabState extends State<LauncherProfileTab> {
   /// Installed version and whether a newer build is published; read once
   /// per visit of the tab, quietly.
-  late final Future<UpdateInfo?> _update =
-      appUpdater().then((u) => u.check());
+  late final Future<UpdateInfo?> _update = appUpdater().then((u) => u.check());
+
+  /// The tab lives in an IndexedStack, so pull-to-refresh is the way to see
+  /// family changes made by the admin.
+  final _family = GlobalKey<FamilySectionState>();
 
   void _open(Widget screen) => Navigator.of(context)
       .push(MaterialPageRoute<void>(builder: (_) => screen));
@@ -340,8 +345,6 @@ class _LauncherProfileTabState extends State<LauncherProfileTab> {
   Widget _hero(User? user, bool editable) {
     final name =
         (user?.name ?? '').trim().isEmpty ? 'Pengguna' : user!.name.trim();
-    final email = user?.email ?? '';
-    final group = user?.groupName ?? '';
     final roles = user?.roleNames ?? const <String>[];
     Widget chip(String text, {IconData? icon}) => Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -416,22 +419,16 @@ class _LauncherProfileTabState extends State<LauncherProfileTab> {
           Text(name,
               textAlign: TextAlign.center,
               style: Lx.userName.copyWith(color: Colors.white, fontSize: 21)),
-          if (email.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Text(email,
-                  textAlign: TextAlign.center,
-                  style: Lx.metadata.copyWith(color: Colors.white70)),
-            ),
-          if (group.isNotEmpty || roles.isNotEmpty) ...[
+          // Email and group are in "Info akun"; the hero keeps name and roles.
+          if (roles.isNotEmpty) ...[
             const SizedBox(height: Lx.s12),
             Wrap(
               alignment: WrapAlignment.center,
               spacing: 6,
               runSpacing: 6,
               children: [
-                if (group.isNotEmpty) chip(group, icon: Icons.groups_rounded),
-                for (final r in roles) chip(r, icon: Icons.verified_user_outlined),
+                for (final r in roles)
+                  chip(r, icon: Icons.verified_user_outlined),
               ],
             ),
           ],
@@ -521,8 +518,7 @@ class _LauncherProfileTabState extends State<LauncherProfileTab> {
                 ),
               ),
               if (badge != null) ...[badge, const SizedBox(width: 4)],
-              const Icon(Icons.chevron_right_rounded,
-                  color: Lx.textSecondary),
+              const Icon(Icons.chevron_right_rounded, color: Lx.textSecondary),
             ],
           ),
         ),
@@ -566,58 +562,70 @@ class _LauncherProfileTabState extends State<LauncherProfileTab> {
     final editable =
         context.watch<HomeSummaryProvider>().isModuleVisible('profile');
 
-    return ListView(
-      padding: EdgeInsets.zero,
-      children: [
-        const _TabHeader('Profil'),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: _hero(user, editable),
-        ),
-        _card(title: 'Info akun', children: [
-          _infoRow(Icons.badge_outlined, 'User ID', user?.userId ?? ''),
-          _infoRow(Icons.mail_outline_rounded, 'Email', user?.email ?? ''),
-          _infoRow(Icons.phone_outlined, 'No. HP', user?.phone ?? ''),
-          _infoRow(Icons.groups_outlined, 'Kelompok', user?.groupName ?? ''),
-        ]),
-        if (editable)
-          _card(title: 'Akun', children: [
-            _menu(
-                Icons.person_outline_rounded,
-                Lx.primary,
-                Lx.primaryLight,
-                'Ubah Profil',
-                'Nama, email, no. HP, dan foto',
-                () => _open(const EditProfileScreen())),
-            _menu(
-                Icons.lock_outline_rounded,
-                const Color(0xFF7C3AED),
-                Lx.secondaryLight,
-                'Ubah Password',
-                'Ganti kata sandi untuk masuk',
-                () => _open(const ChangePasswordScreen())),
+    final birthDate = parseBirthDate(user?.birthDate);
+    final birth = birthDate == null ? '' : longDate(birthDate);
+
+    return RefreshIndicator(
+      onRefresh: () => Future.wait([
+        context.read<AuthProvider>().refreshProfile(),
+        _family.currentState?.reload() ?? Future<void>.value(),
+      ]),
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.zero,
+        children: [
+          const _TabHeader('Profil'),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: _hero(user, editable),
+          ),
+          _card(title: 'Info akun', children: [
+            _infoRow(Icons.badge_outlined, 'User ID', user?.userId ?? ''),
+            _infoRow(Icons.mail_outline_rounded, 'Email', user?.email ?? ''),
+            _infoRow(Icons.phone_outlined, 'No. HP', user?.phone ?? ''),
+            if (editable) _infoRow(Icons.cake_outlined, 'Tanggal lahir', birth),
+            _infoRow(Icons.groups_outlined, 'Kelompok', user?.groupName ?? ''),
           ]),
-        _card(title: 'Aplikasi', children: [_aboutEntry()]),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-          child: OutlinedButton.icon(
-            onPressed: _confirmLogout,
-            icon: const Icon(Icons.logout_rounded, size: 20),
-            label: const Text('Keluar'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Lx.danger,
-              side: BorderSide(color: Lx.danger.withOpacity(0.35)),
-              backgroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(Lx.rButton),
+          if (editable) FamilySection(key: _family),
+          if (editable)
+            _card(title: 'Akun', children: [
+              _menu(
+                  Icons.person_outline_rounded,
+                  Lx.primary,
+                  Lx.primaryLight,
+                  'Ubah Profil',
+                  'Data diri, kontak, dan foto',
+                  () => _open(const EditProfileScreen())),
+              _menu(
+                  Icons.lock_outline_rounded,
+                  const Color(0xFF7C3AED),
+                  Lx.secondaryLight,
+                  'Ubah Password',
+                  'Ganti kata sandi untuk masuk',
+                  () => _open(const ChangePasswordScreen())),
+            ]),
+          _card(title: 'Aplikasi', children: [_aboutEntry()]),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+            child: OutlinedButton.icon(
+              onPressed: _confirmLogout,
+              icon: const Icon(Icons.logout_rounded, size: 20),
+              label: const Text('Keluar'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Lx.danger,
+                side: BorderSide(color: Lx.danger.withOpacity(0.35)),
+                backgroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(Lx.rButton),
+                ),
+                textStyle:
+                    const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
               ),
-              textStyle:
-                  const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

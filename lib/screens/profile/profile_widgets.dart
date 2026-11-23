@@ -7,6 +7,7 @@ import '../../config/launcher_tokens.dart';
 import '../../providers/auth_provider.dart';
 import '../../utils/avatar_image.dart';
 import '../launcher/user_avatar.dart';
+import '../savings/ledger_widgets.dart' show monthNames;
 
 /// Text for a failed profile / password call. The server's Indonesian `error`
 /// is shown as it is for 403, 409, 422 and 429, and for the one 502 that asks
@@ -272,6 +273,9 @@ DateTime? parseBirthDate(String? raw) {
   final date = DateTime(y, mo, d);
   return date.year == y && date.month == mo && date.day == d ? date : null;
 }
+
+/// "17 Mei 1990".
+String longDate(DateTime d) => '${d.day} ${monthNames[d.month - 1]} ${d.year}';
 
 /// `YYYY-MM-DD` with no time or zone: what the server takes.
 String birthDateParam(DateTime d) =>

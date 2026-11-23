@@ -5,7 +5,6 @@ import '../../config/launcher_tokens.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
 import '../../widgets/app_ui.dart' show RetryState;
-import '../savings/ledger_widgets.dart' show monthNames;
 import 'profile_widgets.dart';
 
 /// Edit own profile: name, date of birth, email, phone and gender. The login id (`user_id`)
@@ -158,9 +157,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   bool get _birthChanged => _birth != _birthOrig;
 
-  static String _longDate(DateTime d) =>
-      '${d.day} ${monthNames[d.month - 1]} ${d.year}';
-
   Future<void> _pickBirth() async {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -201,7 +197,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 const SizedBox(width: Lx.s12),
                 Expanded(
                   child: Text(
-                    d == null ? 'Belum diisi' : _longDate(d),
+                    d == null ? 'Belum diisi' : longDate(d),
                     style: Lx.body.copyWith(
                         color: d == null ? Lx.textMuted : Lx.text,
                         fontWeight:

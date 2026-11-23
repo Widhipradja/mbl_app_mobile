@@ -267,15 +267,28 @@ class AuthProvider with ChangeNotifier {
     await _storeAvatar(_avatarOf(resp.data));
   }
 
-  /// Picks up a photo set on another device (or by the web) from
-  /// `GET /profile`. Quiet: a failure leaves what is shown.
-  Future<void> refreshAvatar() async {
+  /// Picks up what login does not give, or what changed on another device
+  /// (or the web), from `GET /profile`: the photo and the date of birth.
+  /// Quiet: a failure leaves what is shown.
+  Future<void> refreshProfile() async {
     if (_user == null) return;
     try {
-      final resp = await _apiService.getProfile();
-      if (resp.data is Map) await _storeAvatar(_avatarOf(resp.data));
+      final body = (await _apiService.getProfile()).data;
+      if (body is! Map) return;
+      final current = _user!.toJson();
+      final avatar = _avatarOf(body);
+      final birth = body['birth_date']?.toString().trim() ?? '';
+      if ((current['avatar'] ?? '') == avatar &&
+          (current['birth_date'] ?? '') == birth) {
+        return;
+      }
+      current['avatar'] = avatar.isEmpty ? null : avatar;
+      current['birth_date'] = birth;
+      _user = User.fromJson(current);
+      await StorageService.saveUser(_user!);
+      notifyListeners();
     } catch (e) {
-      debugPrint('refreshAvatar error: $e');
+      debugPrint('refreshProfile error: $e');
     }
   }
 
