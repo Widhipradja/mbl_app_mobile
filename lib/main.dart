@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
 import 'config/theme.dart';
+import 'providers/home_summary_provider.dart';
 import 'config/routes.dart';
 import 'providers/auth_provider.dart';
 import 'providers/transaction_provider.dart';
 import 'providers/event_provider.dart';
-import 'providers/kbm_provider.dart';
 import 'providers/zakat_provider.dart';
 import 'providers/configuration_provider.dart';
 import 'services/storage_service.dart';
@@ -29,9 +29,9 @@ void main() async {
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => TransactionProvider()),
         ChangeNotifierProvider(create: (_) => EventProvider()),
-        ChangeNotifierProvider(create: (_) => KbmProvider()),
         ChangeNotifierProvider(create: (_) => ZakatProvider()),
         ChangeNotifierProvider(create: (_) => ConfigurationProvider()),
+        ChangeNotifierProvider(create: (_) => HomeSummaryProvider()),
       ],
       child: const MyApp(),
     ),
@@ -81,6 +81,7 @@ class _MyAppState extends State<MyApp> {
       try {
         context.read<ZakatProvider>().reset();
         context.read<ConfigurationProvider>().reset();
+        context.read<HomeSummaryProvider>().reset();
       } catch (_) {}
       // Navigate to login
       AppRouter.router.go('/login');

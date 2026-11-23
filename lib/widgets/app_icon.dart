@@ -1,21 +1,21 @@
 import 'package:flutter/material.dart';
 
-class MblAppIcon extends StatelessWidget {
+class BarakaFundsAppIcon extends StatelessWidget {
   final double size;
 
-  const MblAppIcon({super.key, this.size = 120});
+  const BarakaFundsAppIcon({super.key, this.size = 120});
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: size,
       height: size,
-      child: CustomPaint(painter: _MblIconPainter()),
+      child: CustomPaint(painter: _BarakaFundsIconPainter()),
     );
   }
 }
 
-class _MblIconPainter extends CustomPainter {
+class _BarakaFundsIconPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final width = size.width;
@@ -63,15 +63,15 @@ class _MblIconPainter extends CustomPainter {
       true,
     );
 
-    // Blue gradient for main container
-    const blueGradient = LinearGradient(
+    // Green gradient for main container (Baraka Funds branding)
+    const greenGradient = LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: [Color(0xFF3B82F6), Color(0xFF1D4ED8)],
+      colors: [Color(0xFF10B981), Color(0xFF059669)],
     );
 
     final mainContainerPaint = Paint()
-      ..shader = blueGradient.createShader(mainContainer.outerRect);
+      ..shader = greenGradient.createShader(mainContainer.outerRect);
 
     canvas.drawRRect(mainContainer, mainContainerPaint);
 
@@ -84,10 +84,10 @@ class _MblIconPainter extends CustomPainter {
     // Subtle background icons
     _drawSubtleIcons(canvas, width, height);
 
-    // MBL Text with enhanced styling
+    // 'BF' Text for Baraka Funds
     final textPainter = TextPainter(
       text: TextSpan(
-        text: 'MBL',
+        text: 'BF',
         style: TextStyle(
           color: Colors.white,
           fontSize: width * 0.273,

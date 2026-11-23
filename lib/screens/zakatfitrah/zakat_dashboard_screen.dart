@@ -1,3 +1,5 @@
+import '../../config/baraka_tokens.dart';
+import '../../utils/external_breakdown.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -5,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../models/zakat_transaction.dart';
 import '../../models/muzakki.dart';
+import '../../providers/configuration_provider.dart';
 import '../../providers/zakat_provider.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -19,6 +22,7 @@ class ZakatBerandaBody extends StatefulWidget {
 }
 
 class _ZakatBerandaBodyState extends State<ZakatBerandaBody> {
+  bool _showAllRecent = false;
   static const _green = Color(0xFF066046);
 
   double _parseAmount(String raw) {
@@ -30,13 +34,26 @@ class _ZakatBerandaBodyState extends State<ZakatBerandaBody> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final p = context.read<ZakatProvider>();
+      final cfg = context.read<ConfigurationProvider>();
 
-      if (p.years.isEmpty && !p.isLoadingYears) {
-        await p.fetchYears();
-      }
+      // Every request below is per year: wait until a year is selected, even
+      // when the shell is already loading the years.
+      await p.ensureYears();
+      if (!mounted) return;
 
       if (p.muzakkiList.isEmpty && !p.isLoading) {
         await p.fetchMuzakki();
+      }
+
+      if (p.externals.isEmpty && !p.isLoadingExternals) {
+        p.fetchExternals();
+      }
+
+      if (cfg.configurations.isEmpty && !cfg.isLoading) {
+        cfg.fetchConfigurations(
+          module: ConfigurationProvider.moduleZakatFitrah,
+          yearId: p.selectedYear?.id,
+        );
       }
 
       if (p.recentTransactions.isEmpty && !p.isLoadingRecent) {
@@ -182,98 +199,56 @@ class _ZakatBerandaBodyState extends State<ZakatBerandaBody> {
             externalRegisteredMoneyAmount + externalMoneyAmount;
         final totalRp = internalMoneyAmount + externalMoneyAmountTotal;
 
-        final internalSoulsGroup = internalRiceSouls + internalMoneySouls;
-        final externalSoulsGroup = externalRiceSouls + externalMoneySouls;
+        // The internal row is named after the GROUP value set in Configuration.
+        final groupLabel = context
+                .watch<ConfigurationProvider>()
+                .configurations
+                .where((c) => c.code == 'GROUP' && c.value.trim().isNotEmpty)
+                .map((c) => c.value.trim())
+                .firstOrNull ??
+            externalInternalLabel;
 
-        final internalGroupRows = <Map<String, dynamic>>[];
-        if (summary != null && summary.internalByAfiliasi.isNotEmpty) {
-          for (final group in summary.internalByAfiliasi) {
-            internalGroupRows.add({
-              'name':
-                  group.afiliasi.isNotEmpty ? group.afiliasi : 'Tanpa Group',
-              'souls': group.totalSouls,
-              'riceSouls': group.riceSouls,
-              'moneySouls': group.moneySouls,
-              'moneyAmount': group.totalAmount,
-            });
-          }
-        } else {
-          final fallback = <String, Map<String, num>>{};
-          for (final m in provider.muzakkiList) {
-            if (!m.isInternal || !m.isPaid) continue;
-
-            final name = m.groupName.trim().isNotEmpty
-                ? m.groupName.trim()
-                : 'Tanpa Group';
-            final bucket = fallback.putIfAbsent(
-              name,
-              () => {
-                'riceSouls': 0,
-                'moneySouls': 0,
-                'moneyAmount': 0.0,
-              },
-            );
-
-            final souls = m.numberOfPeople > 0 ? m.numberOfPeople : 1;
-            if (m.paymentType == PaymentType.beras) {
-              bucket['riceSouls'] = (bucket['riceSouls'] as int) + souls;
-            } else if (m.paymentType == PaymentType.uang) {
-              bucket['moneySouls'] = (bucket['moneySouls'] as int) + souls;
-              bucket['moneyAmount'] = (bucket['moneyAmount'] as double) +
-                  (m.amountRp > 0 ? m.amountRp : souls * moneyRatePerSoul);
-            }
-          }
-
-          final entries = fallback.entries.toList()
-            ..sort(
-                (a, b) => a.key.toLowerCase().compareTo(b.key.toLowerCase()));
-          for (final entry in entries) {
-            final rice = entry.value['riceSouls'] as int;
-            final money = entry.value['moneySouls'] as int;
-            final amount = entry.value['moneyAmount'] as double;
-            internalGroupRows.add({
-              'name': entry.key,
-              'souls': rice + money,
-              'riceSouls': rice,
-              'moneySouls': money,
-              'moneyAmount': amount,
-            });
-          }
-        }
+        // "Rincian per Grup": one row per Master Eksternal.
+        final breakdown = buildExternalBreakdown(
+          muzakkiList: provider.muzakkiList,
+          externalFamilies: externalFamilies,
+          masters: provider.externals,
+          moneyRatePerSoul: moneyRatePerSoul,
+          internalLabel: groupLabel,
+        );
+        final namedExternals =
+            breakdown.where((r) => r.kind == ExternalRowKind.external).toList();
+        final breakdownMoneySouls =
+            breakdown.fold<int>(0, (s, r) => s + r.moneySouls);
+        final breakdownRiceSouls =
+            breakdown.fold<int>(0, (s, r) => s + r.riceSouls);
+        final breakdownMoneyAmount =
+            breakdown.fold<double>(0, (s, r) => s + r.moneyAmount);
 
         final perGroupRows = <TableRow>[
           _groupTableHeaderRow(),
         ];
         final asnafRows = provider.mustahiqAsnafSummary;
 
-        for (final row in internalGroupRows) {
-          final riceSouls = (row['riceSouls'] as num).toInt();
-          final moneySouls = (row['moneySouls'] as num).toInt();
-          final moneyAmount = (row['moneyAmount'] as num).toDouble();
-
+        for (final r in breakdown) {
           perGroupRows.add(
             _groupTableDataRow(
-              group: '${row['name']}',
-              titipUang: '${_formatRupiah(moneyAmount)} ($moneySouls)',
-              titipBeras: '$riceSouls',
+              group: r.label,
+              subtitle: '${r.people} orang · ${r.paidSouls} jiwa',
+              titipUang: '${_formatRupiah(r.moneyAmount)} (${r.moneySouls})',
+              titipBeras: '${r.riceSouls}',
             ),
           );
         }
 
         perGroupRows.add(
           _groupTableDataRow(
-            group: 'External',
-            titipUang:
-                '${_formatRupiah(externalMoneyAmountTotal)} ($externalMoneySouls)',
-            titipBeras: '$externalRiceSouls',
-          ),
-        );
-
-        perGroupRows.add(
-          _groupTableDataRow(
             group: 'Total',
-            titipUang: '${_formatRupiah(totalRp)} ($moneySouls)',
-            titipBeras: '${internalRiceSouls + externalRiceSouls}',
+            subtitle:
+                '${breakdown.fold<int>(0, (s, r) => s + r.people)} orang · ${breakdownRiceSouls + breakdownMoneySouls} jiwa',
+            titipUang:
+                '${_formatRupiah(breakdownMoneyAmount)} ($breakdownMoneySouls)',
+            titipBeras: '$breakdownRiceSouls',
             isTotal: true,
           ),
         );
@@ -286,6 +261,7 @@ class _ZakatBerandaBodyState extends State<ZakatBerandaBody> {
               provider.fetchLaporanSummary(),
               provider.fetchRecentTransactions(),
               provider.fetchMustahiqAsnafSummary(),
+              provider.fetchExternals(),
             ]);
           },
           child: SingleChildScrollView(
@@ -407,28 +383,35 @@ class _ZakatBerandaBodyState extends State<ZakatBerandaBody> {
                   ],
                 ),
                 const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _SummaryCard(
-                        title: 'Internal',
-                        value: totalInternal.toString(),
-                        unit: 'Orang',
-                        icon: Icons.groups_rounded,
-                        secondaryValue: '$totalSoulsOverall Jiwa',
+                IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: _SummaryCard(
+                          title: 'Internal',
+                          value: totalInternal.toString(),
+                          unit: 'Orang',
+                          icon: Icons.groups_rounded,
+                          secondaryValue: '$totalSoulsOverall Jiwa',
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _SummaryCard(
-                        title: 'External',
-                        value: totalExternal.toString(),
-                        unit: 'Orang',
-                        icon: Icons.group_add_outlined,
-                        secondaryValue: '$totalExternal Jiwa',
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _SummaryCard(
+                          title: 'External',
+                          value: totalExternal.toString(),
+                          unit: 'Orang',
+                          icon: Icons.group_add_outlined,
+                          secondaryValue: '$totalExternal Jiwa',
+                          details: [
+                            for (final r in namedExternals)
+                              '- ${r.label} ${r.people} orang',
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 12),
                 Container(
@@ -542,7 +525,7 @@ class _ZakatBerandaBodyState extends State<ZakatBerandaBody> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Text(
-                            'Rincian per Group',
+                            'Rincian per Grup',
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
@@ -556,16 +539,7 @@ class _ZakatBerandaBodyState extends State<ZakatBerandaBody> {
                               totalSo: totalSo,
                               moneySouls: moneySouls,
                               totalRp: totalRp,
-                              internalGroupRows: internalGroupRows,
-                              internalSoulsGroup: internalSoulsGroup,
-                              internalRiceSo: internalRiceSo,
-                              internalMoneyAmount: internalMoneyAmount,
-                              externalSoulsGroup: externalSoulsGroup,
-                              externalRiceSo: externalRiceSo,
-                              externalRiceSouls: externalRiceSouls,
-                              externalMoneySouls: externalMoneySouls,
-                              externalMoneyAmountTotal:
-                                  externalMoneyAmountTotal,
+                              rows: breakdown,
                             ),
                             icon: const Icon(Icons.ios_share_rounded, size: 16),
                             label: const Text('Export'),
@@ -659,16 +633,7 @@ class _ZakatBerandaBodyState extends State<ZakatBerandaBody> {
                     !provider.isLoadingRecent)
                   _buildEmptyTransactions()
                 else
-                  ListView.separated(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: provider.recentTransactions.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (context, index) {
-                      return _TransactionTile(
-                          trx: provider.recentTransactions[index]);
-                    },
-                  ),
+                  _buildRecentList(provider.recentTransactions),
                 const SizedBox(height: 24),
               ],
             ),
@@ -687,6 +652,48 @@ class _ZakatBerandaBodyState extends State<ZakatBerandaBody> {
         .where((part) => part.isNotEmpty)
         .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
         .join(' ');
+  }
+
+  /// Compact list: one card, one row per transaction, 5 rows until expanded.
+  Widget _buildRecentList(List<ZakatTransaction> all) {
+    const collapsedCount = 5;
+    final canExpand = all.length > collapsedCount;
+    final rows =
+        _showAllRecent || !canExpand ? all : all.sublist(0, collapsedCount);
+
+    return Container(
+      decoration: Bk.card(),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          for (var i = 0; i < rows.length; i++) ...[
+            if (i > 0) const Divider(height: 1, color: Bk.line),
+            _TransactionTile(trx: rows[i]),
+          ],
+          if (canExpand) ...[
+            const Divider(height: 1, color: Bk.line),
+            InkWell(
+              onTap: () => setState(() => _showAllRecent = !_showAllRecent),
+              child: SizedBox(
+                height: 44,
+                child: Center(
+                  child: Text(
+                    _showAllRecent
+                        ? 'Tampilkan lebih sedikit'
+                        : 'Lihat semua (${all.length})',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Bk.brand,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   Widget _buildEmptyTransactions() {
@@ -792,7 +799,7 @@ class _ZakatBerandaBodyState extends State<ZakatBerandaBody> {
       children: [
         Padding(
           padding: EdgeInsets.symmetric(vertical: 6),
-          child: Text('Group', style: headerStyle),
+          child: Text('Kelompok', style: headerStyle),
         ),
         Padding(
           padding: EdgeInsets.symmetric(vertical: 6),
@@ -887,6 +894,7 @@ class _ZakatBerandaBodyState extends State<ZakatBerandaBody> {
 
   TableRow _groupTableDataRow({
     required String group,
+    String? subtitle,
     required String titipUang,
     required String titipBeras,
     bool isTotal = false,
@@ -906,7 +914,21 @@ class _ZakatBerandaBodyState extends State<ZakatBerandaBody> {
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 7),
-          child: Text(group, style: labelStyle),
+          child: subtitle == null
+              ? Text(group, style: labelStyle)
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(group, style: labelStyle),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
+                ),
         ),
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 7),
@@ -934,15 +956,7 @@ class _ZakatBerandaBodyState extends State<ZakatBerandaBody> {
     required double totalSo,
     required int moneySouls,
     required double totalRp,
-    required List<Map<String, dynamic>> internalGroupRows,
-    required int internalSoulsGroup,
-    required double internalRiceSo,
-    required double internalMoneyAmount,
-    required int externalSoulsGroup,
-    required double externalRiceSo,
-    required int externalRiceSouls,
-    required int externalMoneySouls,
-    required double externalMoneyAmountTotal,
+    required List<ExternalBreakdownRow> rows,
   }) async {
     final buffer = StringBuffer()
       ..writeln('*Ringkasan Pembayaran Zakat Fitrah*')
@@ -952,26 +966,13 @@ class _ZakatBerandaBodyState extends State<ZakatBerandaBody> {
       ..writeln('Titip Uang: $moneySouls jiwa')
       ..writeln('Total Uang: ${_formatRupiah(totalRp)}')
       ..writeln('')
-      ..writeln('*Rincian per Group*');
+      ..writeln('*Rincian per Grup*');
 
-    for (final row in internalGroupRows) {
+    for (final r in rows) {
       buffer.writeln(
-        '- ${row['name']}: Beras ${row['riceSouls']} • Uang ${_formatRupiah((row['moneyAmount'] as num).toDouble())} (${row['moneySouls']})',
+        '- ${r.label} (${r.people} orang · ${r.paidSouls} jiwa): Beras ${r.riceSouls} • Uang ${_formatRupiah(r.moneyAmount)} (${r.moneySouls})',
       );
     }
-
-    buffer.writeln(
-      '- External: Beras $externalRiceSouls • Uang ${_formatRupiah(externalMoneyAmountTotal)} ($externalMoneySouls)',
-    );
-    buffer
-      ..writeln('')
-      ..writeln('*Total per Kategori*')
-      ..writeln(
-        '- Internal Total: $internalSoulsGroup jiwa • ${internalRiceSo.toStringAsFixed(2)} So • ${_formatRupiah(internalMoneyAmount)}',
-      )
-      ..writeln(
-        '- External Total: $externalSoulsGroup jiwa • ${externalRiceSo.toStringAsFixed(2)} So • ${_formatRupiah(externalMoneyAmountTotal)}',
-      );
 
     final message = buffer.toString();
 
@@ -1011,126 +1012,50 @@ class _TransactionTile extends StatelessWidget {
   const _TransactionTile({required this.trx});
   final ZakatTransaction trx;
 
-  static const _green = Color(0xFF066046);
-
   @override
   Widget build(BuildContext context) {
     final t = trx;
-    final isMale = t.isMale;
-    final soulsText = t.externalSouls > 0
-        ? '${t.totalSouls} jiwa (+${t.externalSouls} external)'
-        : '${t.totalSouls} jiwa';
+    final detail = <String>[
+      if (t.totalSouls > 0)
+        t.externalSouls > 0
+            ? '${t.totalSouls} jiwa (+${t.externalSouls} ext)'
+            : '${t.totalSouls} jiwa',
+      if (t.amilName.isNotEmpty) t.amilName,
+      if (t.groupName.isNotEmpty) t.groupName,
+    ].join(' · ');
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: t.isPaid ? const Color(0xFFBBF7D0) : const Color(0xFFE2E8F0),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
       child: Row(
         children: [
-          // Avatar
-          CircleAvatar(
-            radius: 20,
-            backgroundColor:
-                isMale ? const Color(0xFFE8F5F0) : const Color(0xFFFCE4EC),
-            child: Text(
-              t.initials,
-              style: TextStyle(
-                color: isMale ? _green : const Color(0xFFC2185B),
-                fontWeight: FontWeight.bold,
-                fontSize: 15,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-
-          // Name + detail
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   t.fullName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: Color(0xFF1A1A1A),
+                    color: Bk.text,
                   ),
-                  overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    if (t.groupName.isNotEmpty) ...[
-                      Text(
-                        t.groupName,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Color(0xFF94A3B8),
-                        ),
-                      ),
-                      const Text(' · ',
-                          style: TextStyle(
-                              fontSize: 11, color: Color(0xFFCBD5E1))),
-                    ],
-                    Text(
-                      t.relationship.isNotEmpty
-                          ? t.relationship
-                          : (isMale ? 'L' : 'P'),
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Color(0xFF94A3B8),
-                      ),
-                    ),
-                  ],
-                ),
-                if (t.totalSouls > 0 || t.amilName.isNotEmpty) ...[
-                  const SizedBox(height: 2),
+                if (detail.isNotEmpty)
                   Text(
-                    t.amilName.isNotEmpty
-                        ? '$soulsText · Amil: ${t.amilName}'
-                        : soulsText,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: Color(0xFF94A3B8),
-                    ),
+                    detail,
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12, color: Bk.textMuted),
                   ),
-                ],
               ],
             ),
           ),
-
-          // Payment badge
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color:
-                  t.isPaid ? const Color(0xFFDCFCE7) : const Color(0xFFFEE2E2),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              t.isPaid ? '✓ Lunas' : '⋯ Belum',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: t.isPaid
-                    ? const Color(0xFF16A34A)
-                    : const Color(0xFFDC2626),
-              ),
-            ),
-          ),
+          const SizedBox(width: 10),
+          t.isPaid
+              ? const BkStatusPill.done('Lunas')
+              : const BkStatusPill.pending('Belum'),
         ],
       ),
     );
@@ -1376,6 +1301,7 @@ class _SummaryCard extends StatelessWidget {
     required this.unit,
     required this.icon,
     this.secondaryValue,
+    this.details = const [],
     this.fullWidth = false,
   });
 
@@ -1384,6 +1310,9 @@ class _SummaryCard extends StatelessWidget {
   final String unit;
   final IconData icon;
   final String? secondaryValue;
+
+  /// Optional lines under the value, e.g. "- PPM 12 orang".
+  final List<String> details;
   final bool fullWidth;
 
   static const _green = Color(0xFF066046);
@@ -1519,6 +1448,23 @@ class _SummaryCard extends StatelessWidget {
                     ],
                   ],
                 ),
+                if (details.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  for (final line in details)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        line,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFF334155),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                ],
               ],
             ),
     );

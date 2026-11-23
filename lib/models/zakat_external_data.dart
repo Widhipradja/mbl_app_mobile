@@ -11,6 +11,9 @@ class ExternalSoul {
   final DateTime createdAt;
   final String createdBy;
 
+  /// Master Eksternal these souls are attributed to, if any.
+  final String externalId;
+
   const ExternalSoul({
     required this.id,
     required this.transactionId,
@@ -23,6 +26,7 @@ class ExternalSoul {
     required this.notes,
     required this.createdAt,
     required this.createdBy,
+    this.externalId = '',
   });
 
   factory ExternalSoul.fromJson(Map<String, dynamic> json) => ExternalSoul(
@@ -40,6 +44,7 @@ class ExternalSoul {
             ? DateTime.tryParse(json['created_at'] as String) ?? DateTime.now()
             : DateTime.now(),
         createdBy: json['created_by'] as String? ?? '',
+        externalId: json['external_id'] as String? ?? '',
       );
 }
 

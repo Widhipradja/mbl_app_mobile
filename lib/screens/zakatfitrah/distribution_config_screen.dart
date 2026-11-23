@@ -15,8 +15,7 @@ class DistributionConfigSection extends StatefulWidget {
       DistributionConfigSectionState();
 }
 
-class DistributionConfigSectionState
-    extends State<DistributionConfigSection> {
+class DistributionConfigSectionState extends State<DistributionConfigSection> {
   static const _green = Color(0xFF066046);
 
   final ApiService _api = ApiService();
@@ -81,11 +80,10 @@ class DistributionConfigSectionState
     });
 
     try {
-      final response =
-          await _api.getZakatDistributions(yearId: yearId.isEmpty ? null : yearId);
-      final rows = _extractList(response.data)
-          .map(ZakatDistribution.fromJson)
-          .toList();
+      final response = await _api.getZakatDistributions(
+          yearId: yearId.isEmpty ? null : yearId);
+      final rows =
+          _extractList(response.data).map(ZakatDistribution.fromJson).toList();
 
       if (!mounted) return;
       setState(() => _roots = rows);
@@ -126,9 +124,8 @@ class DistributionConfigSectionState
     String? parentId = isEdit ? initial.parentId : presetParentId;
 
     final allNodes = _allNodes;
-    final available = allNodes
-        .where((n) => isEdit ? n.id != initial.id : true)
-        .toList();
+    final available =
+        allNodes.where((n) => isEdit ? n.id != initial.id : true).toList();
 
     final saved = await showDialog<bool>(
       context: context,
@@ -171,9 +168,8 @@ class DistributionConfigSectionState
                           ),
                         ),
                       ],
-                      onChanged: isEdit
-                          ? null
-                          : (v) => setLocal(() => parentId = v),
+                      onChanged:
+                          isEdit ? null : (v) => setLocal(() => parentId = v),
                     ),
                     const SizedBox(height: 10),
                     _InputField(label: 'Nama *', controller: nameCtrl),
@@ -181,8 +177,8 @@ class DistributionConfigSectionState
                     _InputField(
                       label: 'Persentase (0–100) *',
                       controller: pctCtrl,
-                      keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
                     ),
                     const SizedBox(height: 10),
                     _InputField(
@@ -220,8 +216,8 @@ class DistributionConfigSectionState
 
                     try {
                       if (isEdit) {
-                        await ApiService().updateZakatDistribution(
-                            initial.id, payload);
+                        await ApiService()
+                            .updateZakatDistribution(initial.id, payload);
                       } else {
                         await ApiService().createZakatDistribution(payload);
                       }
@@ -450,8 +446,8 @@ class _DistributionNodeTile extends StatelessWidget {
                   ),
                 Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -557,9 +553,21 @@ class _ActionButtons extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _IconBtn(icon: Icons.add_circle_outline, color: const Color(0xFF059669), onTap: onAddChild, tooltip: 'Tambah child'),
-        _IconBtn(icon: Icons.edit_outlined, color: const Color(0xFF0EA5E9), onTap: onEdit, tooltip: 'Edit'),
-        _IconBtn(icon: Icons.delete_outline, color: const Color(0xFFDC2626), onTap: onDelete, tooltip: 'Hapus'),
+        _IconBtn(
+            icon: Icons.add_circle_outline,
+            color: const Color(0xFF059669),
+            onTap: onAddChild,
+            tooltip: 'Tambah child'),
+        _IconBtn(
+            icon: Icons.edit_outlined,
+            color: const Color(0xFF0EA5E9),
+            onTap: onEdit,
+            tooltip: 'Edit'),
+        _IconBtn(
+            icon: Icons.delete_outline,
+            color: const Color(0xFFDC2626),
+            onTap: onDelete,
+            tooltip: 'Hapus'),
       ],
     );
   }

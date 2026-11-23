@@ -34,9 +34,7 @@ class _ZakatShellScreenState extends State<ZakatShellScreen> {
     // Fetch years first, then muzakki
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final provider = context.read<ZakatProvider>();
-      if (provider.years.isEmpty) {
-        await provider.fetchYears();
-      }
+      await provider.ensureYears();
       if (provider.muzakkiList.isEmpty && !provider.isLoading) {
         await provider.fetchMuzakki();
       }
@@ -63,112 +61,119 @@ class _ZakatShellScreenState extends State<ZakatShellScreen> {
             if (!didPop) context.go('/dashboard');
           },
           child: Scaffold(
-          backgroundColor: const Color(0xFFF4F7F6),
-          appBar: AppBar(
-            backgroundColor: Colors.white,
-            elevation: 0,
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back, color: Color(0xFF1A1A1A)),
-              onPressed: () => context.go('/dashboard'),
-              tooltip: 'Kembali',
-            ),
-            title: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _tabTitles[_currentIndex],
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1A1A1A),
-                    fontSize: 17,
+            backgroundColor: const Color(0xFFF4F7F6),
+            appBar: AppBar(
+              backgroundColor: const Color(0xFF064E3B),
+              elevation: 0,
+              leading: IconButton(
+                icon: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(8),
                   ),
+                  child: const Icon(Icons.arrow_back_rounded,
+                      color: Colors.white, size: 18),
                 ),
-                Text(
-                  yearLabel,
-                  style: const TextStyle(
-                    color: Color(0xFF64748B),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w400,
+                onPressed: () => context.go('/dashboard'),
+                tooltip: 'Kembali',
+              ),
+              title: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _tabTitles[_currentIndex],
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      fontSize: 17,
+                    ),
                   ),
+                  Text(
+                    yearLabel,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.65),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                // Year selector button
+                _YearSelector(
+                  years: provider.years,
+                  selectedYear: provider.selectedYear,
+                  isLoading: provider.isLoadingYears,
+                  onYearSelected: (year) => provider.selectYear(year),
+                ),
+                const SizedBox(width: 4),
+              ],
+            ),
+            body: IndexedStack(
+              index: _currentIndex,
+              children: const [
+                ZakatBerandaBody(),
+                MuzakkiListBody(),
+                MustahiqBody(),
+                LaporanBody(),
+                ConfigurationBody(),
+              ],
+            ),
+            floatingActionButton: _currentIndex == 1
+                ? FloatingActionButton.extended(
+                    onPressed: () => context.push('/zakat-fitrah/add'),
+                    backgroundColor: _green,
+                    foregroundColor: Colors.white,
+                    icon: const Icon(Icons.person_add_alt_1_outlined),
+                    label: const Text(
+                      'Tambah',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    elevation: 4,
+                  )
+                : null,
+            bottomNavigationBar: BottomNavigationBar(
+              currentIndex: _currentIndex,
+              onTap: (index) => setState(() => _currentIndex = index),
+              selectedItemColor: _green,
+              unselectedItemColor: const Color(0xFF94A3B8),
+              backgroundColor: Colors.white,
+              type: BottomNavigationBarType.fixed,
+              selectedLabelStyle: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 11,
+              ),
+              unselectedLabelStyle: const TextStyle(fontSize: 11),
+              elevation: 12,
+              items: const [
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.home_outlined),
+                  activeIcon: Icon(Icons.home),
+                  label: 'Beranda',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.people_outline),
+                  activeIcon: Icon(Icons.people),
+                  label: 'Muzakki',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.diversity_3_outlined),
+                  activeIcon: Icon(Icons.diversity_3),
+                  label: 'Mustahiq',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.bar_chart_outlined),
+                  activeIcon: Icon(Icons.bar_chart),
+                  label: 'Laporan',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.settings_outlined),
+                  activeIcon: Icon(Icons.settings),
+                  label: 'Config',
                 ),
               ],
             ),
-            actions: [
-              // Year selector button
-              _YearSelector(
-                years: provider.years,
-                selectedYear: provider.selectedYear,
-                isLoading: provider.isLoadingYears,
-                onYearSelected: (year) => provider.selectYear(year),
-              ),
-              const SizedBox(width: 4),
-            ],
-          ),
-          body: IndexedStack(
-            index: _currentIndex,
-            children: const [
-              ZakatBerandaBody(),
-              MuzakkiListBody(),
-              MustahiqBody(),
-              LaporanBody(),
-              ConfigurationBody(),
-            ],
-          ),
-          floatingActionButton: _currentIndex == 1
-              ? FloatingActionButton.extended(
-                  onPressed: () => context.go('/zakat-fitrah/add'),
-                  backgroundColor: _green,
-                  foregroundColor: Colors.white,
-                  icon: const Icon(Icons.person_add_alt_1_outlined),
-                  label: const Text(
-                    'Tambah',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  elevation: 4,
-                )
-              : null,
-          bottomNavigationBar: BottomNavigationBar(
-            currentIndex: _currentIndex,
-            onTap: (index) => setState(() => _currentIndex = index),
-            selectedItemColor: _green,
-            unselectedItemColor: const Color(0xFF94A3B8),
-            backgroundColor: Colors.white,
-            type: BottomNavigationBarType.fixed,
-            selectedLabelStyle: const TextStyle(
-              fontWeight: FontWeight.w600,
-              fontSize: 11,
-            ),
-            unselectedLabelStyle: const TextStyle(fontSize: 11),
-            elevation: 12,
-            items: const [
-              BottomNavigationBarItem(
-                icon: Icon(Icons.home_outlined),
-                activeIcon: Icon(Icons.home),
-                label: 'Beranda',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.people_outline),
-                activeIcon: Icon(Icons.people),
-                label: 'Muzakki',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.diversity_3_outlined),
-                activeIcon: Icon(Icons.diversity_3),
-                label: 'Mustahiq',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.bar_chart_outlined),
-                activeIcon: Icon(Icons.bar_chart),
-                label: 'Laporan',
-              ),
-              
-              BottomNavigationBarItem(
-                icon: Icon(Icons.settings_outlined),
-                activeIcon: Icon(Icons.settings),
-                label: 'Config',
-              ),
-            ],
-          ),
           ),
         );
       },

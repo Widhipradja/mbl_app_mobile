@@ -6,7 +6,8 @@ class ConfigService {
       'https://widhipradja.github.io/mblapp-config/config.json';
   static String? _apiBaseUrl;
 
-  static String get apiBaseUrl => _apiBaseUrl ?? 'http://192.168.0.13:3000';
+  static String get apiBaseUrl =>
+      _apiBaseUrl ?? 'https://baraka-api.sangkarahub.app';
 
   static Future<void> loadRemoteConfig() async {
     try {
@@ -18,8 +19,8 @@ class ConfigService {
 
       if (response.statusCode == 200 && response.data != null) {
         final config = response.data;
-        if (config['mblapi_url'] != null) {
-          _apiBaseUrl = config['mblapi_url'];
+        if (config['barakaapi_url'] != null) {
+          _apiBaseUrl = config['barakaapi_url'];
           // debugPrint('✅ Remote config loaded: $_apiBaseUrl');
         }
       }
