@@ -9,6 +9,7 @@ import '../../models/user.dart';
 import '../profile/change_password_screen.dart';
 import '../profile/edit_profile_screen.dart';
 import '../profile/about_screen.dart';
+import '../../services/update_service.dart';
 import 'user_avatar.dart';
 import 'hub_cards.dart';
 import 'launcher_models.dart';
@@ -289,7 +290,7 @@ class LauncherNotificationsTab extends StatelessWidget {
 
 // ── Profile ─────────────────────────────────────────────────────────────────
 
-class LauncherProfileTab extends StatelessWidget {
+class LauncherProfileTab extends StatefulWidget {
   const LauncherProfileTab({
     super.key,
     required this.user,
@@ -300,11 +301,271 @@ class LauncherProfileTab extends StatelessWidget {
   final VoidCallback onLogout;
 
   @override
-  Widget build(BuildContext context) {
-    final name = (user?.name ?? '').trim().isEmpty ? 'User' : user!.name.trim();
+  State<LauncherProfileTab> createState() => _LauncherProfileTabState();
+}
+
+class _LauncherProfileTabState extends State<LauncherProfileTab> {
+  /// Installed version and whether a newer build is published; read once
+  /// per visit of the tab, quietly.
+  late final Future<UpdateCheck> _update = UpdateService().check();
+
+  void _open(Widget screen) => Navigator.of(context)
+      .push(MaterialPageRoute<void>(builder: (_) => screen));
+
+  Future<void> _confirmLogout() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Keluar dari akun?'),
+        content: const Text(
+            'Anda perlu masuk lagi untuk membuka data Anda di perangkat ini.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Batal')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: FilledButton.styleFrom(backgroundColor: Lx.danger),
+              child: const Text('Keluar')),
+        ],
+      ),
+    );
+    if (ok == true) widget.onLogout();
+  }
+
+  // ── Identity ─────────────────────────────────────────────────────────────
+
+  Widget _hero(User? user, bool editable) {
+    final name =
+        (user?.name ?? '').trim().isEmpty ? 'Pengguna' : user!.name.trim();
     final email = user?.email ?? '';
     final group = user?.groupName ?? '';
     final roles = user?.roleNames ?? const <String>[];
+    Widget chip(String text, {IconData? icon}) => Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.18),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (icon != null) ...[
+                Icon(icon, size: 13, color: Colors.white),
+                const SizedBox(width: 4),
+              ],
+              Text(text,
+                  style: Lx.metadata.copyWith(
+                      color: Colors.white, fontWeight: FontWeight.w600)),
+            ],
+          ),
+        );
+
+    final avatar = Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(3),
+          decoration:
+              const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+          child: UserAvatar(size: 76, imageUrl: user?.avatar),
+        ),
+        if (editable)
+          Positioned(
+            right: -2,
+            bottom: -2,
+            child: Container(
+              padding: const EdgeInsets.all(5),
+              decoration: BoxDecoration(
+                color: Lx.primary,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 2),
+              ),
+              child:
+                  const Icon(Icons.edit_rounded, size: 13, color: Colors.white),
+            ),
+          ),
+      ],
+    );
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(Lx.s20, Lx.s24, Lx.s20, Lx.s20),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(Lx.rSection),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Lx.bannerStart, Lx.primary],
+        ),
+        boxShadow: Lx.shadowSoft,
+      ),
+      child: Column(
+        children: [
+          Semantics(
+            button: editable,
+            label: editable ? 'Ubah profil dan foto' : null,
+            child: GestureDetector(
+              onTap: editable ? () => _open(const EditProfileScreen()) : null,
+              child: avatar,
+            ),
+          ),
+          const SizedBox(height: Lx.s12),
+          Text(name,
+              textAlign: TextAlign.center,
+              style: Lx.userName.copyWith(color: Colors.white, fontSize: 21)),
+          if (email.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(email,
+                  textAlign: TextAlign.center,
+                  style: Lx.metadata.copyWith(color: Colors.white70)),
+            ),
+          if (group.isNotEmpty || roles.isNotEmpty) ...[
+            const SizedBox(height: Lx.s12),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                if (group.isNotEmpty) chip(group, icon: Icons.groups_rounded),
+                for (final r in roles) chip(r, icon: Icons.verified_user_outlined),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _infoRow(IconData icon, String label, String value) {
+    final empty = value.trim().isEmpty;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: Lx.textMuted),
+          const SizedBox(width: Lx.s12),
+          Text(label, style: Lx.body),
+          const SizedBox(width: Lx.s12),
+          Expanded(
+            child: Text(
+              empty ? 'Belum diisi' : value,
+              textAlign: TextAlign.end,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Lx.body.copyWith(
+                  color: empty ? Lx.textMuted : Lx.text,
+                  fontWeight: empty ? FontWeight.w400 : FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _card({String? title, required List<Widget> children}) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(Lx.s16, Lx.s12, Lx.s16, Lx.s4),
+          decoration: Lx.card(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (title != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4, bottom: 4),
+                  child: Text(title.toUpperCase(),
+                      style: Lx.metadata.copyWith(
+                          color: Lx.textSecondary,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.8)),
+                ),
+              for (var i = 0; i < children.length; i++) ...[
+                if (i > 0) const Divider(height: 1, color: Lx.border),
+                children[i],
+              ],
+            ],
+          ),
+        ),
+      );
+
+  /// One menu entry: tinted icon, title, one line of what it does.
+  Widget _menu(IconData icon, Color color, Color tint, String title,
+          String subtitle, VoidCallback onTap,
+          {Widget? badge}) =>
+      InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(Lx.rButton),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: Lx.s12),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                    color: tint, borderRadius: BorderRadius.circular(12)),
+                child: Icon(icon, size: 20, color: color),
+              ),
+              const SizedBox(width: Lx.s12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: Lx.cardHeading.copyWith(fontSize: 14)),
+                    Text(subtitle, style: Lx.metadata),
+                  ],
+                ),
+              ),
+              if (badge != null) ...[badge, const SizedBox(width: 4)],
+              const Icon(Icons.chevron_right_rounded,
+                  color: Lx.textSecondary),
+            ],
+          ),
+        ),
+      );
+
+  Widget _aboutEntry() => FutureBuilder<UpdateCheck>(
+        future: _update,
+        builder: (_, snap) {
+          final c = snap.data;
+          final subtitle = c == null
+              ? 'Versi dan pembaruan'
+              : c.available
+                  ? 'Versi ${c.latest!.versionName} tersedia'
+                  : 'Versi ${c.installedName}';
+          return _menu(
+            Icons.info_outline_rounded,
+            const Color(0xFF0D9488),
+            const Color(0xFFCCFBF1),
+            'Tentang Aplikasi',
+            subtitle,
+            () => _open(const AboutScreen()),
+            badge: c != null && c.available
+                ? Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Lx.danger,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text('Baru',
+                        style: Lx.metadata.copyWith(
+                            fontSize: 10,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700)),
+                  )
+                : null,
+          );
+        },
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final user = widget.user;
+    final editable =
+        context.watch<HomeSummaryProvider>().isModuleVisible('profile');
 
     return ListView(
       padding: EdgeInsets.zero,
@@ -312,110 +573,41 @@ class LauncherProfileTab extends StatelessWidget {
         const _TabHeader('Profil'),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Container(
-            padding: const EdgeInsets.all(20),
-            decoration: Lx.card(),
-            child: Column(
-              children: [
-                UserAvatar(size: 72, imageUrl: user?.avatar),
-                const SizedBox(height: 12),
-                Text(
-                  name,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      color: Lx.text,
-                      fontSize: 19,
-                      fontWeight: FontWeight.w800),
-                ),
-                if (email.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Text(email,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                            color: Lx.textSecondary, fontSize: 13)),
-                  ),
-                if (group.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Text(group,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                            color: Lx.primary,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600)),
-                  ),
-                const SizedBox(height: 14),
-                if (roles.isEmpty)
-                  const Text('Belum ada role',
-                      style: TextStyle(color: Lx.textSecondary, fontSize: 13))
-                else
-                  Wrap(
-                    alignment: WrapAlignment.center,
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      for (final r in roles)
-                        HubBadge(r, bg: Lx.primaryLight, fg: Lx.primaryDark)
-                    ],
-                  ),
-              ],
-            ),
-          ),
+          child: _hero(user, editable),
         ),
-        if (context.watch<HomeSummaryProvider>().isModuleVisible('profile'))
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-            child: Container(
-              decoration: Lx.card(),
-              child: Column(
-                children: [
-                  ListTile(
-                    leading: const Icon(Icons.edit_outlined, color: Lx.primary),
-                    title: const Text('Ubah Profil'),
-                    trailing: const Icon(Icons.chevron_right_rounded,
-                        color: Lx.textSecondary),
-                    onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                        builder: (_) => const EditProfileScreen())),
-                  ),
-                  const Divider(height: 1, color: Lx.border),
-                  ListTile(
-                    leading: const Icon(Icons.lock_outline_rounded,
-                        color: Lx.primary),
-                    title: const Text('Ubah Password'),
-                    trailing: const Icon(Icons.chevron_right_rounded,
-                        color: Lx.textSecondary),
-                    onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                        builder: (_) => const ChangePasswordScreen())),
-                  ),
-                ],
-              ),
-            ),
-          ),
+        _card(title: 'Info akun', children: [
+          _infoRow(Icons.badge_outlined, 'User ID', user?.userId ?? ''),
+          _infoRow(Icons.mail_outline_rounded, 'Email', user?.email ?? ''),
+          _infoRow(Icons.phone_outlined, 'No. HP', user?.phone ?? ''),
+          _infoRow(Icons.groups_outlined, 'Kelompok', user?.groupName ?? ''),
+        ]),
+        if (editable)
+          _card(title: 'Akun', children: [
+            _menu(
+                Icons.person_outline_rounded,
+                Lx.primary,
+                Lx.primaryLight,
+                'Ubah Profil',
+                'Nama, email, no. HP, dan foto',
+                () => _open(const EditProfileScreen())),
+            _menu(
+                Icons.lock_outline_rounded,
+                const Color(0xFF7C3AED),
+                Lx.secondaryLight,
+                'Ubah Password',
+                'Ganti kata sandi untuk masuk',
+                () => _open(const ChangePasswordScreen())),
+          ]),
+        _card(title: 'Aplikasi', children: [_aboutEntry()]),
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-          child: Container(
-            decoration: Lx.card(),
-            child: ListTile(
-              leading: const Icon(Icons.info_outline_rounded, color: Lx.primary),
-              title: const Text('Tentang Aplikasi'),
-              subtitle: const Text('Versi dan pembaruan'),
-              trailing: const Icon(Icons.chevron_right_rounded,
-                  color: Lx.textSecondary),
-              onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const AboutScreen())),
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
           child: OutlinedButton.icon(
-            onPressed: onLogout,
+            onPressed: _confirmLogout,
             icon: const Icon(Icons.logout_rounded, size: 20),
             label: const Text('Keluar'),
             style: OutlinedButton.styleFrom(
               foregroundColor: Lx.danger,
-              side: const BorderSide(color: Lx.border),
+              side: BorderSide(color: Lx.danger.withOpacity(0.35)),
               backgroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(

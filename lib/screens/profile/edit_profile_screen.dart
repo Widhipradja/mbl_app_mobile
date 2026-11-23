@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../config/launcher_tokens.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
+import '../../widgets/app_ui.dart' show RetryState;
 import 'profile_widgets.dart';
 
 /// Edit own profile: name, email, phone and gender. The login id (`user_id`)
@@ -157,24 +158,113 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           child: _loading
               ? const Center(child: CircularProgressIndicator())
               : _loadError != null
-                  ? Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(Lx.s24),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(_loadError!,
-                                textAlign: TextAlign.center, style: Lx.body),
-                            TextButton(
-                                onPressed: _load,
-                                child: const Text('Coba lagi')),
-                          ],
-                        ),
-                      ),
-                    )
+                  ? Center(child: RetryState(_loadError!, onRetry: _load))
                   : _body(),
         ),
+        bottomNavigationBar:
+            _loading || _loadError != null ? null : _bottomBar(),
       ),
+    );
+  }
+
+  /// Error and the save button, kept above the keyboard.
+  Widget _bottomBar() {
+    final readOnly = _sex == null;
+    final enabled = !_saving && !_photoBusy && !readOnly;
+    return Material(
+      color: Lx.surface,
+      child: DecoratedBox(
+        decoration: const BoxDecoration(
+            border: Border(top: BorderSide(color: Lx.border))),
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.all(Lx.s16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_error != null) ProfileErrorBox(_error!),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: FilledButton(
+                    onPressed: enabled ? _save : null,
+                    child: _saving
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white))
+                        : const Text('Simpan Perubahan'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _section(String title, IconData icon, List<Widget> children) =>
+      Container(
+        margin: const EdgeInsets.only(bottom: Lx.s12),
+        padding: const EdgeInsets.all(Lx.s16),
+        decoration: Lx.card(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Icon(icon, size: 18, color: Lx.primary),
+                const SizedBox(width: Lx.s8),
+                Text(title, style: Lx.cardHeading),
+              ],
+            ),
+            const SizedBox(height: Lx.s12),
+            ...children,
+          ],
+        ),
+      );
+
+  /// Laki-laki | Perempuan as two choices instead of a dropdown.
+  Widget _sexChoice() {
+    Widget option(String value, String label, IconData icon) {
+      final on = _sex == value;
+      return Expanded(
+        child: InkWell(
+          onTap: _saving ? null : () => setState(() => _sex = value),
+          borderRadius: BorderRadius.circular(Lx.rButton),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            height: 48,
+            decoration: BoxDecoration(
+              color: on ? Lx.primaryLight : Lx.surface,
+              borderRadius: BorderRadius.circular(Lx.rButton),
+              border: Border.all(
+                  color: on ? Lx.primary : Lx.border, width: on ? 2 : 1),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 18, color: on ? Lx.primary : Lx.textMuted),
+                const SizedBox(width: 6),
+                Text(label,
+                    style: Lx.button
+                        .copyWith(color: on ? Lx.primary : Lx.textSecondary)),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        option('M', 'Laki-laki', Icons.male_rounded),
+        const SizedBox(width: Lx.s8),
+        option('F', 'Perempuan', Icons.female_rounded),
+      ],
     );
   }
 
@@ -196,129 +286,130 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           ),
           const SizedBox(height: Lx.s4),
           if (!readOnly)
-            Center(
-                child: Text('Ketuk untuk ganti foto', style: Lx.metadata)),
+            Center(child: Text('Ketuk untuk ganti foto', style: Lx.metadata)),
           const SizedBox(height: Lx.s16),
           if (readOnly)
             Container(
               margin: const EdgeInsets.only(bottom: Lx.s12),
               padding: const EdgeInsets.all(Lx.s12),
               decoration: BoxDecoration(
-                color: Lx.primaryLight,
+                color: const Color(0xFFFFF7ED),
                 borderRadius: BorderRadius.circular(Lx.rButton),
+                border: Border.all(color: const Color(0xFFFED7AA)),
               ),
-              child: Text(
-                  'Akun Anda belum terhubung ke data anggota, jadi profil '
-                  'belum bisa diubah. Hubungi admin.',
-                  style: Lx.metadata.copyWith(color: Lx.primaryDark)),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.lock_outline_rounded,
+                      size: 18, color: Color(0xFFEA580C)),
+                  const SizedBox(width: Lx.s8),
+                  Expanded(
+                    child: Text(
+                        'Akun Anda belum terhubung ke data anggota, jadi '
+                        'profil belum bisa diubah. Hubungi admin.',
+                        style: Lx.metadata.copyWith(
+                            color: const Color(0xFF9A3412), height: 1.4)),
+                  ),
+                ],
+              ),
             ),
-          TextFormField(
-            key: ValueKey('uid$_userId'),
-            initialValue: _userId,
-            enabled: false,
-            decoration: profileDecoration('User ID (tidak bisa diubah)'),
-          ),
-          const SizedBox(height: Lx.s12),
-          TextFormField(
-            controller: _first,
-            enabled: enabled,
-            textCapitalization: TextCapitalization.words,
-            decoration: profileDecoration('Nama depan'),
-            validator: (v) {
-              final t = (v ?? '').trim();
-              if (t.isEmpty) return 'Nama depan wajib diisi.';
-              return t.length > 100 ? 'Maksimal 100 karakter.' : null;
-            },
-          ),
-          const SizedBox(height: Lx.s12),
-          TextFormField(
-            controller: _last,
-            enabled: enabled,
-            textCapitalization: TextCapitalization.words,
-            decoration: profileDecoration('Nama belakang'),
-            validator: (v) =>
-                (v ?? '').trim().length > 100 ? 'Maksimal 100 karakter.' : null,
-          ),
-          const SizedBox(height: Lx.s12),
-          TextFormField(
-            controller: _email,
-            enabled: enabled,
-            keyboardType: TextInputType.emailAddress,
-            onChanged: (_) => setState(() {}),
-            decoration: profileDecoration('Email'),
-            validator: (v) {
-              final t = (v ?? '').trim();
-              if (t.isEmpty) return 'Email wajib diisi.';
-              if (t.length > 254) return 'Email terlalu panjang.';
-              return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(t)
-                  ? null
-                  : 'Format email tidak valid.';
-            },
-          ),
-          if (_emailChanged) ...[
+          _section('Data diri', Icons.person_outline_rounded, [
+            TextFormField(
+              controller: _first,
+              enabled: enabled,
+              textCapitalization: TextCapitalization.words,
+              decoration: profileDecoration('Nama depan'),
+              validator: (v) {
+                final t = (v ?? '').trim();
+                if (t.isEmpty) return 'Nama depan wajib diisi.';
+                return t.length > 100 ? 'Maksimal 100 karakter.' : null;
+              },
+            ),
             const SizedBox(height: Lx.s12),
             TextFormField(
-              controller: _password,
+              controller: _last,
               enabled: enabled,
-              obscureText: !_showPassword,
-              decoration: profileDecoration('Password saat ini',
-                  suffix: IconButton(
-                    icon: Icon(_showPassword
-                        ? Icons.visibility_off_outlined
-                        : Icons.visibility_outlined),
-                    onPressed: () =>
-                        setState(() => _showPassword = !_showPassword),
-                  )),
-              validator: (v) => _emailChanged && (v ?? '').isEmpty
-                  ? 'Isi password saat ini untuk mengubah email.'
+              textCapitalization: TextCapitalization.words,
+              decoration: profileDecoration('Nama belakang'),
+              validator: (v) => (v ?? '').trim().length > 100
+                  ? 'Maksimal 100 karakter.'
                   : null,
             ),
-            const SizedBox(height: Lx.s8),
-            Text('Mengubah email memerlukan password saat ini.',
-                style: Lx.metadata),
-          ],
-          const SizedBox(height: Lx.s12),
-          TextFormField(
-            controller: _phone,
-            enabled: enabled,
-            keyboardType: TextInputType.phone,
-            decoration: profileDecoration('No. HP'),
-            validator: (v) {
-              final t = (v ?? '').trim();
-              if (t.isEmpty) return null;
-              final digits = t.replaceAll(RegExp(r'[\s-]'), '');
-              return RegExp(r'^\+?[0-9]{8,16}$').hasMatch(digits)
-                  ? null
-                  : 'Nomor telepon harus 8-16 digit.';
-            },
-          ),
-          if (!readOnly) ...[
+            if (!readOnly) ...[
+              const SizedBox(height: Lx.s16),
+              Text('Jenis kelamin', style: Lx.metadata),
+              const SizedBox(height: 6),
+              _sexChoice(),
+            ],
+          ]),
+          _section('Kontak', Icons.contact_mail_outlined, [
+            TextFormField(
+              controller: _email,
+              enabled: enabled,
+              keyboardType: TextInputType.emailAddress,
+              onChanged: (_) => setState(() {}),
+              decoration: profileDecoration('Email'),
+              validator: (v) {
+                final t = (v ?? '').trim();
+                if (t.isEmpty) return 'Email wajib diisi.';
+                if (t.length > 254) return 'Email terlalu panjang.';
+                return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(t)
+                    ? null
+                    : 'Format email tidak valid.';
+              },
+            ),
+            if (_emailChanged) ...[
+              const SizedBox(height: Lx.s12),
+              TextFormField(
+                controller: _password,
+                enabled: enabled,
+                obscureText: !_showPassword,
+                decoration: profileDecoration('Password saat ini',
+                    suffix: IconButton(
+                      icon: Icon(_showPassword
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined),
+                      onPressed: () =>
+                          setState(() => _showPassword = !_showPassword),
+                    )),
+                validator: (v) => _emailChanged && (v ?? '').isEmpty
+                    ? 'Isi password saat ini untuk mengubah email.'
+                    : null,
+              ),
+              const SizedBox(height: Lx.s8),
+              Text('Mengubah email memerlukan password saat ini.',
+                  style: Lx.metadata),
+            ],
             const SizedBox(height: Lx.s12),
-            DropdownButtonFormField<String>(
-              value: _sex,
-              decoration: profileDecoration('Jenis kelamin'),
-              items: const [
-                DropdownMenuItem(value: 'M', child: Text('Laki-laki')),
-                DropdownMenuItem(value: 'F', child: Text('Perempuan')),
+            TextFormField(
+              controller: _phone,
+              enabled: enabled,
+              keyboardType: TextInputType.phone,
+              decoration: profileDecoration('No. HP'),
+              validator: (v) {
+                final t = (v ?? '').trim();
+                if (t.isEmpty) return null;
+                final digits = t.replaceAll(RegExp(r'[\s-]'), '');
+                return RegExp(r'^\+?[0-9]{8,16}$').hasMatch(digits)
+                    ? null
+                    : 'Nomor telepon harus 8-16 digit.';
+              },
+            ),
+          ]),
+          _section('Akun', Icons.badge_outlined, [
+            Row(
+              children: [
+                Text('User ID', style: Lx.body),
+                const Spacer(),
+                Text(_userId.isEmpty ? '—' : _userId,
+                    style: Lx.body
+                        .copyWith(color: Lx.text, fontWeight: FontWeight.w600)),
               ],
-              onChanged: _saving ? null : (v) => setState(() => _sex = v),
             ),
-          ],
-          const SizedBox(height: Lx.s24),
-          if (_error != null) ProfileErrorBox(_error!),
-          SizedBox(
-            height: 50,
-            child: FilledButton(
-              onPressed: enabled ? _save : null,
-              child: _saving
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
-                  : const Text('Simpan'),
-            ),
-          ),
+            const SizedBox(height: 4),
+            Text('Dipakai untuk masuk dan tidak bisa diubah.',
+                style: Lx.metadata),
+          ]),
         ],
       ),
     );
