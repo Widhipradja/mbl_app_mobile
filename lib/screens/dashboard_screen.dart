@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../config/launcher_tokens.dart';
+import '../widgets/update_prompt.dart';
 import '../providers/auth_provider.dart';
 import '../providers/configuration_provider.dart';
 import '../providers/home_summary_provider.dart';
@@ -41,6 +42,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       context.read<AuthProvider>().refreshAvatar();
+      promptForUpdate(context);
       final p = context.read<HomeSummaryProvider>();
       // Also refreshes when coming back from a module after a while.
       if (p.isStale()) p.load();

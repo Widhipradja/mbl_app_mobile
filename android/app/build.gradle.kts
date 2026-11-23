@@ -15,7 +15,7 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.desalabs.mbl_app"
+    namespace = "com.desalabs.baraka_funds"
     compileSdk = 36
     ndkVersion = "27.0.12077973"
 
@@ -29,8 +29,11 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.desalabs.mbl_app"
+        // The installed identity. It must match the package published on
+        // apk.sangkarahub.app (the in-app update check finds its builds by
+        // it), and builds must be signed with the same keystore as the ones
+        // already installed. The code package (`namespace`) can differ.
+        applicationId = "com.baraka.app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 24
@@ -67,7 +70,7 @@ android {
         outputs.all {
             val output = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
             val versionName = flutter.versionName ?: "1.0.0"
-            output.outputFileName = "mbl-app-v${versionName}-${buildType.name}.apk"
+            output.outputFileName = "baraka-v${versionName}-${buildType.name}.apk"
         }
     }
 }

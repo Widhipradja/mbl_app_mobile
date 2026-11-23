@@ -8,6 +8,7 @@ import '../../providers/home_summary_provider.dart';
 import '../../models/user.dart';
 import '../profile/change_password_screen.dart';
 import '../profile/edit_profile_screen.dart';
+import '../profile/about_screen.dart';
 import 'user_avatar.dart';
 import 'hub_cards.dart';
 import 'launcher_models.dart';
@@ -391,6 +392,21 @@ class LauncherProfileTab extends StatelessWidget {
               ),
             ),
           ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+          child: Container(
+            decoration: Lx.card(),
+            child: ListTile(
+              leading: const Icon(Icons.info_outline_rounded, color: Lx.primary),
+              title: const Text('Tentang Aplikasi'),
+              subtitle: const Text('Versi dan pembaruan'),
+              trailing: const Icon(Icons.chevron_right_rounded,
+                  color: Lx.textSecondary),
+              onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const AboutScreen())),
+            ),
+          ),
+        ),
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
           child: OutlinedButton.icon(
