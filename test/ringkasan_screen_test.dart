@@ -12,12 +12,40 @@ Future<void> _open(
   WidgetTester tester,
   Future<RingkasanData> Function(String month) loader, {
   Size size = const Size(390, 2600),
+  Map<String, bool> modules = _allOpen,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
-  await tester.pumpWidget(MaterialApp(home: RingkasanScreen(loader: loader)));
+  await tester.pumpWidget(
+      MaterialApp(home: RingkasanScreen(loader: loader, modules: modules)));
   await tester.pumpAndSettle();
+}
+
+const _allOpen = {
+  'dashboard': true,
+  'dashboard_finance': true,
+  'dashboard_shodaqoh': true,
+  'jimpitan': true,
+};
+
+/// Opens a tab by its label.
+Future<void> _goTo(WidgetTester tester, String label) async {
+  final tab = find.widgetWithText(Tab, label);
+  await tester.ensureVisible(tab); // the bar scrolls on a narrow phone
+  await tester.pumpAndSettle();
+  await tester.tap(tab);
+  await tester.pumpAndSettle();
+}
+
+/// [_goTo] while a spinner runs, so it cannot wait for things to settle.
+Future<void> _goToLoading(WidgetTester tester, String label) async {
+  final tab = find.widgetWithText(Tab, label);
+  await tester.ensureVisible(tab);
+  await tester.pump(const Duration(milliseconds: 400));
+  await tester.tap(tab);
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 400));
 }
 
 Future<RingkasanData> _ok(String month, [Map<String, dynamic>? parts]) async =>
@@ -29,18 +57,61 @@ Future<RingkasanData> _ok(String month, [Map<String, dynamic>? parts]) async =>
     ));
 
 void main() {
-  testWidgets('shows the four sections with their numbers', (tester) async {
+  testWidgets('shows the four tabs, each with its numbers', (tester) async {
     await _open(tester, _ok);
 
     expect(tester.takeException(), isNull);
+    for (final t in ['Keuangan', 'Shodaqoh', 'Keanggotaan', 'Jimpitan']) {
+      expect(find.widgetWithText(Tab, t), findsOneWidget);
+    }
     expect(find.text('Saldo Kas'), findsOneWidget);
     expect(find.text('Rp 22.863.820'), findsOneWidget);
-    expect(find.text('Keanggotaan'), findsOneWidget);
-    expect(find.text('120'), findsOneWidget); // all members
+    expect(find.text('Dana per kategori'), findsOneWidget);
+
+    await _goTo(tester, 'Shodaqoh');
     expect(find.text('Shodaqoh Bulanan'), findsOneWidget);
     expect(find.text('45 dari 120 anggota'), findsOneWidget);
-    expect(find.text('Jimpitan'), findsOneWidget);
+
+    await _goTo(tester, 'Keanggotaan');
+    expect(find.text('120'), findsOneWidget); // all members
+
+    await _goTo(tester, 'Jimpitan');
     expect(find.text('Rp 1.250.000'), findsOneWidget);
+  });
+
+  testWidgets('each tab follows its server module', (tester) async {
+    expect(ringkasanTabsFor((m) => true), RingkasanTab.values);
+    expect(ringkasanTabsFor((m) => m == 'jimpitan'),
+        [RingkasanTab.keanggotaan, RingkasanTab.jimpitan]);
+    expect(ringkasanTabsFor((m) => true, closed: {RingkasanTab.keuangan}),
+        isNot(contains(RingkasanTab.keuangan)));
+
+    // dashboard_finance closed (the default until a tenant sets it).
+    await _open(tester, _ok,
+        modules: {..._allOpen, 'dashboard_finance': false});
+    expect(find.widgetWithText(Tab, 'Keuangan'), findsNothing);
+    expect(find.widgetWithText(Tab, 'Shodaqoh'), findsOneWidget);
+    expect(find.widgetWithText(Tab, 'Keanggotaan'), findsOneWidget);
+    expect(find.widgetWithText(Tab, 'Jimpitan'), findsOneWidget);
+  });
+
+  testWidgets('a tab the server refuses in the answer disappears',
+      (tester) async {
+    await _open(
+        tester,
+        (m) => _ok(m, {
+              'finance': {'error': 'forbidden'}
+            }));
+    expect(find.widgetWithText(Tab, 'Keuangan'), findsNothing);
+    expect(find.widgetWithText(Tab, 'Shodaqoh'), findsOneWidget);
+    expect(find.text('45 dari 120 anggota'), findsOneWidget); // first tab now
+  });
+
+  testWidgets('modules closed leave only the tabs without one', (tester) async {
+    await _open(tester, _ok, modules: const {'dashboard': true});
+    // Keanggotaan has no module of its own, so it stays.
+    expect(find.widgetWithText(Tab, 'Keanggotaan'), findsOneWidget);
+    expect(find.byType(Tab), findsOneWidget);
   });
 
   testWidgets('Saldo Kas says its income and expense are of this month',
@@ -60,8 +131,9 @@ void main() {
             }));
     expect(find.text('Saldo Kas'), findsNothing);
     expect(find.text('Dana per kategori'), findsNothing);
-    expect(find.text('Keanggotaan'), findsOneWidget);
     expect(find.textContaining('Tidak tersedia'), findsNothing);
+    await _goTo(tester, 'Keanggotaan');
+    expect(find.text('120'), findsOneWidget);
   });
 
   testWidgets('funds hidden for a role that may not see them, Saldo Kas stays',
@@ -120,9 +192,10 @@ void main() {
         (m) => _ok(m, {
               'members': {'error': 'not_configured'}
             }));
-    expect(find.text('Keanggotaan'), findsOneWidget);
-    expect(find.text('Data ini belum diatur di server.'), findsOneWidget);
     expect(find.text('Rp 22.863.820'), findsOneWidget);
+    await _goTo(tester, 'Keanggotaan');
+    expect(find.text('Data ini belum diatur di server.'), findsOneWidget);
+    await _goTo(tester, 'Jimpitan');
     expect(find.text('Rp 1.250.000'), findsOneWidget);
   });
 
@@ -152,6 +225,7 @@ void main() {
       asked.add(m);
       return _ok(m);
     });
+    await _goTo(tester, 'Shodaqoh');
     final now = DateTime.now();
     String key(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}';
     expect(asked, [key(DateTime(now.year, now.month))]);
@@ -186,6 +260,7 @@ void main() {
                 },
               },
             }));
+    await _goTo(tester, 'Jimpitan');
     expect(find.text('Entri 1'), findsOneWidget);
     expect(find.text('Entri 8'), findsNothing);
 
@@ -238,6 +313,7 @@ void main() {
                 },
               },
             }));
+    await _goTo(tester, 'Jimpitan');
     expect(find.textContaining('Belum ada jimpitan'), findsOneWidget);
   });
 
@@ -249,17 +325,20 @@ void main() {
       calls++;
       return calls == 1 ? _ok(m) : gate.future;
     });
+    await _goTo(tester, 'Jimpitan');
+    expect(find.text('Rp 1.250.000'), findsOneWidget);
     await tester.tap(find.byTooltip('Bulan sebelumnya'));
     await tester.pump();
 
-    expect(find.text('Saldo Kas'), findsOneWidget);
-    expect(find.text('Keanggotaan'), findsOneWidget);
-    expect(find.text('Jimpitan'), findsNothing); // waiting for the month
+    expect(find.text('Rp 1.250.000'), findsNothing); // waiting for the month
     expect(find.byType(CircularProgressIndicator), findsWidgets);
+    await _goToLoading(tester, 'Keuangan'); // today's figures stay
+    expect(find.text('Saldo Kas'), findsOneWidget);
+    await _goToLoading(tester, 'Jimpitan');
 
     gate.complete(await _ok('x'));
     await tester.pumpAndSettle();
-    expect(find.text('Jimpitan'), findsOneWidget);
+    expect(find.text('Rp 1.250.000'), findsOneWidget);
   });
 
   testWidgets('a month that fails keeps the rest and offers a retry',
@@ -274,17 +353,16 @@ void main() {
       }
       return _ok(m);
     });
+    await _goTo(tester, 'Jimpitan');
     await tester.tap(find.byTooltip('Bulan sebelumnya'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Saldo Kas'), findsOneWidget);
-    expect(find.text('Keanggotaan'), findsOneWidget);
-    expect(find.text('Jimpitan'), findsNothing);
+    expect(find.text('Rp 1.250.000'), findsNothing);
     expect(find.text('Coba lagi'), findsOneWidget);
 
     await tester.tap(find.text('Coba lagi'));
     await tester.pumpAndSettle();
-    expect(find.text('Jimpitan'), findsOneWidget);
+    expect(find.text('Rp 1.250.000'), findsOneWidget);
     expect(calls, 3);
   });
 }
