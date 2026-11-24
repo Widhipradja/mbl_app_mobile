@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:baraka_funds/screens/ringkasan/ringkasan_data.dart';
 import 'package:baraka_funds/screens/ringkasan/ringkasan_screen.dart';
 import 'package:dio/dio.dart';
@@ -44,8 +46,9 @@ void main() {
   testWidgets('Saldo Kas says its income and expense are of this month',
       (tester) async {
     await _open(tester, _ok);
-    expect(find.text('Pemasukan bulan ini'), findsOneWidget);
-    expect(find.text('Pengeluaran bulan ini'), findsOneWidget);
+    expect(find.text('Bulan ini'), findsOneWidget);
+    expect(find.text('Pemasukan'), findsOneWidget);
+    expect(find.text('Pengeluaran'), findsOneWidget);
   });
 
   testWidgets('a closed finance gate leaves the card out, quietly',
@@ -236,5 +239,52 @@ void main() {
               },
             }));
     expect(find.textContaining('Belum ada jimpitan'), findsOneWidget);
+  });
+
+  testWidgets('changing month keeps Saldo Kas while the month loads',
+      (tester) async {
+    final gate = Completer<RingkasanData>();
+    var calls = 0;
+    await _open(tester, (m) {
+      calls++;
+      return calls == 1 ? _ok(m) : gate.future;
+    });
+    await tester.tap(find.byTooltip('Bulan sebelumnya'));
+    await tester.pump();
+
+    expect(find.text('Saldo Kas'), findsOneWidget);
+    expect(find.text('Keanggotaan'), findsOneWidget);
+    expect(find.text('Jimpitan'), findsNothing); // waiting for the month
+    expect(find.byType(CircularProgressIndicator), findsWidgets);
+
+    gate.complete(await _ok('x'));
+    await tester.pumpAndSettle();
+    expect(find.text('Jimpitan'), findsOneWidget);
+  });
+
+  testWidgets('a month that fails keeps the rest and offers a retry',
+      (tester) async {
+    var calls = 0;
+    await _open(tester, (m) async {
+      calls++;
+      if (calls == 2) {
+        throw DioException(
+            requestOptions: RequestOptions(path: '/dashboard'),
+            type: DioExceptionType.connectionError);
+      }
+      return _ok(m);
+    });
+    await tester.tap(find.byTooltip('Bulan sebelumnya'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Saldo Kas'), findsOneWidget);
+    expect(find.text('Keanggotaan'), findsOneWidget);
+    expect(find.text('Jimpitan'), findsNothing);
+    expect(find.text('Coba lagi'), findsOneWidget);
+
+    await tester.tap(find.text('Coba lagi'));
+    await tester.pumpAndSettle();
+    expect(find.text('Jimpitan'), findsOneWidget);
+    expect(calls, 3);
   });
 }
