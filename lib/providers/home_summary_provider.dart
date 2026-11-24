@@ -56,7 +56,8 @@ class HomeSummaryProvider extends ChangeNotifier {
     if (name == 'finance' ||
         name == 'zakatfitrah' ||
         name == 'budget' ||
-        name == 'dashboard') {
+        name == 'dashboard' ||
+        name == 'dashboard_finance') {
       return false;
     }
     return !hiddenModules.contains(name);

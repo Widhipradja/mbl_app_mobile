@@ -1,7 +1,9 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../config/launcher_tokens.dart';
+import '../../providers/home_summary_provider.dart';
 import '../../widgets/app_ui.dart';
 import '../finance/finance_data.dart' show dateShort, rp;
 import '../savings/ledger_widgets.dart' show monthNames;
@@ -10,16 +12,21 @@ import 'ringkasan_data.dart';
 typedef RingkasanLoader = Future<RingkasanData> Function(String month);
 
 /// Ringkasan: the community's numbers on the phone, in the look of the other
-/// modules (a gradient balance card, then white section cards). Saldo Kas and
-/// Keanggotaan are as of today; the month stepper under them drives Shodaqoh
-/// Bulanan and Jimpitan only. Each card fails on its own (the server answers
-/// `{data}` or `{error}` per section); Saldo Kas is left out when the module
-/// gate for money is closed for this account.
+/// modules (a gradient balance card, then white section cards), split into
+/// four tabs (Keuangan, Shodaqoh, Keanggotaan, Jimpitan) so each can be given
+/// to its own modules ([ringkasanTabsFor]). Keuangan and Keanggotaan are as of
+/// today; Shodaqoh and Jimpitan carry a month stepper. Each card fails on its
+/// own (the server answers `{data}` or `{error}` per section); Saldo Kas is
+/// left out when the module gate for money is closed for this account.
 class RingkasanScreen extends StatefulWidget {
-  const RingkasanScreen({super.key, this.loader = loadRingkasan});
+  const RingkasanScreen({super.key, this.loader = loadRingkasan, this.modules});
 
   /// Fetches one month; replaced in tests.
   final RingkasanLoader loader;
+
+  /// The server's module map deciding which tabs show; read from the
+  /// bootstrap when null (replaced in tests).
+  final Map<String, bool>? modules;
 
   @override
   State<RingkasanScreen> createState() => _RingkasanScreenState();
@@ -99,61 +106,73 @@ class _RingkasanScreenState extends State<RingkasanScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final d = _data;
+    final given = widget.modules;
+    final provider =
+        given == null ? context.watch<HomeSummaryProvider>() : null;
+    final tabs = ringkasanTabsFor(
+      (m) => given != null ? given[m] == true : provider!.isModuleVisible(m),
+      closed: _data?.forbiddenTabs ?? const {},
+    );
     return Theme(
       data: Lx.theme,
-      child: Scaffold(
-        appBar: AppBar(title: const Text('Ringkasan')),
-        body: RefreshIndicator(
-          onRefresh: _load,
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(Lx.s16, 0, Lx.s16, Lx.s24),
-            children: [
-              _intro(),
-              if (d == null && _loading)
-                const Padding(
-                  padding: EdgeInsets.only(top: 80),
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else if (d == null)
-                RetryState(_error ?? 'Data belum bisa dimuat.', onRetry: _load)
-              else ...[
-                ..._finance(d.finance),
-                _members(d.members),
-                _monthHeader(),
-                ..._monthly(d),
-              ],
-            ],
-          ),
-        ),
+      child: tabs.isEmpty
+          ? Scaffold(
+              appBar: AppBar(title: const Text('Ringkasan')),
+              body: const EmptyState(
+                icon: Icons.lock_outline_rounded,
+                text: 'Ringkasan tidak tersedia untuk akun Anda.',
+              ),
+            )
+          : DefaultTabController(
+              key: ValueKey(tabs.join(',')),
+              length: tabs.length,
+              child: Scaffold(
+                appBar: AppBar(
+                  title: const Text('Ringkasan'),
+                  bottom: TabBar(
+                    isScrollable: true,
+                    tabAlignment: TabAlignment.start,
+                    tabs: [for (final t in tabs) Tab(text: t.label)],
+                  ),
+                ),
+                body: TabBarView(
+                  children: [for (final t in tabs) _tabBody(t)],
+                ),
+              ),
+            ),
+    );
+  }
+
+  Widget _tabBody(RingkasanTab tab) {
+    final d = _data;
+    final monthly =
+        tab == RingkasanTab.shodaqoh || tab == RingkasanTab.jimpitan;
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(Lx.s16, Lx.s12, Lx.s16, Lx.s24),
+        children: [
+          if (d == null && _loading)
+            const Padding(
+              padding: EdgeInsets.only(top: 80),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (d == null)
+            RetryState(_error ?? 'Data belum bisa dimuat.', onRetry: _load)
+          else if (monthly) ...[
+            _monthHeader(),
+            ..._monthly(d, tab),
+          ] else if (tab == RingkasanTab.keuangan)
+            ..._finance(d.finance)
+          else
+            _members(d.members),
+        ],
       ),
     );
   }
 
   // ── Shared pieces ────────────────────────────────────────────────────────
-
-  Widget _intro() => Padding(
-        padding: const EdgeInsets.only(top: Lx.s8, bottom: Lx.s12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Padding(
-              padding: EdgeInsets.only(top: 1),
-              child: Icon(Icons.groups_outlined,
-                  size: 15, color: Lx.textSecondary),
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                'Angka komunitas dalam satu layar. Saldo kas dan keanggotaan '
-                'per hari ini; shodaqoh dan jimpitan per bulan yang dipilih.',
-                style: Lx.metadata.copyWith(height: 1.4),
-              ),
-            ),
-          ],
-        ),
-      );
 
   Widget _sectionError(String? code) {
     final retry = code == 'timeout' || code == 'unavailable' || code == null;
@@ -592,22 +611,18 @@ class _RingkasanScreenState extends State<RingkasanScreen> {
 
   // ── Per month ────────────────────────────────────────────────────────────
 
-  /// Where the monthly part starts: what the stepper below drives.
+  /// The month stepper of the Shodaqoh and Jimpitan tabs.
   Widget _monthHeader() => Padding(
-        padding: const EdgeInsets.only(top: Lx.s8, bottom: Lx.s12),
+        padding: const EdgeInsets.only(bottom: Lx.s12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              padding: const EdgeInsets.only(left: Lx.s4, bottom: Lx.s8),
-              child: Text('Bulanan', style: Lx.sectionHeading),
-            ),
             MonthPill(month: _month, onChanged: _setMonth),
           ],
         ),
       );
 
-  List<Widget> _monthly(RingkasanData d) {
+  List<Widget> _monthly(RingkasanData d, RingkasanTab tab) {
     if (_monthError != null) {
       return [RetryState(_monthError!, onRetry: _load)];
     }
@@ -619,7 +634,10 @@ class _RingkasanScreenState extends State<RingkasanScreen> {
         ),
       ];
     }
-    return [_shodaqoh(d.shodaqoh), _jimpitan(d.jimpitan)];
+    return [
+      if (tab == RingkasanTab.shodaqoh) _shodaqoh(d.shodaqoh),
+      if (tab == RingkasanTab.jimpitan) _jimpitan(d.jimpitan),
+    ];
   }
 
   // ── Shodaqoh Bulanan ─────────────────────────────────────────────────────
