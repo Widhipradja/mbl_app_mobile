@@ -25,6 +25,35 @@ DateTime? _day(dynamic v) {
   return date.year == y && date.month == mo && date.day == d ? date : null;
 }
 
+/// The tabs of Ringkasan and the server module that gates each one (the
+/// bootstrap `modules` map; the server decides per tenant and role, and
+/// answers 403 / `{error: forbidden}` on its own). Keanggotaan has no module
+/// of its own: it follows `dashboard`, which gates the whole screen.
+enum RingkasanTab {
+  keuangan('Keuangan', 'dashboard_finance'),
+  shodaqoh('Shodaqoh', 'dashboard_shodaqoh'),
+  keanggotaan('Keanggotaan', null),
+  jimpitan('Jimpitan', 'jimpitan');
+
+  const RingkasanTab(this.label, this.module);
+
+  final String label;
+  final String? module;
+}
+
+/// The tabs to show: those whose module is open for this account, minus the
+/// ones the answer itself marked `forbidden` ([closed], when it is known).
+/// [moduleOpen] answers for a module key.
+List<RingkasanTab> ringkasanTabsFor(
+  bool Function(String module) moduleOpen, {
+  Set<RingkasanTab> closed = const {},
+}) =>
+    [
+      for (final t in RingkasanTab.values)
+        if ((t.module == null || moduleOpen(t.module!)) && !closed.contains(t))
+          t,
+    ];
+
 /// One section of the answer: its data, or the reason it is missing.
 class RingkasanSection<T> {
   const RingkasanSection({this.data, this.error});
@@ -316,6 +345,14 @@ class RingkasanData {
   final RingkasanSection<RingkasanMembers> members;
   final RingkasanSection<RingkasanShodaqoh> shodaqoh;
   final RingkasanSection<RingkasanJimpitan> jimpitan;
+
+  /// The tabs whose section the server refused for this account.
+  Set<RingkasanTab> get forbiddenTabs => {
+        if (finance.forbidden) RingkasanTab.keuangan,
+        if (shodaqoh.forbidden) RingkasanTab.shodaqoh,
+        if (members.forbidden) RingkasanTab.keanggotaan,
+        if (jimpitan.forbidden) RingkasanTab.jimpitan,
+      };
 }
 
 /// Loads Ringkasan of [month] (`YYYY-MM`) from the gateway.
