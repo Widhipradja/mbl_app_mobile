@@ -206,6 +206,40 @@ class ApiService {
     return await _dio.delete('/api/m/v1/events/$id');
   }
 
+  /// Roster of one event: `{event, rows, tally}`.
+  /// Endpoint: `GET /api/m/v1/events/:id/attendance`
+  Future<Response> getEventAttendance(String id) async {
+    return await _dio.get('/api/m/v1/events/$id/attendance');
+  }
+
+  /// One member; [body] holds only `is_attending`, `presence_mode`, `remark`.
+  /// Endpoint: `PUT /api/m/v1/events/:id/attendance/:member_id` → `{ok}`
+  Future<Response> updateAttendanceMember(
+      String id, String memberId, Map<String, dynamic> body) async {
+    return await _dio.put('/api/m/v1/events/$id/attendance/$memberId',
+        data: body);
+  }
+
+  /// Many members in one request (1..1000 ids).
+  /// Endpoint: `PUT /api/m/v1/events/:id/attendance` → `{ok, updated}`
+  Future<Response> setAttendanceMany(
+      String id, List<String> memberIds, bool isAttending) async {
+    return await _dio.put('/api/m/v1/events/$id/attendance',
+        data: {'member_ids': memberIds, 'is_attending': isAttending});
+  }
+
+  /// Rebuilds the roster from the event's settings → `{added, removed}`.
+  /// Endpoint: `POST /api/m/v1/events/:id/attendance/sync`
+  Future<Response> syncAttendance(String id) async {
+    return await _dio.post('/api/m/v1/events/$id/attendance/sync');
+  }
+
+  /// Endpoint: `GET /api/m/v1/attendance/monthly?month=YYYY-MM`
+  Future<Response> getAttendanceMonthly(String month) async {
+    return await _dio.get('/api/m/v1/attendance/monthly',
+        queryParameters: {'month': month});
+  }
+
   /// Endpoint: `GET /api/m/v1/jimpitan?month=YYYY-MM`
   Future<Response> getMobileJimpitan(String month) async {
     return await _dio
