@@ -56,6 +56,7 @@ class MobileEvent {
     this.kind = 'event',
     this.status = 'Scheduled',
     this.materials = const [],
+    this.trackAttendance,
   });
 
   factory MobileEvent.fromJson(Map<String, dynamic> j) {
@@ -79,10 +80,16 @@ class MobileEvent {
               .map(EventMaterial.fromJson)
               .toList()
           : const [],
+      trackAttendance:
+          j.containsKey('track_attendance') ? j['track_attendance'] == true : null,
     );
   }
 
   final String id, title, description, location, level, category, kind, status;
+
+  /// `null` when the answer did not carry the flag (the list does not):
+  /// unknown, not "no".
+  final bool? trackAttendance;
 
   /// `YYYY-MM-DD`; [endDate] is empty for a single day.
   final String startDate, endDate;
