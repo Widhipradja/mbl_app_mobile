@@ -3,17 +3,28 @@ import 'package:flutter/material.dart';
 import '../../config/launcher_tokens.dart';
 import '../launcher/launcher_models.dart'
     show EventLevel, daysShort, monthsShort;
+import 'attendance_data.dart';
+import 'attendance_roster_screen.dart';
 import 'event_data.dart';
 import 'event_form_screen.dart';
 import 'events_list_screen.dart' show EventChip, eventStatusChip, eventWhen;
 
 /// All fields of one event. Writers get "Ubah" and "Hapus".
 class EventDetailScreen extends StatefulWidget {
-  const EventDetailScreen(
-      {super.key, required this.event, required this.canManage});
+  const EventDetailScreen({
+    super.key,
+    required this.event,
+    required this.canManage,
+    this.events,
+    this.attendance,
+  });
 
   final MobileEvent event;
   final bool canManage;
+
+  /// Where the event and its attendance are read (tests pass fakes).
+  final EventRepository? events;
+  final AttendanceRepository? attendance;
 
   @override
   State<EventDetailScreen> createState() => _EventDetailScreenState();
@@ -24,16 +35,27 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   late bool _canManage = widget.canManage;
   bool _busy = false;
 
+  EventRepository get _events => widget.events ?? eventRepo;
+  AttendanceRepository get _attendanceRepo => widget.attendance ?? attendanceRepo;
+
   @override
   void initState() {
     super.initState();
     _refresh();
   }
 
+  Future<void> _openAttendance() async {
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) => AttendanceRosterScreen(
+            eventId: _event.id, repo: _attendanceRepo)));
+    if (!mounted) return;
+    _refresh();
+  }
+
   /// The list row can be stale (and may lack materials): read the event.
   Future<void> _refresh() async {
     try {
-      final e = await eventRepo.get(_event.id);
+      final e = await _events.get(_event.id);
       if (mounted) setState(() => _event = e);
     } catch (e) {
       debugPrint('Event detail error: $e');
@@ -81,7 +103,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     if (ok != true || !mounted) return;
     setState(() => _busy = true);
     try {
-      await eventRepo.delete(_event.id);
+      await _events.delete(_event.id);
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
       debugPrint('Event delete error: $e');
@@ -142,6 +164,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               _row(Icons.location_on_outlined, e.location),
             _row(Icons.sell_outlined, 'Kategori ${e.category}'),
           ]),
+          if (_canManage && !e.isAnnouncement && e.trackAttendance != null)
+            _attendanceCard(e.trackAttendance!),
           if (e.description.isNotEmpty)
             _card([
               Text('Keterangan', style: Lx.cardHeading),
@@ -205,6 +229,23 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       ),
     );
   }
+
+  /// The Attendance button only for `can_manage && track_attendance`. The
+  /// flag comes with the event; the roster (names, phones) is read only when
+  /// the roster screen opens.
+  Widget _attendanceCard(bool tracked) => _card([
+        if (tracked)
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: _openAttendance,
+              icon: const Icon(Icons.fact_check_outlined),
+              label: const Text('Attendance'),
+            ),
+          )
+        else
+          Text('This event does not track attendance.', style: Lx.metadata),
+      ]);
 
   Widget _card(List<Widget> children) => Container(
         width: double.infinity,

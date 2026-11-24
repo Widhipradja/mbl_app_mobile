@@ -5,6 +5,7 @@ import '../../widgets/app_ui.dart'
     show MonthPill, EmptyState, RetryState;
 import '../launcher/launcher_models.dart'
     show EventLevel, daysShort, monthsShort;
+import 'attendance_monthly_screen.dart';
 import 'event_data.dart';
 import 'event_detail_screen.dart';
 import 'event_form_screen.dart';
@@ -113,7 +114,19 @@ class _EventsListScreenState extends State<EventsListScreen>
 
     return Scaffold(
       backgroundColor: Lx.background,
-      appBar: AppBar(title: const Text('Kegiatan')),
+      appBar: AppBar(
+        title: const Text('Kegiatan'),
+        actions: [
+          if (_canManage)
+            IconButton(
+              tooltip: 'Attendance report',
+              icon: const Icon(Icons.fact_check_outlined),
+              onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                      builder: (_) => const AttendanceMonthlyScreen())),
+            ),
+        ],
+      ),
       floatingActionButton: _canManage
           ? FloatingActionButton.extended(
               onPressed: _add,
